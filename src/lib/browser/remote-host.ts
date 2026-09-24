@@ -52,8 +52,10 @@ export function remoteConnectionOfProfile(
 }
 
 /** A remote tab's address as the remote host knows it: the macOS alias put
- *  back to `localhost`. For whatever leaves the tab — a copied link, a page
- *  sent to the chat — where the alias names nothing. */
+ *  back to `localhost`. For whatever leaves the tab — a copied link, the
+ *  address shown in its place — where the alias names nothing. A page sent to
+ *  the chat is named this way by the backend (`browser::remote::host_address`)
+ *  before it gets here. */
 export function remoteHostAddress(url: string): string {
   try {
     const parsed = new URL(url)

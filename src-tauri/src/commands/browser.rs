@@ -13,7 +13,7 @@ use crate::app_error::AppCommandError;
 use crate::browser::agent::{self, GrantLevel};
 use crate::browser::blank_page;
 use crate::browser::capture::{self, CaptureOutcome, CaptureRegion, CaptureRequest};
-use crate::browser::console::{ConsoleLevel, ConsoleQuery, ConsoleReadout};
+use crate::browser::console::{ConsoleEntry, ConsoleLevel, ConsoleQuery, ConsoleReadout};
 use crate::browser::confirm::{
     AskRefused, EvalConsent, EvalRequestPayload, EVAL_CONFIRM_TIMEOUT,
 };
@@ -2870,9 +2870,9 @@ pub async fn pick_element_core(
     registry: &BrowserRegistry,
     tab_id: &str,
 ) -> Result<handoff::PageHandoff, AppCommandError> {
-    let Some((surface, generation)) =
-        registry.read(tab_id, |tab| (tab.surface.clone(), tab.generation))
-    else {
+    let Some((surface, generation, profile)) = registry.read(tab_id, |tab| {
+        (tab.surface.clone(), tab.generation, tab.state.profile.clone())
+    }) else {
         return Err(AppCommandError::not_found(format!(
             "browser tab {tab_id} not found"
         )));
@@ -2899,7 +2899,7 @@ pub async fn pick_element_core(
         stop_picking(registry, tab_id, Some(&token)).await;
         return Err(err);
     }
-    let picked = match tokio::time::timeout(PICK_TIMEOUT, wait).await {
+    let mut picked = match tokio::time::timeout(PICK_TIMEOUT, wait).await {
         Ok(Ok(handoff::PickReport::Picked(element))) => element,
         // Cancelled by the person, or the slot went away under us: a new
         // document, a second pick, the tab closing. Either way there is
@@ -2911,6 +2911,9 @@ pub async fn pick_element_core(
             return Ok(handoff::PageHandoff::cancelled());
         }
     };
+    // Everything below says where the page is — the block, the link, the
+    // picture — and says it as the agent's host knows it (a remote tab).
+    picked.href = crate::browser::remote::host_address(profile.as_deref(), &picked.href).into_owned();
     let text = handoff::render_element(&picked);
     let (url, _) = handoff::redact_url(&picked.href);
     // A picture of the element, when it has a box on screen and the page said
@@ -3013,9 +3016,9 @@ pub async fn capture_page_core(
     registry: &BrowserRegistry,
     tab_id: &str,
 ) -> Result<handoff::PageHandoff, AppCommandError> {
-    let Some((surface, title)) =
-        registry.read(tab_id, |tab| (tab.surface.clone(), tab.state.title.clone()))
-    else {
+    let Some((surface, title, profile)) = registry.read(tab_id, |tab| {
+        (tab.surface.clone(), tab.state.title.clone(), tab.state.profile.clone())
+    }) else {
         return Err(AppCommandError::not_found(format!(
             "browser tab {tab_id} not found"
         )));
@@ -3029,7 +3032,9 @@ pub async fn capture_page_core(
         width: answer.viewport.width,
         height: answer.viewport.height,
     };
-    let (url, _) = handoff::redact_url(&answer.url);
+    // Where the page is, as the agent's host knows it (a remote tab).
+    let page = crate::browser::remote::host_address(profile.as_deref(), &answer.url);
+    let (url, _) = handoff::redact_url(&page);
     let image = draw_capture(
         &surface,
         answer.viewport.width,
@@ -3043,7 +3048,7 @@ pub async fn capture_page_core(
     Ok(handoff::PageHandoff {
         cancelled: false,
         label: String::new(),
-        text: handoff::render_screenshot(&answer.url, &title, region, &image),
+        text: handoff::render_screenshot(&page, &title, region, &image),
         url,
         image: Some(image),
         count: 0,
@@ -3068,13 +3073,25 @@ pub fn page_console_core(
             limit: Some(crate::browser::console::CONSOLE_RING_CAPACITY),
         };
         let readout = tab.console.read(&query, &tab.state.url, |_| true);
-        (tab.state.url.clone(), readout.entries, readout.dropped)
+        (tab.state.url.clone(), readout.entries, readout.dropped, tab.state.profile.clone())
     });
-    let Some((url, mut entries, dropped)) = answer else {
+    let Some((url, entries, dropped, profile)) = answer else {
         return Err(AppCommandError::not_found(format!(
             "browser tab {tab_id} not found"
         )));
     };
+    Ok(console_handoff(profile.as_deref(), &url, entries, dropped, errors_only))
+}
+
+/// The console lines a tab of `profile` read out, as the block that goes to
+/// a conversation.
+fn console_handoff(
+    profile: Option<&str>,
+    url: &str,
+    mut entries: Vec<ConsoleEntry>,
+    dropped: u64,
+    errors_only: bool,
+) -> handoff::PageHandoff {
     // The newest lines, not the oldest: someone handing over a console wants
     // what just happened. What that leaves out is counted with what the ring
     // had already lost, so the block never reads as the whole story when it
@@ -3083,16 +3100,24 @@ pub fn page_console_core(
     if omitted > 0 {
         entries.drain(..omitted);
     }
+    // The page, and the scripts the lines came from, as the agent's host
+    // knows them (a remote tab).
+    let url = crate::browser::remote::host_address(profile, url);
+    for entry in &mut entries {
+        if let Some(script) = entry.url.as_mut() {
+            *script = crate::browser::remote::host_address(profile, script).into_owned();
+        }
+    }
     let text = handoff::render_console(&url, &entries, dropped + omitted as u64, errors_only);
     let (url, _) = handoff::redact_url(&url);
-    Ok(handoff::PageHandoff {
+    handoff::PageHandoff {
         cancelled: false,
         label: String::new(),
         text,
         url,
         image: None,
         count: entries.len(),
-    })
+    }
 }
 
 /// The browser tools an agent gets, answered from this process's tab
@@ -4251,6 +4276,43 @@ mod tests {
         assert!(not_found(cancel_pick_core(&registry, "ghost").await.unwrap_err()));
         assert!(not_found(capture_page_core(&registry, "ghost").await.unwrap_err()));
         assert!(not_found(page_console_core(&registry, "ghost", true).unwrap_err()));
+    }
+
+    /// A remote tab's console goes to an agent on the remote host, so the page
+    /// and the scripts the lines came from are named as that host names them,
+    /// not by the alias macOS loaded them by. Any other tab's alias is an
+    /// address someone typed, and stays.
+    #[test]
+    fn a_remote_tab_s_console_names_its_page_as_the_remote_host_does() {
+        let line = |url: &str| ConsoleEntry {
+            seq: 1,
+            at: 0,
+            level: ConsoleLevel::Error,
+            source: crate::browser::console::ConsoleSource::Exception,
+            text: "boom".into(),
+            url: Some(url.into()),
+            line: Some(12),
+            column: Some(5),
+            top: true,
+            origin: None,
+        };
+        let entries = vec![
+            line("http://remote.localhost:3000/src/main.js"),
+            line("https://cdn.example.com/lib.js"),
+        ];
+        let page = "http://remote.localhost:3000/app?token=a";
+
+        let remote = console_handoff(Some("remote-7"), page, entries.clone(), 0, true);
+        assert_eq!(remote.url, "http://localhost:3000/app?token=REDACTED");
+        assert!(remote.text.contains("- page: http://localhost:3000/app?token=REDACTED\n"));
+        assert!(remote.text.contains("(http://localhost:3000/src/main.js:12:5)"));
+        assert!(remote.text.contains("(https://cdn.example.com/lib.js:12:5)"));
+        assert!(!remote.text.contains("remote.localhost"), "{}", remote.text);
+        assert_eq!(remote.count, 2);
+
+        let local = console_handoff(Some("default"), page, entries, 0, true);
+        assert_eq!(local.url, "http://remote.localhost:3000/app?token=REDACTED");
+        assert!(local.text.contains("(http://remote.localhost:3000/src/main.js:12:5)"));
     }
 
     #[test]

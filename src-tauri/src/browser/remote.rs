@@ -388,6 +388,26 @@ pub fn egress_address<'a>(profile_id: &str, url: &'a Url) -> Cow<'a, Url> {
     Cow::Borrowed(url)
 }
 
+/// `url` as the remote host knows it, for a tab of `profile_id`: a remote
+/// profile's page on `ALIAS_HOST` is on that host's own `localhost`, which
+/// the tunnel connects the alias to. For what leaves the tab for the remote
+/// host — a page handed to a conversation, whose agent runs there — where the
+/// alias names nothing (a copied link is named the same way, by the
+/// frontend's `remoteHostAddress`). Every other tab and address is returned
+/// as it is.
+pub fn host_address<'a>(profile_id: Option<&str>, url: &'a str) -> Cow<'a, str> {
+    if !profile_id.is_some_and(profile::is_remote_profile) {
+        return Cow::Borrowed(url);
+    }
+    let Ok(mut parsed) = Url::parse(url) else {
+        return Cow::Borrowed(url);
+    };
+    if parsed.host_str() != Some(ALIAS_HOST) || parsed.set_host(Some("localhost")).is_err() {
+        return Cow::Borrowed(url);
+    }
+    Cow::Owned(parsed.into())
+}
+
 /// `url` on `ALIAS_HOST`, when it addresses this machine by a loopback name:
 /// `localhost` (a trailing dot too), `127.0.0.0/8`, `::1` and the IPv4-mapped
 /// forms, and the unspecified addresses dev servers print (`0.0.0.0`, `::`),
@@ -484,6 +504,35 @@ mod tests {
             assert_eq!(remote.as_str(), "http://remote.localhost:3000/");
         } else {
             assert_eq!(remote.as_str(), "http://localhost:3000/");
+        }
+    }
+
+    #[test]
+    fn a_remote_tab_s_alias_leaves_the_tab_as_the_remote_host_s_localhost() {
+        let remote = Some("remote-7");
+        assert_eq!(
+            host_address(remote, "http://remote.localhost:3000/a?b=1#c"),
+            "http://localhost:3000/a?b=1#c"
+        );
+        assert_eq!(host_address(remote, "https://u:p@remote.localhost/x"), "https://u:p@localhost/x");
+        // What the alias took a loopback address to, it gives back.
+        let aliased = alias_for(&Url::parse("http://localhost:5173/app").unwrap()).unwrap();
+        assert_eq!(host_address(remote, aliased.as_str()), "http://localhost:5173/app");
+        for raw in [
+            "http://localhost:3000/",
+            "http://app.localhost/",
+            "http://remote.localhost.example.com/",
+            "http://10.0.0.5:3000/",
+            "blob:http://remote.localhost:3000/uuid",
+            "about:blank",
+            "not a url",
+            "",
+        ] {
+            assert_eq!(host_address(remote, raw), raw, "{raw}");
+        }
+        // A tab of any other profile keeps its address, alias or not.
+        for profile in [None, Some("default"), Some("p-abc")] {
+            assert_eq!(host_address(profile, "http://remote.localhost:3000/"), "http://remote.localhost:3000/");
         }
     }
 
