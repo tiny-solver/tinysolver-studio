@@ -2126,15 +2126,15 @@ export function MessageInput({
           </div>
         </div>
       )}
-      {/* When the folder/branch row is attached below the composer, this group
-          clips both into one rounded box (`overflow-hidden rounded-xl`); the
-          drag-active ring rides the wrapper so it isn't clipped. Standalone
-          (no row) it's layout-neutral (`display:contents`). */}
+      {/* Keep a real wrapper even before the folder data has loaded. Switching
+          this ancestor from display:contents to block can leave the mounted
+          editor at 0x0 in WebView2 when the folder row arrives on cold start.
+          Only the clipping/decoration changes when the row is attached. */}
       <div
         className={cn(
-          folderBranchPickerAttached
-            ? "overflow-hidden rounded-xl transition-colors"
-            : "contents",
+          "block",
+          folderBranchPickerAttached &&
+            "overflow-hidden rounded-xl transition-colors",
           folderBranchPickerAttached &&
             showDragActive &&
             "ring-1 ring-primary/40"
