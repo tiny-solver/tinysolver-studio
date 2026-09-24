@@ -68,6 +68,17 @@ const tab = {
   },
 } as BrowserWorkspaceTab
 
+/** A remote workspace window's tab on the remote host's own loopback, which
+ *  macOS loads by the alias. */
+const remoteTab = {
+  ...tab,
+  browser: {
+    ...tab.browser,
+    initialUrl: "http://remote.localhost:3000/app",
+    remote: true,
+  },
+} as BrowserWorkspaceTab
+
 function state(over: Partial<BrowserTabState> = {}): BrowserTabState {
   return {
     tabId: "abc",
@@ -105,10 +116,10 @@ function handoff(over: Partial<PageHandoff> = {}): PageHandoff {
   }
 }
 
-function wrap() {
+function wrap(browserTab: BrowserWorkspaceTab = tab) {
   return render(
     <NextIntlClientProvider locale="en" messages={enMessages}>
-      <BrowserSendToChatControl tab={tab} state={state()} />
+      <BrowserSendToChatControl tab={browserTab} state={state()} />
     </NextIntlClientProvider>
   )
 }
@@ -218,6 +229,20 @@ describe("sending a page to the chat", () => {
     expect(seen[0].image?.type).toBe("image/png")
     expect(seen[0].image?.name).toBe("button-export.png")
     expect(mocks.success).toHaveBeenCalledWith("Added to the chat")
+  })
+
+  // The agent it goes to runs on the remote host, where the alias the tab was
+  // loaded by names nothing.
+  it("hands a remote tab's page over by the remote host's own address", async () => {
+    const seen = captureAttachEvents()
+    mocks.capture.mockResolvedValue(
+      handoff({ url: "http://remote.localhost:3000/app?x=1" })
+    )
+    wrap(remoteTab)
+    await openMenu()
+    await choose("Send a screenshot")
+    expect(seen).toHaveLength(1)
+    expect(seen[0].uri).toBe("http://localhost:3000/app?x=1")
   })
 
   it("says nothing to the composer when the person calls the pick off", async () => {
@@ -430,8 +455,8 @@ describe("marking up a screenshot", () => {
 
   /** The toolbar control and the workspace's host, mounted apart as they are
    *  in the app — the host outlives any one browser tab. */
-  function mountBoth() {
-    const control = wrap()
+  function mountBoth(browserTab: BrowserWorkspaceTab = tab) {
+    const control = wrap(browserTab)
     const host = render(
       <NextIntlClientProvider locale="en" messages={enMessages}>
         <BrowserScreenshotMarkupHost />
@@ -516,6 +541,23 @@ describe("marking up a screenshot", () => {
     expect(seen).toHaveLength(1)
     expect(seen[0].tabId).toBe("conv-1")
     expect(seen[0].label).toBe("Marked-up screenshot")
+  })
+
+  // Marked up or not, a remote tab's page goes to the agent the way every
+  // other handoff sends it: by the remote host's address, not the alias.
+  it("names a remote tab's page by the remote host's own address", async () => {
+    const seen = captureAttachEvents()
+    mocks.capture.mockResolvedValue({
+      ...screenshot(),
+      url: "http://remote.localhost:3000/app",
+    })
+    mountBoth(remoteTab)
+    await openMarkup()
+    drawBox()
+    await addToChat()
+    expect(seen).toHaveLength(1)
+    expect(seen[0].label).toBe("Marked-up screenshot")
+    expect(seen[0].uri).toBe("http://localhost:3000/app")
   })
 
   // The active tab can change while the person draws; the picture goes where

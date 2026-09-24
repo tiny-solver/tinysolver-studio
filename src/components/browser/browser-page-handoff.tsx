@@ -72,6 +72,12 @@ function imageFile(handoff: PageHandoff, name: string): File | undefined {
   return handoff.image ? captureFile(handoff.image, name) : undefined
 }
 
+/** The page's address as the remote host, and its agent, knows it: a remote
+ *  tab is loaded by the macOS alias, which names nothing there. */
+function pageUri(handoff: PageHandoff, remote: boolean): string {
+  return remote ? remoteHostAddress(handoff.url) : handoff.url
+}
+
 /** A file name that cannot surprise a filesystem: the label, letters and
  *  digits only. */
 function safeName(label: string, fallback: string): string {
@@ -90,6 +96,7 @@ export function BrowserSendToChatControl({
 }) {
   const t = useTranslations("Browser.handoff")
   const backendId = browserTabBackendId(tab.id)
+  const remote = tab.browser.remote === true
   const conversationTabId = useTargetConversation()
   const marked = useBrowserConsoleErrors(tab.id)
   const [picking, setPicking] = useState(false)
@@ -128,12 +135,7 @@ export function BrowserSendToChatControl({
         tabId: conversationTabId,
         label: handoff.label || label,
         text: handoff.text,
-        // A remote tab's page as the remote host (and its agent) knows it:
-        // the macOS alias it was loaded by names nothing there.
-        uri:
-          tab.browser.remote === true
-            ? remoteHostAddress(handoff.url)
-            : handoff.url,
+        uri: pageUri(handoff, remote),
         image: imageFile(
           handoff,
           safeName(handoff.label || fileName, fileName)
@@ -142,7 +144,7 @@ export function BrowserSendToChatControl({
       if (accepted) toast.success(t("sent"))
       else toast.error(t("gone"))
     },
-    [conversationTabId, t, tab.browser.remote]
+    [conversationTabId, remote, t]
   )
 
   const failed = useCallback(
@@ -213,12 +215,12 @@ export function BrowserSendToChatControl({
         openScreenshotMarkup({
           capture: handoff.image,
           text: handoff.text,
-          uri: handoff.url,
+          uri: pageUri(handoff, remote),
           conversationTabId: target,
         })
       })
       .catch(failed)
-  }, [backendId, conversationTabId, deliver, failed, t])
+  }, [backendId, conversationTabId, deliver, failed, remote, t])
 
   const sendConsole = useCallback(() => {
     if (!backendId || !conversationTabId) return
