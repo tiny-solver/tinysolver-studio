@@ -10,7 +10,8 @@ const dir = location.pathname.replace(/[^/]*$/, "")
 const storage = browserStorage(`codeg:${dir}`)
 
 const canShare =
-  typeof navigator !== "undefined" && (typeof navigator.share === "function" || !!navigator.clipboard)
+  typeof navigator !== "undefined" &&
+  (typeof navigator.share === "function" || !!navigator.clipboard)
 
 export const platform = makePlatform("web", {
   caps: canShare ? ["save", "share"] : ["save"],

@@ -35,7 +35,9 @@ export const SLOT_BYTES = 64 * 1024
 function slotOf(options) {
   const slot = options?.slot ?? 0
   if (!Number.isInteger(slot) || slot < 0 || slot >= SLOTS)
-    throw new RangeError(`[codeg-platform] slot 은 0~${SLOTS - 1} 이다: ${slot}`)
+    throw new RangeError(
+      `[codeg-platform] slot 은 0~${SLOTS - 1} 이다: ${slot}`
+    )
   return slot
 }
 
@@ -127,12 +129,14 @@ export function makePlatform(target, impl = {}) {
     return fallback
   }
 
-  ;(impl.lifecycle ||
+  ;(
+    impl.lifecycle ||
     ((send) => {
       document.addEventListener("visibilitychange", () =>
         send(document.hidden ? "pause" : "resume")
       )
-    }))(emit)
+    })
+  )(emit)
 
   const platform = {
     target,
@@ -172,7 +176,8 @@ export function makePlatform(target, impl = {}) {
     },
     /** 'pause' | 'resume' — 탭 숨김 · 광고 · 앱 백그라운드. 게임은 소리와 시간을 멈춘다. 끄는 함수를 돌려준다. */
     on(event, fn) {
-      if (!listeners[event]) throw new RangeError(`[codeg-platform] 모르는 이벤트: ${event}`)
+      if (!listeners[event])
+        throw new RangeError(`[codeg-platform] 모르는 이벤트: ${event}`)
       listeners[event].add(fn)
       return () => listeners[event].delete(fn)
     },
@@ -187,7 +192,9 @@ export function makePlatform(target, impl = {}) {
       const text = JSON.stringify(data ?? null)
       const bytes = new TextEncoder().encode(text).length
       if (bytes > SLOT_BYTES)
-        throw new RangeError(`[codeg-platform] 저장이 ${bytes}B — 슬롯 하나는 ${SLOT_BYTES}B 까지다`)
+        throw new RangeError(
+          `[codeg-platform] 저장이 ${bytes}B — 슬롯 하나는 ${SLOT_BYTES}B 까지다`
+        )
       if (!caps.has("save") || !impl.storage) return missing("save", undefined)
       impl.storage.set(`save:${slot}`, text)
     },
@@ -217,7 +224,8 @@ export function makePlatform(target, impl = {}) {
       const board = boardOf(options)
       const around = options.around === "me" ? "me" : "top"
       const limit = Math.max(1, Math.min(100, options.limit ?? 10))
-      if (!caps.has("leaderboard") || !impl.leaderboard) return missing("leaderboard", [])
+      if (!caps.has("leaderboard") || !impl.leaderboard)
+        return missing("leaderboard", [])
       return impl.leaderboard({ board, around, limit })
     },
 
@@ -234,7 +242,10 @@ export function makePlatform(target, impl = {}) {
       async break(options = {}) {
         if (!caps.has("ads") || !impl.adsBreak)
           return missing("ads", { shown: false, rewarded: false })
-        return impl.adsBreak({ type: options.type || "next", name: options.name || "" }, emit)
+        return impl.adsBreak(
+          { type: options.type || "next", name: options.name || "" },
+          emit
+        )
       },
     },
   }

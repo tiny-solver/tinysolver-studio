@@ -362,7 +362,7 @@ mod tests {
         let body = axum::body::to_bytes(ok.into_body(), usize::MAX).await.unwrap();
         let body = String::from_utf8(body.to_vec()).unwrap();
         assert!(body.starts_with("<script data-codeg-preview>"), "no <head>: reporter goes first");
-        assert!(body.contains(&format!("window.__codegPreview={{scope:\"{}\"}}", preview_scope(root))));
+        assert!(body.contains(&format!("window.__codegPreview={{scope:\"{}\"}}", preview_scope(&root.canonicalize().unwrap()))));
         assert!(body.ends_with("<h1>hi</h1>"));
 
         let js = serve(&id, "outputs/game/src/main.js").await;
