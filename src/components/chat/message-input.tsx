@@ -2126,10 +2126,16 @@ export function MessageInput({
           </div>
         </div>
       )}
-      {/* Keep a real wrapper even before the folder data has loaded. Switching
-          this ancestor from display:contents to block can leave the mounted
-          editor at 0x0 in WebView2 when the folder row arrives on cold start.
-          Only the clipping/decoration changes when the row is attached. */}
+      {/* Attached, this group clips the composer and the folder/branch row
+          below it into one rounded box (`overflow-hidden rounded-xl`); the
+          drag-active ring rides the wrapper so it isn't clipped. Standalone it
+          stays a plain block, never `display:contents`, because the row comes
+          and goes under a mounted editor (on a cold start it appears once the
+          restored tab's folder loads): some Blink builds (Chromium 111,
+          WebView2 145; not Chrome 153) drop the layout boxes inside the chrome
+          below, a size container (`@container`), when this ancestor flips
+          between `contents` and a box in either direction, leaving the editor
+          0x0 and unable to take input. */}
       <div
         className={cn(
           "block",

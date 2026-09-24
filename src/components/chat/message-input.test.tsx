@@ -2403,10 +2403,13 @@ describe("MessageInput folder data arriving after mount", () => {
     act(() => handle.insertTextAtCursor("keep this draft"))
     const chrome = container.querySelector(".codeg-composer-chrome")!
     const wrapper = chrome.parentElement!
-    // jsdom cannot reproduce the lost WebView2 layout tree; assert the stable
-    // layout contract here and exercise its pixel geometry in the browser.
+    // jsdom has no layout engine, so it cannot reproduce the collapse; this
+    // pins the class contract that avoids it. One class per negative
+    // assertion: `not.toHaveClass(a, b)` passes as soon as either is missing.
+    // Unattached, nothing may clip the chrome's outer focus ring.
     expect(wrapper).toHaveClass("block")
-    expect(wrapper).not.toHaveClass("contents", "overflow-hidden")
+    expect(wrapper).not.toHaveClass("contents")
+    expect(wrapper).not.toHaveClass("overflow-hidden")
 
     folderPickerVisible.mockReturnValue(true)
     rerender(
