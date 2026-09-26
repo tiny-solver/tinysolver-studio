@@ -1,0 +1,41 @@
+{
+  "$comment": [
+    "Tinysolver Studio 가 아는 '왜 이런가' — 이 제품 고유의 구조 질문. 모양은 my-devops scripts/why/why.schema.json.",
+    "fork 만의 파일이다(업스트림 xintaofei/codeg 에 없다 — decide.json 과 같다). 모아보기는 http://birdview.home.codepoet.me/why (my-devops scripts/gen-why.sh 가 버드뷰 home 을 따라 걷는다)."
+  ],
+  "v": 1,
+  "items": [
+    {
+      "id": "studio-where-runs",
+      "asked": "2026-09-25",
+      "tags": [
+        "배포 형태",
+        "설치 앱",
+        "서버",
+        "약관",
+        "원가",
+        "afterplay"
+      ],
+      "q": "Studio 는 왜 각자 PC 에서 도나 — 우리 서버를 안 거치나?",
+      "a": "오너 결정(09-25, C): 앱은 각자 PC · 서버는 거드는 것만. Studio 는 사용자 PC 에 까는 앱이고, AI 에이전트는 사용자 자신의 Claude Code · Codex(자기 구독), 렌더 · 빌드 · 에셋도 사용자 PC 에서 돈다. 우리 서버는 afterplay(올리기 · 재생)와 나중의 로그인 · 유료 에셋 · AI 크레딧만 맡는다.",
+      "why": [
+        "Studio 는 개인 사용자용이다(오너 09-25). 사용자는 두 종류 — 만드는 사람(Studio) · 노는 사람(afterplay). 만드는 곳과 노는 곳을 가르고, 사이에는 만든 게임(패킷)만 오간다(my-devops docs/plans/tinysolver/studio-afterplay.md).",
+        "B(내 서버 — 웹 Studio)는 결제 · 사업자등록 · 사용자 코드 격리 · 멀티유저화가 먼저다 — 결정 때 다 없었다. codeg-server 웹 모드는 토큰 하나짜리 1인용이다.",
+        "사용자 구독 CLI 를 우리 서버에서 돌리면 약관 문제가 된다(my-devops docs/plans/tinysolver/agent-access.md) — 서버에서 돌리려면 우리 API 키 · 크레딧이어야 하고 원가가 사용자 수에 비례한다.",
+        "C 는 원가 0 · 약관 문제 없이 시작하고, 서버 몫(로그인 · 유료 에셋 · AI 크레딧)은 결제가 열린 뒤 하나씩 붙인다. A(서버는 afterplay 뿐)와 먼저 필요한 것(서명 · Windows)은 같고, 유료 기능을 붙일 길만 열어 둔다.",
+        "서버가 없으니 관리 페이지도 없다 — 할 일 · 결정 · 니즈는 이 repo decide.json 이 백오피스다(AGENTS.md 'Fork 운영 — tinysolver')."
+      ],
+      "where": "사용자 PC 설치 앱(src-tauri) · 서버 몫은 afterplay(tiny-solver/afterplay) · 계획 my-devops docs/plans/tinysolver/studio-afterplay.md '만드는 곳과 노는 곳을 가른다'",
+      "enforce": "—",
+      "status": {
+        "kind": "keep",
+        "text": "2026-09-25 — C. 언제 · 어느 OS 로 주나 · 에셋 생성을 어디서 돌리나 · afterplay 계정 잇기는 decide.json studio-distribution · studio-asset-gen · t4-afterplay-account."
+      },
+      "refs": [
+        "decide.json",
+        "AGENTS.md",
+        "src-tauri"
+      ]
+    }
+  ]
+}
