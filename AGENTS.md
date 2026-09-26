@@ -144,3 +144,4 @@ layer independent of Three.js and other renderers.
   PR 은 **tiny-solver/tinysolver-studio** 에만 선다(work.sh 가 `-R` 고정 · 이 체크아웃의 gh 기본 repo 도 이것).
 - **계정** — PR 은 gh `tiny-solver`, 커밋은 `iam.tinysolver@gmail.com`. linux-1 의 gh 기본 계정은 choigawoon 이라 `gh` 를 맨손으로 쓰지 않는다.
 - 업스트림 파일은 되도록 고치지 않는다. 브랜드 불변식 · 릴리스는 my-devops `docs/plans/tinysolver/studio-release.md`.
+- **할 일 · 결정 · 니즈의 정본은 [decide.json](decide.json)** — 서버가 없는 설치 앱이라 이 파일이 백오피스다. 세션을 시작하면 `asks` 의 `new`(사업 자리가 넣은 니즈)부터 → 계획 항목으로 받고 `taken` · 반영한 PR 에서 `done` (my-devops `docs/architecture/roles.md` "니즈").

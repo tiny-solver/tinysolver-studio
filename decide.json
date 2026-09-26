@@ -1,0 +1,246 @@
+{
+  "$comment": [
+    "Tinysolver Studio 의 할 일 · 결정 · 니즈 — 정본은 이 파일이다. 서버가 없는 설치 앱이라 백오피스 화면 대신 이 파일이 백오피스다(my-devops docs/architecture/roles.md \"니즈\"). 버드뷰가 GitHub main 에서 읽어 수만 센다.",
+    "모양은 my-devops inventory/decide.json · dal decide.json 과 같다 — 항목 수명: open(고를 것 · pick 은 권장안) · todo(손이 필요) → 정하면 status=decided + decided{date,pick,note}.",
+    "role = 이 결정을 내리는 자리. role 이 '사업' 인 항목은 대표가 정할 것이라 버드뷰에 올라간다. p = 1 지금 · 2 이번 주 · 3 정리. 항목의 needs · unblocks 는 이 파일 안의 선행 id — my-devops /decide 항목은 refs 로 적는다.",
+    "asks = 니즈 — 사업 자리(버드뷰 · 오너)가 넣는 '무엇이 필요한가'. new → taken(items 에 계획 항목) → done(note 에 공지) · 안 하면 dropped. 세션을 시작하면 new 부터 본다."
+  ],
+  "date": "2026-09-26",
+  "asks": [
+    {
+      "id": "standalone-native",
+      "date": "2026-09-24",
+      "from": "오너",
+      "text": "Studio 는 독립 게임을 먼저 만든다 — 웹 엔진으로 만들고 감싸서 폰 · 데스크톱 앱으로도 낸다. afterplay 는 나중에 붙여 올리는 곳",
+      "status": "taken",
+      "items": ["t1-targets", "t2-tauri", "t3-capacitor", "build-flatten"]
+    },
+    {
+      "id": "afterplay-share",
+      "date": "2026-09-24",
+      "from": "오너",
+      "text": "Studio 에서 만든 게임을 afterplay 에 올려 서로 공유하고 같이 놀고, 플랫폼 기능과 이어지면 좋겠다",
+      "status": "taken",
+      "items": ["t1-targets", "t1-afterplay-adapter", "t4-afterplay-account"]
+    },
+    {
+      "id": "personal-users",
+      "date": "2026-09-25",
+      "from": "오너",
+      "text": "Studio 는 개인 사용자용이다 — 각자 PC 에 설치해 자기 AI 구독으로 만든다",
+      "status": "taken",
+      "items": ["users-ai-guide", "t4-afterplay-account"]
+    }
+  ],
+  "topics": [
+    {
+      "id": "afterplay",
+      "name": "afterplay 대상 — 만든 게임을 올린다",
+      "role": "제품",
+      "ask": "같은 빌드가 afterplay 안에서 돌고, Studio 에서 바로 올라가게 하려면 무엇부터",
+      "rule": "my-devops docs/plans/tinysolver/studio-afterplay.md"
+    },
+    {
+      "id": "native",
+      "name": "네이티브 빌드 대상 — 데스크톱 · 폰",
+      "role": "제품",
+      "ask": "같은 게임을 Tauri(데스크톱) · Capacitor(폰)로 어떻게 싣나",
+      "rule": "my-devops docs/plans/tinysolver/studio-afterplay.md"
+    },
+    {
+      "id": "editor",
+      "name": "편집기 · 엔진 — 제작 공정",
+      "role": "제품",
+      "ask": "roadmap S6(제작 공정과 분야별 확장) 중 무엇을 먼저",
+      "rule": "docs/studio/roadmap.json"
+    },
+    {
+      "id": "release",
+      "name": "fork 추종 · 릴리스 · 설치",
+      "role": "제품",
+      "ask": "업스트림을 받아 들이고, 앱을 오너 밖 사람도 설치해 쓰게",
+      "rule": "AGENTS.md \"Fork 운영 — tinysolver\""
+    }
+  ],
+  "items": [
+    {
+      "id": "t1-targets",
+      "topic": "afterplay",
+      "p": 2,
+      "status": "todo",
+      "role": "제품",
+      "asked": "2026-09-25",
+      "q": "빌드 대상 고르기 (T1 앞부분)",
+      "now": "플랫폼 층 codeg-platform · studio · web 어댑터가 있다(#8). 빌드는 늘 web 대상이고, 호환 검사(content_compat.rs)는 경고만 남긴다",
+      "action": "codeg-project.json targets → 빌드 대상 고르기(UI · studio_build 인자) → afterplay 대상에선 호환 경고를 실패로 → 엔진이 pause 를 받아 스스로 멈춤",
+      "needs": [],
+      "unblocks": ["t1-afterplay-adapter", "t2-tauri", "t3-capacitor"],
+      "then": [],
+      "refs": ["my-devops docs/plans/tinysolver/studio-afterplay.md 순서 T1", "src-tauri/engines/platform/"]
+    },
+    {
+      "id": "t1-afterplay-adapter",
+      "topic": "afterplay",
+      "p": 2,
+      "status": "todo",
+      "role": "제품",
+      "asked": "2026-09-25",
+      "q": "afterplay 어댑터 — 같은 빌드가 afterplay qa 에서 돌고 점수가 순위표에 (T1)",
+      "now": "afterplay 쪽 헤더(ACAO · CORP)는 qa 에 있다. Studio 빌드를 afterplay 에 올리는 길은 zip 을 손으로 올리는 것뿐(버드뷰 TF '만들고 논다' P2)",
+      "action": "__codeg/platform/afterplay.js(window.Afterplay SDK v1 → v2 를 감싼다) · afterplay 대상 zip 필터 · afterplay.json(방향 = 장면 크기) → zip 을 afterplay #make 에 손으로 올려 qa 에서 확인",
+      "needs": ["t1-targets"],
+      "unblocks": ["t4-afterplay-account"],
+      "then": [],
+      "refs": ["my-devops docs/plans/tinysolver/studio-afterplay.md 순서 T1", "my-devops codepoet-mac-mini-1/services/infra-dashboard/inventory/birdview.json tfs make-play P2"]
+    },
+    {
+      "id": "t4-afterplay-account",
+      "topic": "afterplay",
+      "p": 3,
+      "status": "todo",
+      "role": "제품",
+      "asked": "2026-09-25",
+      "q": "afterplay 계정 잇기 — Studio 버튼 하나로 올리기 · 반응 읽기 (T4)",
+      "now": "afterplay 쪽 인가 서버(agent-access 이식)가 먼저 있어야 한다 — afterplay repo 의 일. 시험판 초대(P1)는 심사 중인 판 주소를 손으로 건넨다",
+      "action": "계정 연결(qa · prod · 토큰은 OS 키체인) → 출시 대상 afterplay(codeg-project.json publish.afterplay {stage, game_id} · studio_publish 대상 인자 · 심사 상태) → afterplay /mcp 를 에이전트 세션에 붙인다",
+      "needs": ["t1-afterplay-adapter"],
+      "unblocks": [],
+      "then": ["시험판 초대(P1) — Studio 올리기 → 초대 알림"],
+      "refs": ["my-devops docs/plans/tinysolver/studio-afterplay.md 순서 T4 · 2단계 · 3단계", "my-devops docs/plans/tinysolver/agent-access.md"]
+    },
+    {
+      "id": "t2-tauri",
+      "topic": "native",
+      "p": 3,
+      "status": "todo",
+      "role": "제품",
+      "asked": "2026-09-24",
+      "q": "Tauri 데스크톱 대상 — mac 앱 · Windows exe 가 오프라인으로 돈다 (T2)",
+      "now": "Studio 자신이 Tauri 이고 릴리스 레일(studio-release.yml)이 있다. 게임 쪽 tauri 어댑터 · 껍데기는 없다",
+      "action": "tauri 어댑터(저장 = 앱 데이터 파일) → 콘텐츠 프로젝트 targets/tauri 틀 → GitHub Actions(mac · Windows) — studio-release 레일을 복사",
+      "needs": ["t1-targets"],
+      "unblocks": [],
+      "then": [],
+      "refs": ["my-devops docs/plans/tinysolver/studio-afterplay.md 순서 T2", "my-devops codepoet-mac-mini-1/services/infra-dashboard/inventory/decide.json#studio-native-shell"]
+    },
+    {
+      "id": "t3-capacitor",
+      "topic": "native",
+      "p": 3,
+      "status": "todo",
+      "role": "제품",
+      "asked": "2026-09-24",
+      "q": "Capacitor 폰 대상 — 폰에서 돌고 백그라운드 가면 멈춘다 (T3)",
+      "now": "폰 껍데기는 dal · diary 가 Capacitor 로 해보는 중이다. 스토어 계정 전에는 기기 직접 설치(iOS 무료 서명 · APK)",
+      "action": "capacitor 어댑터(저장 = Preferences · pause = 앱 백그라운드) → targets/capacitor 틀 → iOS 시뮬레이터 · Android 에뮬레이터 → 기기 직접 설치",
+      "needs": ["t1-targets"],
+      "unblocks": [],
+      "then": [],
+      "refs": ["my-devops docs/plans/tinysolver/studio-afterplay.md 순서 T3", "my-devops codepoet-mac-mini-1/services/infra-dashboard/inventory/decide.json#studio-native-shell", "my-devops codepoet-mac-mini-1/services/infra-dashboard/inventory/decide.json#store-dev-account"]
+    },
+    {
+      "id": "build-flatten",
+      "topic": "native",
+      "p": 3,
+      "status": "open",
+      "role": "제품",
+      "asked": "2026-09-25",
+      "q": "빌드 산출물을 평탄화하나 — 맨 위 index.html 이 meta refresh 로 outputs/game/index.html 에 넘긴다",
+      "now": "Capacitor webDir · Tauri frontendDist 는 맨 위 진입을 원한다. 엔진 에셋 경로 기본값이 ../../assets/ 라 평탄화하면 세 곳을 다시 써야 한다. meta refresh 진입은 sandbox iframe 에서는 된다",
+      "facets": ["진입", "고칠 곳", "언제"],
+      "options": [
+        {
+          "key": "A",
+          "title": "지금 모양 그대로",
+          "facets": { "진입": "맨 위 index.html → meta refresh", "고칠 곳": "없음", "언제": "T2 · T3 에서 막히면 B" }
+        },
+        {
+          "key": "B",
+          "title": "평탄화",
+          "facets": { "진입": "outputs/game 을 맨 위로 · __codeg 는 옆에", "고칠 곳": "엔진 에셋 경로 기본값 세 곳", "언제": "T2 · T3 전에" }
+        }
+      ],
+      "pick": "A",
+      "reason": "afterplay 와 독립 웹에서는 지금 모양이 돈다. Tauri · Capacitor 에서 실제로 막히는지 T2 · T3 에서 보고 정한다",
+      "needs": [],
+      "unblocks": [],
+      "then": [],
+      "refs": ["my-devops docs/plans/tinysolver/studio-afterplay.md T0 결과 '평탄화'"]
+    },
+    {
+      "id": "s6-asset-upload",
+      "topic": "editor",
+      "p": 3,
+      "status": "todo",
+      "role": "제품",
+      "asked": "2026-09-19",
+      "q": "에셋 업로드 — 편집기에서 assets/ 로",
+      "now": "이미지 업로드 UI 가 없다. 에셋은 assets/ 에 두고 장면 파일에 선언한다",
+      "action": "편집기 → assets/ 업로드 → 장면 파일 선언까지 → roadmap.json S6 · docs/studio/README.md 갱신 · pnpm studio:plan",
+      "needs": [],
+      "unblocks": [],
+      "then": [],
+      "refs": ["docs/studio/roadmap.json S6 · boundaries"]
+    },
+    {
+      "id": "s6-pipeline",
+      "topic": "editor",
+      "p": 3,
+      "status": "todo",
+      "role": "제품",
+      "asked": "2026-09-19",
+      "q": "제작 공정 — 원본이 바뀌면 필요한 산출물만 다시 만든다 (S6)",
+      "now": "엔진은 2D 장면 런타임이다(3D · 물리 · 타일맵 · 오디오 · 파티클 없음). 가공 작업 · 의존성 · 캐시가 없다",
+      "action": "S6 남은 것 중 순서를 정한다 — 타임라인 · 애니메이션 클립, 타일맵, 오디오, 3D, 가공 작업 · 의존성 · 캐시 · 재생성, 0.2.x 프로젝트 이전 도구, publish 프리셋 UI, 매니페스트 agents 역할",
+      "needs": [],
+      "unblocks": [],
+      "then": [],
+      "refs": ["docs/studio/roadmap.json S6"]
+    },
+    {
+      "id": "upstream-sync-land",
+      "topic": "release",
+      "p": 1,
+      "status": "todo",
+      "role": "제품",
+      "asked": "2026-09-23",
+      "q": "열린 업스트림 추종 PR 셋 — #6 v0.32.0 · #7 v0.32.1 · #10 v0.32.2",
+      "now": "#10 은 검사가 모두 통과했다. #6 · #7 의 태그는 v0.32.2 에 들어 있다. land 는 ff — squash 금지(업스트림 조상이 끊기면 다음 머지가 충돌한다)",
+      "action": "#10 브랜치를 지금 main 에 맞춘다(main 이 앞서 있으면 main 을 머지) → 검사 · 브랜드 불변식 확인 → ff land → #6 · #7 닫기 → 릴리스는 scripts/studio-release.sh",
+      "needs": [],
+      "unblocks": [],
+      "then": [],
+      "refs": ["https://github.com/tiny-solver/tinysolver-studio/pull/10", "my-devops docs/plans/tinysolver/studio-release.md 업스트림 추종"]
+    },
+    {
+      "id": "release-rail-rest",
+      "topic": "release",
+      "p": 3,
+      "status": "todo",
+      "role": "제품",
+      "asked": "2026-09-20",
+      "q": "릴리스 레일 남은 것 — 서버 tarball 을 쓰는 자리 · 빌드 시간",
+      "now": "릴리스는 macOS arm64 앱과 서버 tarball(linux-x64 · darwin-arm64)을 만든다. 서버 tarball 은 만들기만 하고 쓰는 자리가 없다. 첫 빌드는 약 32분",
+      "action": "서버 tarball 을 계속 만들지 정한다 → 캐시 뒤 빌드 시간을 재서 studio-release.md 에 적는다",
+      "needs": [],
+      "unblocks": [],
+      "then": [],
+      "refs": ["my-devops docs/plans/tinysolver/studio-release.md 남은 일"]
+    },
+    {
+      "id": "users-ai-guide",
+      "topic": "release",
+      "p": 3,
+      "status": "todo",
+      "role": "제품",
+      "asked": "2026-09-25",
+      "q": "사용자 PC 의 AI 설치 안내 — Claude Code · Codex 가 없으면 에이전트가 안 돈다",
+      "now": "Studio 는 머신의 claude CLI 로 에이전트를 띄운다(src-tauri/src/studio_agent_cli.rs) · 사용자는 자기 구독을 쓴다. 지금은 오너 맥에만 설치돼 있다",
+      "action": "첫 실행에서 claude · codex 가 있는지 보고 없으면 설치 안내",
+      "needs": [],
+      "unblocks": [],
+      "then": [],
+      "refs": ["my-devops docs/plans/tinysolver/studio-afterplay.md 4단계", "my-devops codepoet-mac-mini-1/services/infra-dashboard/inventory/decide.json#studio-distribution"]
+    }
+  ]
+}
