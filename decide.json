@@ -121,7 +121,7 @@
       "needs": ["t1-targets"],
       "unblocks": [],
       "then": [],
-      "refs": ["my-devops docs/plans/tinysolver/studio-afterplay.md 순서 T2", "my-devops codepoet-mac-mini-1/services/infra-dashboard/inventory/decide.json#studio-native-shell"]
+      "refs": ["my-devops docs/plans/tinysolver/studio-afterplay.md 순서 T2", "#studio-native-shell"]
     },
     {
       "id": "t3-capacitor",
@@ -136,7 +136,7 @@
       "needs": ["t1-targets"],
       "unblocks": [],
       "then": [],
-      "refs": ["my-devops docs/plans/tinysolver/studio-afterplay.md 순서 T3", "my-devops codepoet-mac-mini-1/services/infra-dashboard/inventory/decide.json#studio-native-shell", "my-devops codepoet-mac-mini-1/services/infra-dashboard/inventory/decide.json#store-dev-account"]
+      "refs": ["my-devops docs/plans/tinysolver/studio-afterplay.md 순서 T3", "#studio-native-shell", "my-devops codepoet-mac-mini-1/services/infra-dashboard/inventory/decide.json#store-dev-account"]
     },
     {
       "id": "build-flatten",
@@ -240,7 +240,183 @@
       "needs": [],
       "unblocks": [],
       "then": [],
-      "refs": ["my-devops docs/plans/tinysolver/studio-afterplay.md 4단계", "my-devops codepoet-mac-mini-1/services/infra-dashboard/inventory/decide.json#studio-distribution"]
+      "refs": ["my-devops docs/plans/tinysolver/studio-afterplay.md 4단계", "#studio-distribution"]
+    },
+    {
+      "id": "studio-distribution",
+      "topic": "release",
+      "p": 3,
+      "status": "open",
+      "role": "제품",
+      "asked": "2026-09-24",
+      "q": "Studio 를 오너 밖으로 — 언제 · 어느 OS 로 주나",
+      "now": "오너 맥 전용(Apple Silicon · ad-hoc 서명 · 자동 업데이트 꺼짐). 서명은 store-dev-account 결정(D)대로 법인 등기 뒤 Apple 조직 계정. 업스트림 codeg 는 Windows 도 빌드한다(install.ps1 · 업스트림 Test). 막는 일은 아니다 — 0~3단계(afterplay 연결)는 오너 맥으로 먼저 된다",
+      "facets": [
+        "누가 쓰나",
+        "OS",
+        "서명 · 경고",
+        "비용 · 일"
+      ],
+      "options": [
+        {
+          "key": "A",
+          "title": "등기 전엔 지인 몇 명에게 맥만 — curl 설치, 등기 뒤 서명",
+          "facets": {
+            "누가 쓰나": "오너 · 지인",
+            "OS": "macOS(Apple Silicon)",
+            "서명 · 경고": "ad-hoc — 업데이트마다 권한 재요청",
+            "비용 · 일": "지금 0 · 설치 안내 한 장"
+          }
+        },
+        {
+          "key": "B",
+          "title": "A + Windows 빌드도 — 서명 없이 먼저",
+          "facets": {
+            "누가 쓰나": "게이머 다수(Windows)까지",
+            "OS": "macOS + Windows",
+            "서명 · 경고": "Windows SmartScreen 경고 · 맥은 A 와 같음",
+            "비용 · 일": "러너 시간 · Windows 설치 스크립트 · 경로 · 셸 차이 실측"
+          }
+        },
+        {
+          "key": "C",
+          "title": "등기 전엔 오너만 — 서명 뒤 한 번에 공개",
+          "facets": {
+            "누가 쓰나": "오너",
+            "OS": "macOS",
+            "서명 · 경고": "공개 때부터 공증",
+            "비용 · 일": "지금 0 · 공개가 등기만큼 늦다"
+          }
+        }
+      ],
+      "pick": "B",
+      "reason": "afterplay 첫 고객이 한국 게임 플레이어라 올리는 사람도 Windows 가 다수일 것이다. 업스트림이 이미 Windows 를 빌드해 추가 일이 작다. 경고는 초기 지인 단계에서 감수 · 서명은 등기 뒤",
+      "needs": [],
+      "unblocks": [],
+      "then": [
+        "studio-release.md 에 Windows 러너 · 설치 스크립트 절",
+        "afterplay #make 에 'Studio 받기'",
+        "등기 뒤: Apple 조직 계정 → Developer ID 서명 · 공증 · Tauri updater 서명 키 Vault secret/tinysolver/studio"
+      ],
+      "refs": [
+        "my-devops docs/plans/tinysolver/studio-afterplay.md",
+        "my-devops docs/plans/tinysolver/studio-release.md"
+      ]
+    },
+    {
+      "id": "studio-asset-gen",
+      "topic": "editor",
+      "p": 3,
+      "status": "open",
+      "role": "제품",
+      "asked": "2026-09-24",
+      "q": "Studio 사용자의 에셋(이미지 · 영상 · 3D) 생성을 어디서 돌리나",
+      "now": "오너는 my-genai(linux-2 GPU · ComfyUI)를 쓴다. 사용자에게 열면 원가가 생긴다 — 크레딧 원장은 agent-access 2단계(diary 에만 · 꺼진 채로), 결제는 사업자등록 뒤. afterplay 는 포인트(활동으로만 버는)만 있다",
+      "facets": [
+        "원가",
+        "사용자 준비",
+        "선행"
+      ],
+      "options": [
+        {
+          "key": "A",
+          "title": "사용자 로컬 — Studio 는 연결만(ComfyUI · 사용자 API 키)",
+          "facets": {
+            "원가": "0",
+            "사용자 준비": "GPU 또는 자기 키 필요",
+            "선행": "없음"
+          }
+        },
+        {
+          "key": "B",
+          "title": "우리 크레딧 — my-genai 유료 레인(원가 + 10%)",
+          "facets": {
+            "원가": "사용자 부담 · 우리가 과금",
+            "사용자 준비": "충전만",
+            "선행": "사업자등록 · PG · afterplay 원장"
+          }
+        },
+        {
+          "key": "C",
+          "title": "A 먼저, B 는 결제가 열리면",
+          "facets": {
+            "원가": "0 → 사용자 부담",
+            "사용자 준비": "처음엔 A 와 같음",
+            "선행": "B 부분만 사업자등록"
+          }
+        }
+      ],
+      "pick": "C",
+      "reason": "지금은 결제가 없어 B 를 할 수 없다. 연결 틀(A)을 먼저 만들면 B 는 그 뒤에 공급자 하나 추가다",
+      "needs": [],
+      "unblocks": [],
+      "then": [
+        "studio-afterplay.md 보류 절 갱신"
+      ],
+      "refs": [
+        "my-devops docs/plans/tinysolver/studio-afterplay.md",
+        "my-devops docs/plans/tinysolver/agent-access.md",
+        "my-devops codepoet-mac-mini-1/services/infra-dashboard/inventory/decide.json#product-credits-business-reg"
+      ]
+    },
+    {
+      "id": "studio-native-shell",
+      "topic": "native",
+      "p": 3,
+      "status": "open",
+      "role": "기술",
+      "asked": "2026-09-24",
+      "q": "Studio 게임을 네이티브로 감싸는 껍데기 — Capacitor · Tauri 를 어디에 쓰나",
+      "now": "게임은 웹 엔진(three-web) 한 벌 · 빌드 대상만 바꾼다(studio-afterplay.md '목표 재정의'). diary · dal 폰 앱은 Capacitor 로 해보는 중(app-shell · evaluating). Studio 자신은 Tauri 이고 릴리스 레일이 있다. 스토어 계정은 store-dev-account D(등기 전 직접 설치)",
+      "facets": [
+        "껍데기 수",
+        "폰 게임 플러그인(광고 · 결제 · 게임센터)",
+        "dal 과 경험 공유",
+        "데스크톱"
+      ],
+      "options": [
+        {
+          "key": "A",
+          "title": "폰 = Capacitor · 데스크톱 = Tauri",
+          "facets": {
+            "껍데기 수": "둘",
+            "폰 게임 플러그인(광고 · 결제 · 게임센터)": "있음(커뮤니티)",
+            "dal 과 경험 공유": "그대로",
+            "데스크톱": "Studio 레일 재사용"
+          }
+        },
+        {
+          "key": "B",
+          "title": "Tauri 2 로 폰 · 데스크톱 모두",
+          "facets": {
+            "껍데기 수": "하나",
+            "폰 게임 플러그인(광고 · 결제 · 게임센터)": "얇다(추정) — 직접 짜는 몫",
+            "dal 과 경험 공유": "갈린다",
+            "데스크톱": "같음"
+          }
+        },
+        {
+          "key": "C",
+          "title": "Capacitor 로 폰만 · 데스크톱은 웹 빌드(브라우저 · itch.io)",
+          "facets": {
+            "껍데기 수": "하나",
+            "폰 게임 플러그인(광고 · 결제 · 게임센터)": "있음",
+            "dal 과 경험 공유": "그대로",
+            "데스크톱": "설치 앱 없음 · Steam 불가"
+          }
+        }
+      ],
+      "pick": "A",
+      "reason": "게임은 플랫폼 층 뒤에 있어 껍데기가 둘이어도 게임 코드는 한 벌이다. 폰은 이미 걷는 길(Capacitor)과 수익화 플러그인이 있는 쪽, 데스크톱은 이미 가진 레일(Tauri)을 쓴다. 틀리면 껍데기만 버린다",
+      "needs": [],
+      "unblocks": [],
+      "then": [
+        "T2(Tauri) · T3(Capacitor) 를 studio-afterplay.md 순서대로"
+      ],
+      "refs": [
+        "my-devops docs/plans/tinysolver/studio-afterplay.md",
+        "my-devops docs/decisions/mobile/app-shell.md"
+      ]
     }
   ]
 }
