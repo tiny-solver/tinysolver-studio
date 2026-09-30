@@ -744,6 +744,10 @@ export type CanvasNodeKind =
  *  soft references — a binding whose target is gone renders as unresolved. */
 export interface CanvasNode {
   id: number
+  /** The canvas (`CanvasBoard.id`) this node sits on. Fixed for the node's
+   *  life — which is what lets a client scope the global event stream to the
+   *  one board it shows. */
+  board_id: number
   kind: CanvasNodeKind
   folder_id: number | null
   /** kind=group: the sidebar folder group this region mirrors. */
@@ -775,9 +779,13 @@ export interface CanvasNode {
   updated_at: string
 }
 
-/** Response of `canvas_list_nodes`: the full node set plus the revision it was
- *  read at (single read transaction server-side). Seeds `lastRevision`. */
+/** Response of `canvas_list_nodes`: one board's full node set plus the
+ *  revision it was read at (single read transaction server-side). Seeds
+ *  `lastRevision`. The revision is workspace-global, not per board. */
 export interface CanvasSnapshot {
+  /** The board `nodes` belongs to — echoed so an answer that arrives after the
+   *  client switched boards can be recognised as someone else's. */
+  board_id: number
   nodes: CanvasNode[]
   revision: number
 }
@@ -825,6 +833,49 @@ export type CanvasChange =
     }
 
 export const CANVAS_CHANGED_EVENT = "canvas://changed"
+
+/** One canvas on the canvas list. Mirrors the Rust `CanvasBoard`. `name` is
+ *  null until the user names it (render a localized "Untitled canvas"). */
+export interface CanvasBoard {
+  id: number
+  name: string | null
+  description: string | null
+  /** Theme-preset color name (FolderThemeColor vocabulary), or null. */
+  color: string | null
+  created_at: string
+  /** Last change to the board OR anything on it — node writes stamp it too,
+   *  which is what the list is ordered by. */
+  updated_at: string
+}
+
+/** One node's footprint on a board's list card. */
+export interface CanvasBoardPreviewRect {
+  kind: CanvasNodeKind
+  x: number
+  y: number
+  width: number
+  height: number
+  color: string | null
+}
+
+/** Row of `canvas_list_boards`: the board plus what its card shows about the
+ *  nodes on it. Mirrors the Rust `CanvasBoardSummary`. */
+export interface CanvasBoardSummary {
+  board: CanvasBoard
+  node_count: number
+  /** Terminal cards on the board — shells a board delete would stop. */
+  terminal_count: number
+  /** Largest-first footprints, capped server-side (a thumbnail, not a render). */
+  preview: CanvasBoardPreviewRect[]
+}
+
+/** Payload of the `canvas-board://changed` side-channel: a board was created
+ *  or edited (full row), or deleted. Mirrors the Rust `CanvasBoardChange`. */
+export type CanvasBoardChange =
+  | { kind: "upsert"; board: CanvasBoard }
+  | { kind: "deleted"; id: number }
+
+export const CANVAS_BOARD_CHANGED_EVENT = "canvas-board://changed"
 
 export interface DbConversationDetail {
   summary: DbConversationSummary
@@ -2648,7 +2699,32 @@ export type AcpEvent =
       record: SessionFailureRecord
     }
   /**
-   * A JetBrains AIR async-task delta (claude + codex — see `AsyncTaskDelta`).
+   * One ACP Session Notice (claude-agent-acp 0.81+/codex-acp 1.13+; published
+   * because codeg advertises `clientCapabilities.session.notices`).
+   *
+   * NOT a record — no id, no revision, no history position, and never replayed
+   * (the backend drops these on the replay seam). Every emission is a distinct
+   * event, so the consumer raises a toast rather than merging anything. The
+   * `warning`/`error` mirror into `sessionFailures` is a presentation choice
+   * made in `acp-connections-context`, not something the wire carries.
+   */
+  | {
+      type: "session_notice"
+      notice: SessionNotice
+    }
+  /**
+   * Plugins Claude Code could not load (CLI 2.1.283+, see `PluginLoadFailure`).
+   * The backend reads them off the raw SDK stream's `system/init` frames and
+   * forwards a set once per connection, again only when it changes. NOT
+   * replayed and not kept in the snapshot — like a notice, it is an event.
+   */
+  | {
+      type: "plugin_load_failures"
+      failures: PluginLoadFailure[]
+    }
+  /**
+   * A JetBrains AIR async-task delta (claude + codex, and Grok workflows
+   * translated to the same shape — see `AsyncTaskDelta`).
    * PARTIAL by design: the reducer merges it into the connection's task table
    * by the same rule the backend snapshot applies, and only a `spawned` delta
    * may create a row.
@@ -3003,6 +3079,42 @@ export interface SessionLastError {
  * doubles as its id's revision watermark — dropping one would let a delayed
  * stale upsert resurrect it.
  */
+/**
+ * One ACP Session Notice (mirror of Rust `SessionNotice`) — fire-and-forget
+ * advisory text from the Session Notices RFD.
+ *
+ * Replaces, on connections that advertise the capability, the `**bold label:**`
+ * agent-message line both adapters used to fold these into, and it OUTRANKS the
+ * AIR advisory lane — which is why `warning`/`error` notices are mirrored into
+ * a synthetic {@link SessionFailureRecord} so the banner keeps working.
+ */
+export interface SessionNotice {
+  /** `info` | `warning` | `error` today; an unrecognized level renders as
+   *  `info` rather than being dropped. */
+  severity: string
+  /** Adapter-authored, non-empty, in the adapter's own English — passed through
+   *  verbatim, exactly as `SessionFailureRecord.title` already is. */
+  title: string
+  description?: string | null
+}
+
+/**
+ * One entry of Claude Code's `system/init.plugin_errors` (CLI 2.1.283+): a
+ * plugin that did not load, or loaded without one of its components.
+ */
+export interface PluginLoadFailure {
+  /** `name@marketplace`, or the positional `inline[N]` / `synced[N]` tag of a
+   *  directory entry that failed before it had a name. */
+  plugin: string
+  /** The CLI's category, from an open set (`path-not-found`, `generic-error`,
+   *  `manifest-validation-error`, `dependency-unsatisfied`, …). */
+  kind: string
+  /** CLI-authored English, shown verbatim. */
+  message: string
+  /** The entry's path, for a directory entry that did not load at all. */
+  path?: string | null
+}
+
 export interface SessionFailureRecord {
   id: string
   /** Per-id upsert revision, from 1. */
@@ -3042,15 +3154,16 @@ export interface AsyncTaskUsage {
 /**
  * One JetBrains AIR async task (mirror of Rust `AsyncTaskRecord`;
  * claude-agent-acp 0.73+ and codex-acp 1.10+, published only because codeg
- * advertises the `asyncTasks` AIR capability).
+ * advertises the `asyncTasks` AIR capability — plus Grok's background
+ * workflows, which the backend translates from Grok's own `workflow_updated`).
  *
  * The agent's NON-AGENT background work: Claude's background shells, workflows
- * and monitors; codex's background terminals. Sub-agents are excluded by the
- * adapters themselves. This is the MERGED row, not a wire frame — the adapter
- * announces a task once and then revises it with partial deltas
- * (`AsyncTaskDelta`), and the reducer applies the same merge as the backend's
- * `SessionState::apply_event` so a client hydrating from the snapshot and one
- * that saw every delta agree.
+ * and monitors; codex's background terminals; Grok's workflows. Sub-agents are
+ * excluded by the adapters themselves. This is the MERGED row, not a wire
+ * frame — the adapter announces a task once and then revises it with partial
+ * deltas (`AsyncTaskDelta`), and the reducer applies the same merge as the
+ * backend's `SessionState::apply_event` so a client hydrating from the snapshot
+ * and one that saw every delta agree.
  *
  * codex fills in far less than claude: no `description`, `usage` or
  * `output_file_path`, and `task_id` simply EQUALS `tool_call_id` for a
@@ -3060,7 +3173,8 @@ export interface AsyncTaskUsage {
 export interface AsyncTaskRecord {
   task_id: string
   /** Adapter-authored label — claude: the workflow name, else the description;
-   *  codex: the launching tool call's title, else the raw command. */
+   *  codex: the launching tool call's title, else the raw command; Grok: the
+   *  workflow name. */
   name: string
   /** Already friendly: `shell` | `workflow` | `monitor` | `task`, or an
    *  unmapped future value rendered as itself. NOT the SDK's raw type.
@@ -3071,7 +3185,8 @@ export interface AsyncTaskRecord {
    *  either way and does not read this today; `false` marks work already drawn
    *  as an ordinary tool call (a background `Bash` is). */
   show_in_transcript: boolean
-  /** Whether `_session/async_task/stop` is offered for this task. */
+  /** Whether `_session/async_task/stop` is offered for this task. Always
+   *  `false` for Grok, which has no such request. */
   can_stop: boolean
   /** `running` | `paused` | `completed` | `failed` | `stopped`. Anything
    *  outside the terminal three is treated as still live. */
@@ -3083,6 +3198,12 @@ export interface AsyncTaskRecord {
   output_file_path?: string | null
   /** The tool call this task belongs to, when it has one. */
   tool_call_id?: string | null
+  /** The phase a multi-step task is in (a Grok workflow's current phase).
+   *  Empty = none right now. */
+  phase?: string | null
+  /** The child agent the task is running right now (a Grok workflow's current
+   *  agent). Empty = none right now. */
+  current_agent?: string | null
 }
 
 /**
@@ -3093,9 +3214,10 @@ export interface AsyncTaskRecord {
  */
 export interface AsyncTaskDelta {
   task_id: string
-  /** True only for `async_task_spawned`, the only frame carrying a task's
-   *  identity. A delta naming an unknown task is dropped rather than creating a
-   *  nameless placeholder row. */
+  /** True only for a frame carrying a task's identity: AIR's
+   *  `async_task_spawned`, and every Grok workflow frame (each restates the
+   *  whole run). A delta naming an unknown task is dropped rather than
+   *  creating a nameless placeholder row. */
   spawned: boolean
   name?: string | null
   task_type?: string | null
@@ -3108,6 +3230,10 @@ export interface AsyncTaskDelta {
   usage?: AsyncTaskUsage | null
   output_file_path?: string | null
   tool_call_id?: string | null
+  /** Grok restates its whole workflow on every frame, so an EMPTY string here
+   *  means "none any more" — absent still means unchanged. */
+  phase?: string | null
+  current_agent?: string | null
 }
 
 export interface LiveSessionSnapshot {
@@ -3480,6 +3606,13 @@ export interface QoderAuthStatus {
   binary_path?: string | null
 }
 
+// The newest upstream release of an agent, newer than codeg's pinned version,
+// returned by acp_fetch_agent_latest_release. Unreviewed by codeg; `version` is
+// already in the form Custom install accepts.
+export interface AgentLatestRelease {
+  version: string
+}
+
 // Lightweight agent status returned by acp_get_agent_status
 export interface AcpAgentStatus {
   agent_type: AgentType
@@ -3709,6 +3842,9 @@ export interface SkillSyncReport {
 export interface SystemProxySettings {
   enabled: boolean
   proxy_url: string | null
+  // Hosts that bypass the proxy, comma-separated. Optional because a server
+  // that predates the setting (a remote workspace) never sends it.
+  no_proxy?: string | null
 }
 
 export type AppLocale =
@@ -4724,7 +4860,8 @@ export interface ModelProviderInfo {
   agent_type: AgentType
   /**
    * Model value, interpretation depends on agent_type:
-   * - claude_code: JSON string of {main, reasoning, haiku, sonnet, opus}
+   * - claude_code: JSON string of {main, reasoning, haiku, sonnet, opus,
+   *   fable} plus the custom model option trio
    * - codex / gemini / others: plain model name string
    */
   model: string | null
@@ -4747,6 +4884,7 @@ export interface ClaudeProviderModel {
   haiku?: string
   sonnet?: string
   opus?: string
+  fable?: string
   /** ANTHROPIC_CUSTOM_MODEL_OPTION — id of a custom entry appended to the
    *  in-session /model picker (e.g. a model the gateway serves). */
   customOption?: string
@@ -4770,6 +4908,7 @@ export function parseClaudeProviderModel(
       "haiku",
       "sonnet",
       "opus",
+      "fable",
       "customOption",
       "customOptionName",
       "customOptionDescription",
@@ -4793,6 +4932,7 @@ export function serializeClaudeProviderModel(
   if (obj.haiku?.trim()) cleaned.haiku = obj.haiku.trim()
   if (obj.sonnet?.trim()) cleaned.sonnet = obj.sonnet.trim()
   if (obj.opus?.trim()) cleaned.opus = obj.opus.trim()
+  if (obj.fable?.trim()) cleaned.fable = obj.fable.trim()
   if (obj.customOption?.trim()) cleaned.customOption = obj.customOption.trim()
   if (obj.customOptionName?.trim())
     cleaned.customOptionName = obj.customOptionName.trim()

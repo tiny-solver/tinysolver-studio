@@ -285,6 +285,22 @@ pub fn build_router(
         )
         // ─── Canvas ───
         .route(
+            "/canvas_list_boards",
+            post(handlers::canvas::canvas_list_boards),
+        )
+        .route(
+            "/canvas_create_board",
+            post(handlers::canvas::canvas_create_board),
+        )
+        .route(
+            "/canvas_update_board",
+            post(handlers::canvas::canvas_update_board),
+        )
+        .route(
+            "/canvas_delete_board",
+            post(handlers::canvas::canvas_delete_board),
+        )
+        .route(
             "/canvas_list_nodes",
             post(handlers::canvas::canvas_list_nodes),
         )
@@ -924,6 +940,10 @@ pub fn build_router(
             post(handlers::acp::acp_load_pi_config),
         )
         .route(
+            "/acp_list_pi_model_capabilities",
+            post(handlers::acp::acp_list_pi_model_capabilities),
+        )
+        .route(
             "/acp_load_deepseek_model_catalog",
             post(handlers::acp::acp_load_deepseek_model_catalog),
         )
@@ -990,6 +1010,10 @@ pub fn build_router(
         .route(
             "/acp_detect_agent_local_version",
             post(handlers::acp::acp_detect_agent_local_version),
+        )
+        .route(
+            "/acp_fetch_agent_latest_release",
+            post(handlers::acp::acp_fetch_agent_latest_release),
         )
         .route(
             "/acp_prepare_npx_agent",
@@ -1870,9 +1894,13 @@ pub fn build_router(
         },
     ));
 
-    // WebSocket route (auth via Sec-WebSocket-Protocol)
+    // WebSocket routes (auth via Sec-WebSocket-Protocol)
     let ws_route = Router::new()
         .route("/ws/events", get(ws::ws_handler))
+        .route(
+            crate::web::browser_tunnel::frame::TUNNEL_PATH,
+            get(crate::web::browser_tunnel::ws_handler),
+        )
         .layer(middleware::from_fn(move |req, next| {
             auth::require_token(req, next, token_for_ws.clone())
         }));
@@ -1927,11 +1955,20 @@ pub fn build_router(
         .layer(cors)
         .layer(Extension(state))
         .layer(Extension(shutdown_signal))
-        // Outermost: compress API JSON and static text assets. Allowlist
-        // predicate — binary downloads keep their exact Content-Length (the
-        // remote proxy's progress source) and SSE stays unbuffered; see
+        // Compress API JSON and static text assets. Allowlist predicate —
+        // binary downloads keep their exact Content-Length (the remote
+        // proxy's progress source) and SSE stays unbuffered; see
         // `web::compression`.
         .layer(crate::web::compression::compression_layer())
+        // Outermost, and outside everything above on purpose: a request
+        // addressed to a bridge hostname is a dev server's, not codeg's, and
+        // is answered by the bridge exactly as a listener of its own would —
+        // no CORS, no compression, no body limit, no static fallback. Only
+        // when `CODEG_BRIDGE_HOST_PATTERN` is set; every other request goes
+        // straight through. See `web::browser_bridge`.
+        .layer(middleware::from_fn(
+            crate::web::browser_bridge::route_by_host,
+        ))
 }
 
 async fn health_check() -> impl IntoResponse {

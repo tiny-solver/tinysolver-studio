@@ -241,6 +241,8 @@
     "enableProxy": "Activar proxy del sistema",
     "proxyAddress": "Dirección del proxy",
     "proxyHint": "Compatible con http(s)/socks5, ejemplo: {example}. Solo funciona cuando el proxy del sistema está activado.",
+    "proxyBypass": "Omitir el proxy para",
+    "proxyBypassHint": "Separa las entradas con comas y sin espacios, por ejemplo <code>{example}</code>. <code>example.com</code> coincide con ese dominio y <code>.example.com</code> con todos sus subdominios; también se admiten direcciones IP. Las direcciones locales <code>localhost,127.0.0.1,::1</code> siempre se conectan directamente y no hace falta añadirlas. La lista se aplica como la variable de entorno NO_PROXY.",
     "save": "Guardar",
     "saving": "Guardando...",
     "proxyRequired": "Se requiere URL del proxy cuando el proxy está activado",
@@ -300,6 +302,8 @@
     "rollbackSuccess": "Se revirtió a la versión anterior. Recargando...",
     "rollbackFailed": "Error al revertir. Revisa los registros del servidor.",
     "updateErrors": {
+      "permissionDenied": "No se puede escribir en {path}, así que las actualizaciones no pueden instalarse en el lugar. Actualiza manualmente con permisos de administrador o revisa los permisos de instalación.",
+      "targetWriteFailed": "No se puede escribir en {path}, así que las actualizaciones no pueden instalarse en el lugar: {reason}",
       "sourceUnavailable": "No se puede acceder al origen de actualización. Revisa tu red o proxy e inténtalo de nuevo.",
       "network": "Falló la conexión de red. Revisa tu red o proxy e inténtalo de nuevo.",
       "downloadFailed": "No se pudo descargar el paquete de actualización. Inténtalo más tarde.",
@@ -718,13 +722,6 @@
     "emptyNoAgent": "No hay agentes disponibles.",
     "configManagement": "Gestión de configuración",
     "envVars": "Variables de entorno",
-    "adapterChannel": {
-      "label": "Versión del adaptador",
-      "description": "Instalar y Actualizar usan la versión que codeg ha revisado y fijado. Con Última pasan a instalar la versión de npm más reciente del paquete en ese momento; si esa instalación falla, codeg vuelve a la versión fijada y lo indica en el registro de instalación.",
-      "pinned": "Fijada (recomendada)",
-      "latest": "Última (sin revisar)",
-      "latestWarning": "Las versiones más recientes no están revisadas y pueden romper este agente en codeg; en ocasiones incluso se sabe que una versión está rota. El estado de versión muestra lo que quedó instalado realmente."
-    },
     "hostTools": {
       "label": "Dejar que el agente gestione archivos y comandos",
       "description": "codeg deja de atender el acceso a archivos y los comandos de terminal, de modo que el agente los ejecuta en su propio proceso, donde sí se aplican su sandbox y sus reglas de permisos. También se desactiva la delegación a otros agentes, ya que devolvería ese mismo trabajo a codeg. codeg no añade ningún sandbox propio, así que actívalo solo si el agente tiene uno configurado."
@@ -795,6 +792,7 @@
       "saveCodeBuddyConfig": "Guardar configuración de CodeBuddy",
       "saveKimiCodeConfig": "Guardar configuración de Kimi Code",
       "customInstall": "Instalación personalizada",
+      "upgradeToLatest": "Actualizar a la última sin revisar {version}",
       "saveKimiCodeRawConfig": "Save config.toml",
       "saveDeepSeekConfig": "Guardar configuración de DeepSeek",
       "diagnose": "Diagnosticar"
@@ -1042,9 +1040,9 @@
       "sandboxMode_read-only": "Solo lectura",
       "sandboxMode_workspace-write": "Escritura en el espacio de trabajo",
       "sandboxMode_danger-full-access": "Acceso total (sin sandbox)",
-      "sandboxModeReadOnlyAcpWarning": "El adaptador ACP ya no incluye un sandbox de solo lectura, así que las sesiones de codeg se ejecutan con escritura en el espacio de trabajo diga lo que diga esta opción. codeg elige el ajuste más estricto disponible —cada elevación pasa por tu aprobación— pero las ediciones dentro del espacio de trabajo ya no la necesitan. Las sesiones de codex CLI y del IDE sí respetan solo lectura.",
+      "sandboxModeReadOnlyAcpWarning": "codex-acp 1.7–1.13 no incluye un sandbox de solo lectura: con esas versiones del adaptador, una sesión de codeg se ejecuta con escritura en el espacio de trabajo diga lo que diga esta opción, aunque cada elevación sigue pasando por tu aprobación. codex-acp 2.0 lo restauró, así que actualiza el adaptador si tienes uno anterior. Las sesiones de codex CLI y del IDE siempre respetan solo lectura.",
       "sandboxModeHint": "En Windows, la escritura en el espacio de trabajo baja a solo lectura salvo que actives el sandbox experimental de Windows de codex.",
-      "sandboxModeSeedsPresetHint": "codeg también asigna esto al ajuste de aprobación inicial de la sesión, así que —a diferencia de la política de aprobación— sí afecta a las peticiones normales. Ten en cuenta que el ajuste por defecto del adaptador ahora hace que un modelo filtre las elevaciones y solo reenvíe las que considera inseguras; elige «Pedir aprobación» en el compositor para revisarlas todas tú. El ajuste del compositor siempre tiene prioridad.",
+      "sandboxModeSeedsPresetHint": "codeg también asigna esto al ajuste de aprobación inicial de la sesión, así que —a diferencia de la política de aprobación— sí afecta a las peticiones normales. Solo lectura empieza en «Read-only». Con la política de aprobación never, acceso total empieza en «Full access» y escritura en el espacio de trabajo en «Auto review», donde un modelo filtra las elevaciones y solo reenvía las que considera inseguras. Con cualquier otra política, escritura en el espacio de trabajo y acceso total empiezan en «Workspace access», que te pasa cada elevación, con codex-acp 2.0 o posterior, y en «Auto review» con adaptadores anteriores. Sin definir, se mantiene el valor por defecto del adaptador, «Auto review». El ajuste del compositor siempre tiene prioridad.",
       "writableRootsLabel": "Carpetas adicionales con escritura",
       "writableRootsHint": "Una ruta absoluta por línea, además del directorio de trabajo.",
       "sandboxRootsRelativeError": "Debe ser una ruta absoluta: codex resuelve las rutas relativas dentro de ~/.codex: {path}",
@@ -1381,6 +1379,7 @@
       "haikuDefaultModel": "Modelo Haiku predeterminado",
       "sonnetDefaultModel": "Modelo Sonnet predeterminado",
       "opusDefaultModel": "Modelo Opus predeterminado",
+      "fableDefaultModel": "Modelo Fable predeterminado",
       "customModelOption": "ID de modelo personalizado",
       "customModelOptionName": "Nombre del modelo personalizado",
       "customModelOptionDescription": "Descripción del modelo personalizado",
@@ -1399,7 +1398,9 @@
       "customInstallDescription": "Introduce la versión que quieres instalar. Se reinstalará y reemplazará la versión instalada actualmente.",
       "customInstallVersionLabel": "Número de versión",
       "customInstallInvalid": "Introduce un número de versión válido, p. ej. 1.2.3.",
-      "customInstallSubmit": "Instalar"
+      "customInstallSubmit": "Instalar",
+      "confirmUpgradeToLatest": "¿Actualizar {name} a la versión sin revisar {version}?",
+      "confirmUpgradeToLatestDescription": "codeg no ha revisado esta versión. Puede romper {name} en codeg y, en ocasiones, se sabe que una versión está rota. Para volver atrás, usa Instalación personalizada y reinstala la versión recomendada {recommendedVersion}."
     },
     "errors": {
       "windowsFileLocked": "Los archivos de {name} están en uso por una sesión activa, por lo que Windows no puede reemplazarlos. Cierra todas las sesiones de {name} e inténtalo de nuevo.",
@@ -1488,7 +1489,7 @@
     "version": {
       "statusLabel": "Estado de versión",
       "notInstalled": "No instalado",
-      "remoteLocal": "Remota: {remoteVersion} · Local: {localVersion}",
+      "recommendedLocal": "Recomendada: {recommendedVersion} · Local: {localVersion}",
       "localOnly": "Local: {localVersion}",
       "localInstalled": "{versionText}. Instalado.",
       "platformUnsupported": "{versionText}. La plataforma actual no soporta este agente.",
@@ -1496,9 +1497,9 @@
       "clickInstall": "{versionText}. Haz clic en Instalar a la derecha.",
       "localUnrecognized": "{versionText}. La versión local no es comparable; intenta actualizar para sobrescribir la instalación.",
       "upgradeAvailable": "{versionText}. Hay actualización disponible.",
-      "remoteUnavailable": "{versionText}. La versión remota no está disponible por ahora.",
+      "recommendedUnavailable": "{versionText}. No hay una versión recomendada disponible.",
       "latest": "{versionText}. Ya está en la última versión.",
-      "latestChannel": "{versionText}. Canal de última versión activado; Actualizar instala la versión más reciente."
+      "unreviewedAvailable": "{versionText}. Hay una versión más reciente sin revisar."
     },
     "adapter": {
       "label": "Adaptador ACP",
@@ -1548,7 +1549,8 @@
         "medium": "Medio",
         "high": "Alto",
         "minimal": "Mínimo",
-        "xhigh": "Muy alto"
+        "xhigh": "Muy alto",
+        "max": "Máximo"
       },
       "apiKeyLabel": "Clave API",
       "apiKeyHint": "Se guarda en ~/.pi/agent/auth.json para el proveedor seleccionado.",
@@ -1562,7 +1564,9 @@
       "modeCustom": "pi personalizado",
       "modeCustomHint": "Ejecuta tu propia compilación, instalación o envoltorio de pi.",
       "commandLabel": "Comando o ruta de pi",
-      "commandHint": "Una ruta absoluta, un nombre de comando en el PATH o un script envoltorio (p. ej. ./pi-test.sh de un monorepo).",
+      "commandHint": "Use una ruta absoluta o un nombre de comando en PATH.",
+      "relativeCommandPath": "Use una ruta absoluta para el comando Pi o un nombre de comando en PATH.",
+      "relativeAgentDir": "Use un directorio de agente Pi absoluto o ~/...; las rutas relativas dependen del directorio de trabajo.",
       "commandNotFound": "Comando no encontrado",
       "validate": "Validar",
       "advanced": "Avanzado",
@@ -1603,7 +1607,14 @@
       "levelsEmptyError": "Elige al menos un nivel: sin ninguno, pi vuelve a Off.",
       "wireValuesTitle": "Avanzado: valores enviados al proveedor",
       "wireValuesHint": "Déjalo vacío para enviar el nombre del nivel tal cual. Defínelo cuando tu endpoint espere otra cosa: los backends al estilo de Google quieren LOW / HIGH.",
-      "defaultLevelUnlisted": "Este nivel no está en la lista de arriba: pi lo reduciría."
+      "defaultLevelUnlisted": "Este nivel no está en la lista de arriba: pi lo reduciría.",
+      "modelLevels": "{model} ofrece: {levels}.",
+      "modelNoThinking": "{model} no tiene niveles de razonamiento: Pi siempre lo ejecuta con el razonamiento desactivado.",
+      "levelClamped": "{model} no ofrece {level}, así que Pi lo ejecuta en {effective}. Los modelos que ofrecen {level} lo siguen usando.",
+      "modelNotListed": "Pi no incluye este modelo para este proveedor. Comprueba el ID del modelo: Pi solo muestra proveedores para los que tiene una clave de API o un inicio de sesión.",
+      "catalogUnavailable": "No se pudo consultar a Pi qué niveles de razonamiento ofrece este modelo.",
+      "configLoadFailed": "No se pudieron leer los ajustes de Pi: {message}",
+      "runtimeTooOld": "Este Pi es demasiado antiguo: Codeg necesita Pi {min} o posterior para abrir una sesión. Actualízalo primero."
     },
     "addCustomAgent": "Añadir agente personalizado",
     "addCustomAgentHint": "Registra cualquier agente compatible con ACP. Elige uno del registro público de ACP o pega su información de registro.",
@@ -1987,7 +1998,7 @@
       "tasks": "Tareas pendientes",
       "loadingSubsessions": "Cargando subconversaciones…",
       "forge": "Panel del repositorio",
-      "canvas": "Conversaciones infinitas",
+      "canvas": "Lienzo infinito",
       "folderGroup": {
         "newGroup": "Nuevo grupo",
         "newGroupTitle": "Nuevo grupo de carpetas",
@@ -2003,7 +2014,12 @@
         "removeFromGroup": "Sin grupo",
         "newGroupAndMove": "Nuevo grupo…",
         "dropToUngroup": "Suelta aquí para quitar del grupo"
-      }
+      },
+      "recentFilterAll": "Todo",
+      "recentFilterTitle": "Mostrar en Recientes: {filter}",
+      "noRecentChats": "No hay chats recientes",
+      "noRecentFolders": "No hay conversaciones de carpeta recientes",
+      "recentFilterMenuLabel": "Mostrar en Recientes"
     },
     "conversation": {
       "reloadFailed": "No se pudo recargar la conversación: {message}",
@@ -3006,8 +3022,6 @@
           "openAgentsSettings": "Abrir ajustes de agentes",
           "retry": "Reintentar"
         },
-        "agentsSetupHint": "Abre Ajustes > Agentes para gestionar la instalación.",
-        "withSetupHint": "{message}\n{hint}",
         "blocked": {
           "missingConfig": "No se puede leer la configuración actual del agente.",
           "disabled": "{agent} está deshabilitado en Ajustes de agentes. Actívalo antes de conectar.",
@@ -3031,16 +3045,20 @@
           "turnFailedUnknown": "{agent} finalizó el turno con un motivo de parada no reconocido.",
           "turnFailedAuthRequired": "{agent} necesita que inicies sesión de nuevo antes de ejecutar este turno. Inicia sesión desde Ajustes y vuelve a enviar el mensaje.",
           "agentAuthRequired": "{agent} no ha podido iniciar una sesión: no tiene ninguna credencial utilizable. Vuelve a iniciar sesión en Ajustes → Agentes → {agent} y reabre esta conversación.",
+          "agentRuntimeOutdated": "{agent} es demasiado antiguo para esta versión de Codeg. Actualízalo y vuelve a abrir esta conversación.",
           "grokModelSwitchIncompatibleAgent": "{agent} no puede cambiar a ese modelo en una conversación existente. Inicia una nueva sesión para usarlo.",
+          "setModeFailed": "{agent} no pudo cambiar de modo.",
+          "setConfigOptionFailed": "{agent} no pudo aplicar ese ajuste.",
+          "goalControlFailed": "{agent} no pudo actualizar el objetivo.",
+          "imageDropped": "{agent} no recibió una imagen adjunta.",
+          "sessionLoadFallback": "{agent} no pudo restaurar la sesión anterior y empezó una nueva; ya no tiene el contexto previo.",
           "turnFailedEmpty": "{agent} finalizó el turno sin producir ninguna respuesta.",
           "turnFailedEmptyProtocol": "{agent} produjo una salida que codeg no pudo analizar; la versión del agente podría no coincidir con el protocolo.",
-          "turnFailedEmptyMetadata": "{agent} solo envió actualizaciones de estado en este turno (plan / modo / uso) y ninguna respuesta.",
-          "detailsInAlerts": "Abre Alertas en la barra de estado y despliega los detalles para ver la salida del agente."
+          "turnFailedEmptyMetadata": "{agent} solo envió actualizaciones de estado en este turno (plan / modo / uso) y ninguna respuesta."
         },
         "unableReadAgentConfig": "No se puede leer la configuración del agente: {message}",
         "connectFailedTitle": "Falló la conexión de {agent}",
         "toolFallbackTitle": "Herramienta",
-        "eventErrorTitle": "Error del agente",
         "notificationTurnComplete": "{agent} ha terminado de responder",
         "notificationError": "{agent} error: {message}",
         "notificationQuestion": "{agent} espera tu respuesta",
@@ -3057,7 +3075,9 @@
           "lineNoErrorWithDelay": "{retry}, {delay}",
           "httpStatus": " (HTTP {status})"
         },
-        "configOptionAdjusted": "{agent} estableció {option} en {actual} en lugar de {requested}"
+        "configOptionAdjusted": "{agent} estableció {option} en {actual} en lugar de {requested}",
+        "noticeTitle": "{agent}: {title}",
+        "pluginLoadFailedTitle": "{agent} no pudo cargar {count, plural, one {# plugin} other {# plugins}}"
       },
       "connectionLifecycle": {
         "tasks": {
@@ -3741,7 +3761,22 @@
           "outputMissing": "Codex truncó la salida del script y eliminó el separador de este comando, por lo que no se le pudo atribuir ninguna salida.",
           "sharedWith": "También contiene la salida de {commands}: codex truncó sus separadores.",
           "truncated": "truncado"
-        }
+        },
+        "visualizeTitle": "Visualización",
+        "visualizeWide": "Ancho",
+        "visualizeLoading": "Cargando visualización…",
+        "visualizeError": "No se pudo cargar la visualización",
+        "visualizeReload": "Recargar",
+        "visualizeOpenFile": "Abrir archivo",
+        "visualizeExpand": "Mostrar todo",
+        "visualizeCollapse": "Mostrar menos",
+        "visualizeScriptsOn": "Scripts activados",
+        "visualizeScriptsOff": "Activar scripts",
+        "visualizeScriptsHint": "Ejecuta los scripts de la visualización para que sea interactiva. Se ejecuta en un entorno aislado y no puede acceder a la red ni a tus archivos.",
+        "visualizeFrameTitle": "Visualización de Codex",
+        "htmlPreviewOpen": "Vista previa",
+        "htmlPreviewOpenAria": "Vista previa de {name}",
+        "htmlPreviewHide": "Ocultar vista previa"
       },
       "messageNav": {
         "title": "Navegación de mensajes",
@@ -3829,7 +3864,6 @@
         "reconnecting": "Reconectando…",
         "reconnectDisabledDuringTurn": "Disponible cuando termine el turno actual",
         "dismiss": "Descartar",
-        "reconnectFailed": "No se pudo reconectar la sesión",
         "applied": "Nueva configuración aplicada"
       },
       "piProjectTrust": {
@@ -3883,6 +3917,7 @@
         "compacted": "Contexto compactado",
         "compactedTokens": "Contexto compactado · {before} → {after} tokens",
         "failed": "Error al compactar el contexto",
+        "summary": "Resumen",
         "triggerManual": "Activada manualmente",
         "triggerAutomatic": "Activada automáticamente"
       },
@@ -4292,13 +4327,14 @@
     "agentTypeRequired": "El tipo de agente es obligatorio.",
     "agentTypeImmutableHint": "El tipo de agente no se puede cambiar después de la creación.",
     "model": "Modelo",
-    "modelPlaceholderCodex": "gpt-5.6-sol / gpt-5.5",
+    "modelPlaceholderCodex": "gpt-6.1-sol / gpt-6-luna",
     "modelPlaceholderGemini": "gemini-3-pro-preview",
     "claudeMainModel": "Modelo Principal",
     "claudeReasoningModel": "Modelo de Razonamiento (pensamiento)",
     "claudeHaikuDefaultModel": "Modelo Haiku Predeterminado",
     "claudeSonnetDefaultModel": "Modelo Sonnet Predeterminado",
     "claudeOpusDefaultModel": "Modelo Opus Predeterminado",
+    "claudeFableDefaultModel": "Modelo Fable Predeterminado",
     "claudeCustomModelOption": "ID de modelo personalizado",
     "claudeCustomModelOptionName": "Nombre del modelo personalizado",
     "claudeCustomModelOptionDescription": "Descripción del modelo personalizado",
@@ -4742,7 +4778,8 @@
     "none": "Sin ramas",
     "local": "Local",
     "remote": "Remota",
-    "useCustom": "Usar «{query}»"
+    "useCustom": "Usar «{query}»",
+    "head": "HEAD"
   },
   "BackupSettings": {
     "tabs": {
@@ -5115,6 +5152,7 @@
   "BrowserSettings": {
     "title": "Navegador integrado",
     "description": "Las páginas web abiertas desde conversaciones, resultados de herramientas y la terminal pueden mostrarse como pestañas junto a tus archivos, sin salir de la aplicación.",
+    "descriptionWeb": "En una sesión de navegador, las páginas se abren en el navegador que ya estás usando. La excepción es un servidor que se ejecuta en el host de codeg: se reenvía a una pestaña aquí. Estos son los ajustes que siguen decidiendo algo.",
     "defaultTargetTitle": "Dónde se abren los enlaces",
     "defaultTargetHint": "Se configura por origen. Haz ⌘/Ctrl+clic en un enlace para usar la otra opción solo esta vez.",
     "sourceTranscript": "Mensajes de la conversación",
@@ -5154,6 +5192,7 @@
     "downloadsHint": "Los archivos que descarga una página se guardan en {dir}. No se abre nada automáticamente y nunca se reemplaza un archivo existente.",
     "rulesTitle": "Reglas de sitio",
     "rulesHint": "Por sitio: siempre el navegador integrado, siempre el navegador del sistema, o bloquear. Los patrones son un nombre de host, *.example.com o *, con un :puerto opcional; gana la coincidencia más específica.",
+    "rulesHintWeb": "Por sitio: bloquear. En una sesión de navegador no se puede elegir dónde se abre un enlace. Los patrones son un nombre de host, *.example.com o *, con un :puerto opcional; gana la coincidencia más específica.",
     "serviceOpenTitle": "Servidores locales",
     "serviceOpenHint": "Cuando un servidor iniciado en un terminal imprime su dirección, ábrela en una pestaña del navegador. Solo direcciones de este equipo y solo cuando algo esté escuchando en ellas.",
     "serviceOpenOff": "No hacer nada",
@@ -5514,7 +5553,6 @@
     "promptPlaceholder": "Describe la tarea para el agente — @ para referenciar archivos, / para comandos",
     "folderPlaceholder": "Selecciona una carpeta",
     "baseBranch": "Rama base",
-    "baseBranchPlaceholder": "Rama actual",
     "baseBranchDefault": "Rama actual al iniciar la tarea",
     "baseBranchHint": "La tarea parte de esta rama y la fusión la devuelve a ella.",
     "agentInheritedHint": "Heredado de la configuración de tareas; cámbialo para personalizar esta tarea",
@@ -5646,8 +5684,8 @@
     "eventContextCompact": "Compactación de contexto",
     "eventUserAction": "Acción del usuario",
     "eventDiffStat": "Instantánea de cambios",
-    "eventForgeWriteback": "Comentario publicado en la incidencia",
-    "eventForgeWritebackFailed": "Fallo al comentar en la incidencia",
+    "eventForgeWriteback": "Comentario publicado en el elemento",
+    "eventForgeWritebackFailed": "Fallo al comentar en el elemento",
     "actionDeliverPr": "Abrir pull request",
     "actionDeliverPrMr": "Abrir merge request",
     "actionDeliverPrBack": "Enviar al pull request",
@@ -6181,7 +6219,7 @@
     "scenarioPlanFirst": "Primero un plan",
     "scenarioPlanFirstHint": "El agente confirma que el problema es real, entrega un plan de implementación y se detiene — apruébalo devolviendo la tarea para implementarlo.",
     "scenarioReviewFix": "Revisar y corregir",
-    "scenarioReviewFixHint": "Revisa los cambios y corrige los problemas encima; al aceptar, los commits vuelven a la rama.",
+    "scenarioReviewFixHint": "El agente juzga primero si el enfoque en sí se sostiene y solo entonces corrige los problemas encima; si no, no hace ningún commit y te devuelve la revisión para que decidas. Al aceptar, las correcciones vuelven a la rama.",
     "scenarioReviewOnly": "Solo revisar",
     "scenarioReviewOnlyHint": "Un informe de revisión con hallazgos y sugerencias, sin commits — devuelve la tarea si quieres aplicar arreglos.",
     "settingsTitle": "Ajustes del panel",
@@ -6209,7 +6247,7 @@
     "save": "Guardar"
   },
   "Canvas": {
-    "title": "Conversaciones infinitas",
+    "title": "Lienzo infinito",
     "untitled": "Conversación sin título",
     "unresolvedConversation": "Conversación eliminada",
     "removeCard": "Quitar tarjeta",
@@ -6297,7 +6335,36 @@
     "removeTerminalCard": "Quitar tarjeta de terminal",
     "terminalNoDirectory": "Esta tarjeta no tiene directorio de trabajo",
     "confirmDeleteTerminals": "Se cerrarán {count} terminal(es) en ejecución y se detendrán sus procesos.",
-    "confirmDeleteNotesAndTerminals": "Se eliminarán permanentemente {notes} nota(s) que escribiste y se detendrán {terminals} terminal(es) en ejecución."
+    "confirmDeleteNotesAndTerminals": "Se eliminarán permanentemente {notes} nota(s) que escribiste y se detendrán {terminals} terminal(es) en ejecución.",
+    "boardsTitle": "Lienzos",
+    "boardsSubtitle": "Cada lienzo es su propio tablero infinito de regiones, tarjetas de conversación, notas, archivos y terminales.",
+    "boardCount": "{count, plural, one {# lienzo} other {# lienzos}}",
+    "newBoard": "Nuevo lienzo",
+    "newBoardTitle": "Nuevo lienzo",
+    "editBoard": "Editar lienzo…",
+    "editBoardTitle": "Editar lienzo",
+    "deleteBoard": "Eliminar lienzo…",
+    "openBoard": "Abrir",
+    "boardMenu": "Opciones del lienzo",
+    "boardName": "Nombre",
+    "boardDescription": "Descripción",
+    "boardDescriptionPlaceholder": "¿Para qué es este lienzo? (opcional)",
+    "untitledBoard": "Lienzo sin título",
+    "boardItemCount": "{count, plural, =0 {Vacío} one {# elemento} other {# elementos}}",
+    "boardEditedAt": "Editado {time}",
+    "boardsEmpty": "Aún no hay lienzos",
+    "boardsEmptyHint": "Crea un lienzo para organizar tu trabajo espacialmente. Cada lienzo tiene sus propias regiones, tarjetas y notas.",
+    "searchBoards": "Buscar lienzos…",
+    "noBoardsMatch": "Ningún lienzo coincide con «{query}»",
+    "boardsLoadFailed": "No se pudieron cargar los lienzos",
+    "retry": "Reintentar",
+    "backToBoards": "Volver a todos los lienzos",
+    "boardDeleted": "Este lienzo fue eliminado",
+    "deleteBoardTitle": "¿Eliminar este lienzo?",
+    "deleteBoardDescription": "«{name}» y todo su contenido se eliminarán definitivamente. Las conversaciones, carpetas y archivos que muestra no se verán afectados.",
+    "deleteBoardItems": "Contiene {count, plural, one {# elemento} other {# elementos}}.",
+    "deleteBoardTerminals": "{count, plural, one {Se cerrará # terminal y se detendrá su proceso.} other {Se cerrarán # terminales y se detendrán sus procesos.}}",
+    "deleteBoardConfirm": "Eliminar lienzo"
   },
   "Studio": {
     "back": "Back to workspace",
@@ -6459,6 +6526,7 @@
       "ownedWindow": "Esta página se muestra en su propia ventana.",
       "ownedWindowShow": "Mostrar ventana",
       "remoteBanner": "Abierto a través de {host}",
+      "remoteBannerDown": "Se perdió la conexión con {host}. Se volverá a intentar con la próxima solicitud.",
       "navigationBlocked": "Navegación bloqueada: {host}",
       "navigationBlockedRule": "bloqueada por una regla de sitio",
       "navigationBlockedScheme": "este tipo de dirección no se puede abrir aquí",
@@ -6472,7 +6540,17 @@
       "agentGrantLost": "El acceso terminó: la página salió de {origin}",
       "agentGrantLostShare": "Compartir también {origin}",
       "agentGrantReplaced": "El acceso terminó: ahora otro programa sirve {origin}",
-      "agentGrantReplacedShare": "Compartir de todos modos"
+      "agentGrantReplacedShare": "Compartir de todos modos",
+      "errorRemoteRefused": "Nada está escuchando en esta dirección del host remoto",
+      "errorRemoteRefusedHint": "{host} rechazó la conexión. Comprueba que el servidor de esta dirección esté en marcha allí.",
+      "errorRemoteUnreachable": "El host remoto no puede llegar a esta dirección",
+      "errorRemoteUnreachableHint": "Desde {host}, el nombre no se resuelve o no hay ruta hasta él.",
+      "errorRemoteNotAllowed": "El servidor remoto no abre esta dirección para el navegador",
+      "errorRemoteNotAllowedHint": "El codeg-server de {host} solo deja que su túnel del navegador llegue a direcciones privadas (CODEG_BROWSER_TUNNEL=private).",
+      "errorRemoteTimeout": "El host remoto tardó demasiado en conectar",
+      "errorRemoteTimeoutHint": "{host} no obtuvo respuesta de esta dirección a tiempo. Puede que el servidor esté ocupado o detrás de un cortafuegos.",
+      "errorTunnelDown": "La conexión con el host remoto está caída",
+      "errorTunnelDownHint": "El túnel hacia {host} no transporta nada ahora mismo. Reinténtalo cuando vuelva a estar accesible."
     },
     "tab": {
       "untitled": "Nueva pestaña"
@@ -6492,7 +6570,22 @@
       "copied": "Dirección copiada",
       "unreachableTitle": "No se puede acceder al puerto puente",
       "unreachableHint": "El servidor de codeg puso esta página en {origin}, pero tu navegador no puede acceder a él. Publica ese puerto (consulta CODEG_BRIDGE_PORTS) o define CODEG_BRIDGE_PUBLIC_HOST; si codeg se sirve por HTTPS, los puertos puente también necesitan HTTPS.",
+      "unreachableHostHint": "El servidor de codeg puso esta página en {origin}, pero tu navegador no puede acceder a ella. Ese nombre de host tiene que resolverse al servidor de codeg y atravesar el proxy que haya delante: un registro DNS comodín y un vhost comodín (consulta CODEG_BRIDGE_HOST_PATTERN).",
       "errorTitle": "Esta página no se puede mostrar aquí"
+    },
+    "remote": {
+      "title": "Esta dirección está en {host}",
+      "titleUnnamed": "Esta dirección está en el host remoto",
+      "description": "Apunta a la máquina donde se ejecuta este espacio de trabajo, no a este equipo.",
+      "copyAddress": "Copiar dirección",
+      "copied": "Dirección copiada",
+      "tryHost": "Probar {host}",
+      "tryHostHint": "Abre {address} en una pestaña de este equipo. Funciona si la página escucha en todas las interfaces de red y este equipo llega a su puerto.",
+      "openHere": "Abrir en este equipo",
+      "openHereHint": "Abre la dirección en una pestaña de este equipo. Funciona si este equipo está en la misma red.",
+      "retry": "Reintentar",
+      "connecting": "Conectando a través de {host}…",
+      "connectingUnnamed": "Conectando a través del host remoto…"
     },
     "download": {
       "started": "Descargando…",
@@ -6549,6 +6642,7 @@
       "shareControl": "Leer y actuar",
       "levelDefault": "Predeterminado",
       "notShareable": "Esta página no tiene una dirección web que compartir con los agentes",
+      "remoteWindow": "Los agentes de un espacio de trabajo remoto se ejecutan en su host y no pueden usar el navegador de este equipo",
       "shared": "Compartida",
       "sharedControl": "Compartida · puede actuar",
       "sharedWith": "Los agentes pueden leer {origin}",
@@ -6642,6 +6736,7 @@
       "noConversation": "Abre una conversación a la que enviar esta página",
       "pickElement": "Elegir un elemento…",
       "screenshot": "Enviar una captura",
+      "markUp": "Marcar una captura…",
       "consoleErrors": "Enviar los errores de la consola",
       "consoleClean": "Nada ha fallado en esta página",
       "picking": "Eligiendo…",
@@ -6652,9 +6747,20 @@
       "noConsoleErrors": "Esta página no ha mostrado ningún error",
       "chipElement": "Elemento de la página",
       "chipScreenshot": "Captura de la página",
+      "chipMarkedScreenshot": "Captura marcada",
       "chipConsole": "{count, plural, one {# error de consola} other {# errores de consola}}",
       "gone": "Esa conversación ya no está abierta",
-      "consoleErrorsCount": "{count, plural, one {Enviar el # error de consola} other {Enviar los # errores de consola}}"
+      "consoleErrorsCount": "{count, plural, one {Enviar el # error de consola} other {Enviar los # errores de consola}}",
+      "markupTitle": "Marcar la captura",
+      "markupTools": "Herramienta de dibujo",
+      "markupBox": "Recuadro",
+      "markupArrow": "Flecha",
+      "markupUndo": "Deshacer",
+      "markupClear": "Borrar",
+      "markupHint": "Arrastra sobre la imagen para dibujar. Cada marca lleva un número al que tu mensaje puede referirse.",
+      "markupCount": "{count, plural, one {# marca} other {# marcas}}",
+      "markupCancel": "Cancelar",
+      "markupSend": "Añadir al chat"
     }
   },
   "browser": {
@@ -6666,6 +6772,16 @@
     "inspector": {
       "error": {
         "switchedOff": "Esta pestaña se abrió con el inspector web desactivado. Actívalo en la configuración del navegador y vuelve a abrir la página."
+      }
+    },
+    "remote": {
+      "error": {
+        "unavailable": "Para abrir las direcciones del host remoto en el navegador integrado se necesita macOS 14 o posterior.",
+        "unsupported": "El codeg-server remoto es demasiado antiguo para transportar el tráfico del navegador. Actualízalo para abrir sus direcciones aquí.",
+        "disabled": "El codeg-server remoto tiene desactivado su túnel del navegador (CODEG_BROWSER_TUNNEL).",
+        "unreachable": "No se pudo conectar con el túnel del navegador del codeg-server remoto ({reason}).",
+        "bypassed": "El motor del navegador de este equipo envía algunas direcciones por fuera del túnel, así que las páginas del host remoto no se abren para no cargarlas desde este equipo.",
+        "probeFailed": "El navegador integrado no pudo confirmar que llega al host remoto a través del túnel. Vuelve a intentarlo en un momento."
       }
     }
   }
