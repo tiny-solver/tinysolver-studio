@@ -145,6 +145,7 @@
     },
     {
       "id": "build-flatten",
+      "rule": "up-tech",
       "topic": "native",
       "p": 3,
       "status": "open",
@@ -253,6 +254,7 @@
     },
     {
       "id": "studio-distribution",
+      "rule": "up-biz",
       "topic": "release",
       "p": 3,
       "status": "open",
@@ -314,6 +316,7 @@
     },
     {
       "id": "studio-asset-gen",
+      "rule": "up-tech",
       "topic": "editor",
       "p": 3,
       "status": "open",
@@ -370,6 +373,7 @@
     },
     {
       "id": "studio-native-shell",
+      "rule": "up-tech",
       "topic": "native",
       "p": 3,
       "status": "open",
