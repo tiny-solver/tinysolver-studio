@@ -3,7 +3,8 @@
     "Tinysolver Studio 의 할 일 · 결정 · 니즈 — 정본은 이 파일이다. 서버가 없는 설치 앱이라 백오피스 화면 대신 이 파일이 백오피스다(my-devops docs/architecture/roles.md \"니즈\"). 버드뷰가 GitHub main 에서 읽어 수만 센다.",
     "모양은 my-devops inventory/decide.json · dal decide.json 과 같다 — 항목 수명: open(고를 것 · pick 은 권장안) · todo(손이 필요) → 정하면 status=decided + decided{date,pick,note}.",
     "role = 이 결정을 내리는 자리. role 이 '사업' 인 항목은 대표가 정할 것이라 버드뷰에 올라간다. p = 1 지금 · 2 이번 주 · 3 정리. 항목의 needs · unblocks 는 이 파일 안의 선행 id — my-devops /decide 항목은 refs 로 적는다.",
-    "asks = 니즈 — 사업 자리(버드뷰 · 오너)가 넣는 '무엇이 필요한가'. new → taken(items 에 계획 항목) → done(note 에 공지) · 안 하면 dropped. 세션을 시작하면 new 부터 본다."
+    "asks = 니즈 — 사업 자리(버드뷰 · 오너)가 넣는 '무엇이 필요한가'. new → taken(items 에 계획 항목) → done(note 에 공지) · 안 하면 dropped. 세션을 시작하면 new 부터 본다.",
+    "갈래 칸(my-devops docs/plans/tinysolver/work-management.md §3-1) — 결정 요청(open)은 rule = 어느 기준 밖인가(방향판 https://direction.home.tinysolver.me/rules 의 규칙 id · 맞는 규칙이 없으면 none). 규칙 · 약속 · none 에 걸린 것은 정하면 그 규칙 정본에 한 줄 쓰고 ruled(날짜). 할 일(todo)은 goal(방향판 goals.json 키) · from(issue:<id> · ask:<id>) · prep · who · learn(목록 — 준비해 줄 것 · 필요한 사람 · 먼저 공부할 것). 비면 '안 적음' — 기한은 두지 않는다."
   ],
   "date": "2026-09-26",
   "asks": [
