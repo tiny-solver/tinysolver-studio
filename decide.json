@@ -39,28 +39,28 @@
       "name": "afterplay 대상 — 만든 게임을 올린다",
       "role": "제품",
       "ask": "같은 빌드가 afterplay 안에서 돌고, Studio 에서 바로 올라가게 하려면 무엇부터",
-      "rule": "my-devops docs/plans/tinysolver/studio-afterplay.md"
+      "doc": "my-devops docs/plans/tinysolver/studio-afterplay.md"
     },
     {
       "id": "native",
       "name": "네이티브 빌드 대상 — 데스크톱 · 폰",
       "role": "제품",
       "ask": "같은 게임을 Tauri(데스크톱) · Capacitor(폰)로 어떻게 싣나",
-      "rule": "my-devops docs/plans/tinysolver/studio-afterplay.md"
+      "doc": "my-devops docs/plans/tinysolver/studio-afterplay.md"
     },
     {
       "id": "editor",
       "name": "편집기 · 엔진 — 제작 공정",
       "role": "제품",
       "ask": "roadmap S6(제작 공정과 분야별 확장) 중 무엇을 먼저",
-      "rule": "docs/studio/roadmap.json"
+      "doc": "docs/studio/roadmap.json"
     },
     {
       "id": "release",
       "name": "fork 추종 · 릴리스 · 설치",
       "role": "제품",
       "ask": "업스트림을 받아 들이고, 앱을 오너 밖 사람도 설치해 쓰게",
-      "rule": "AGENTS.md \"Fork 운영 — tinysolver\""
+      "doc": "AGENTS.md \"Fork 운영 — tinysolver\""
     }
   ],
   "items": [
