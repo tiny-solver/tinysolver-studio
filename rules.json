@@ -1,0 +1,23 @@
+{
+  "$comment": [
+    "Tinysolver Studio 가 정해 둔 것 — 제품 층 기준 · 규칙 목록. 회사 층(환경 · 배포 · 공지 · 시간 등)은 my-devops inventory/rules.json 이고 여기엔 이 제품 것만.",
+    "칸 · 갈래(kind) · 고리는 회사 목록과 같다(my-devops codepoet-mac-mini-1/services/infra-dashboard/inventory/rules.json factors · kinds · loop). scope 는 '제품:studio', source 는 이 repo 안 경로(#절).",
+    "내용은 베끼지 않는다 — 한 줄 요약과 정본(source) 링크만. 고치는 곳은 정본이고, 여기는 목차다. 이력은 쓰지 않는다 — my-devops gen_rules_history 가 git log 에서 만든다.",
+    "결정 요청(decide.json)의 rule 은 여기 id 를 그대로 적는다(이 제품 것이 먼저, 없으면 회사 id). 화면: 방향판 https://direction.home.tinysolver.me/rules '제품 · Tinysolver Studio'."
+  ],
+  "v": 1,
+  "date": "2026-10-04",
+  "rules": [
+    { "id": "codeg-credit", "name": "기반은 codeg — 고맙다는 말 먼저", "says": "codeg(xintaofei, Apache-2.0) 위에 콘텐츠 층을 얹은 fork — 이름을 바꾼 것은 만드는 것이 콘텐츠라서이고 codeg 를 지우려는 뜻이 아니다", "kind": "원칙", "seat": "대표", "scope": "제품:studio", "source": "docs/studio/README.md#content-studio--첫-구현", "enforce": "—" },
+    { "id": "upstream-receive-only", "name": "업스트림은 받기만 · 업스트림 파일은 끝에만", "says": "upstream 리모트는 fetch 전용 · 업스트림에 PR · push 하지 않는다 · 업스트림 파일은 되도록 고치지 않고, 고칠 땐 끝에만 덧붙인다(중간을 고치면 머지마다 충돌)", "kind": "규칙", "seat": "CTO", "scope": "제품:studio", "source": "AGENTS.md#fork-운영--tinysolver", "enforce": "upstream push URL 막힘 · work.sh -R tiny-solver/tinysolver-studio 고정" },
+    { "id": "upstream-sync-ff", "name": "업스트림 추종은 기계가 · ff 로 land", "says": "linux-1 크론 studio-upstream-sync 가 새 태그를 upstream-sync/<태그> 로 머지해 PR 을 연다 — land 는 알림의 명령대로 ff, squash 금지(업스트림 조상이 끊기면 다음 머지가 충돌)", "kind": "규칙", "seat": "CTO", "scope": "제품:studio", "source": "AGENTS.md#fork-운영--tinysolver", "enforce": "크론 studio-upstream-sync · 알림의 land 명령" },
+    { "id": "living-plan", "name": "Content Studio 를 고치면 계획도 같은 변경에서", "says": "src/lib · components · app 의 studio 를 고치면 roadmap.json · README 를 같이 고치고 studio:plan 으로 생성 · 검증 결과는 checks 에 실제대로 — 검증하지 않은 항목을 완료로 표시하지 않는다", "kind": "규칙", "seat": "CTO", "scope": "제품:studio", "source": "AGENTS.md#content-studio-living-plan", "enforce": "pnpm studio:plan:check · .github/workflows/studio-check.yml" },
+    { "id": "renderer-independent", "name": "문서 · 명령 층은 렌더러와 독립", "says": "공유 문서 · 명령 층은 Three.js 와 다른 렌더러에 기대지 않는다", "kind": "규칙", "seat": "CTO", "scope": "제품:studio", "source": "AGENTS.md#content-studio-living-plan", "enforce": "리뷰" },
+    { "id": "scene-commands-validated", "name": "장면은 검증된 명령으로 · 검증기는 쌍둥이", "says": "명령 배치는 전체가 검증될 때만 한 번에 적용(틀리면 원본 유지) · 편집기와 에이전트(MCP studio_*)가 같은 명령 · Rust studio_scene.rs 와 TS document.ts 는 규칙이 같아야 한다(한쪽을 고치면 다른 쪽도)", "kind": "규칙", "seat": "CTO", "scope": "제품:studio", "source": "docs/studio/project-layout.md#에이전트-연결", "enforce": "vitest src/lib/studio · cargo test content_ · 리뷰" },
+    { "id": "managed-engine", "name": "엔진은 프로젝트 밖의 관리형 런타임", "says": "프로젝트에는 엔진 코드가 없다 — __codeg/ 를 미리보기 서버 · 빌드가 채우고, 에이전트는 엔진을 복사해 고치지 않고 스크립트를 쓴다 · 빌드는 CDN 없이 단독 실행", "kind": "규칙", "seat": "CTO", "scope": "제품:studio", "source": "docs/studio/project-layout.md#엔진-프로젝트-밖의-관리형-런타임-three-web-030", "enforce": "src-tauri/src/content_engine.rs · 스캐폴드 AGENTS.md" },
+    { "id": "project-folder-contract", "name": "콘텐츠 프로젝트 폴더 계약", "says": "bible/ 이 단일 정본(새 이름은 bible 에 먼저) · 결과물 폴더끼리 import 하지 않는다 · 생성물은 build/ 에만 · 에셋 파일명 <대상>_<상태>_<WxH>.png · 스캐폴드가 정본이고 바뀌면 문서도 같은 변경에서", "kind": "규칙", "seat": "제품 책임", "scope": "제품:studio", "source": "docs/studio/project-layout.md#폴더", "enforce": "스캐폴드(content_project.rs)가 쓰는 프로젝트 AGENTS.md" },
+    { "id": "creds-belong-to-cli", "name": "바깥 호스트 자격 증명은 Studio 가 갖지 않는다", "says": "출시 command 의 계정 · 자격 증명은 호출되는 CLI 의 것 — Studio 는 저장하지 않는다", "kind": "원칙", "seat": "대표", "scope": "제품:studio", "source": "docs/studio/project-layout.md#출시", "enforce": "—" },
+    { "id": "release-from-linux1", "name": "릴리스는 linux-1 에서 태그만 · 빌드는 러너", "says": "scripts/studio-release.sh 가 studio-v<앱 버전>-<날짜>.<순번> 태그 하나만 push → GitHub Actions 가 빌드 · 맥은 설치 스크립트로 받기만 · v* 태그 · git push --tags 는 쓰지 않는다(업스트림 release.yml 을 깨운다)", "kind": "규칙", "seat": "CTO", "scope": "제품:studio", "source": "docs/studio/README.md#릴리스와-설치--만드는-곳과-쓰는-곳이-다르다", "enforce": "scripts/studio-release.sh(--check) · studio-release.yml" },
+    { "id": "separate-from-codeg", "name": "codeg 와 상태를 섞지 않는다", "says": "식별자 me.tinysolver.studio · 홈 ~/.tinysolver-studio · 키체인 · 포트를 따로 써서 두 앱을 같이 켜도 서로 건드리지 않는다 · 일부러 나누는 것(npm-global)은 brand.rs 에 적는다", "kind": "규칙", "seat": "CTO", "scope": "제품:studio", "source": "docs/studio/README.md#다음-제작-흐름과-데스크톱", "enforce": "src-tauri/src/brand.rs" }
+  ]
+}
