@@ -1,7 +1,7 @@
 {
   "$comment": [
     "Tinysolver Studio 가 아는 '왜 이런가' — 이 제품 고유의 구조 질문. 모양은 my-devops scripts/why/why.schema.json.",
-    "fork 만의 파일이다(업스트림 xintaofei/codeg 에 없다 — decide.json 과 같다). 모아보기는 http://birdview.home.codepoet.me/why (my-devops scripts/gen-why.sh 가 버드뷰 home 을 따라 걷는다)."
+    "fork 만의 파일이다(업스트림 xintaofei/codeg 에 없다 — decide.json 과 같다). 모아보기는 https://direction.home.tinysolver.me/why (my-devops scripts/gen-why.sh 가 버드뷰 home 을 따라 걷는다)."
   ],
   "v": 1,
   "items": [
@@ -35,6 +35,152 @@
         "decide.json",
         "AGENTS.md",
         "src-tauri"
+      ]
+    },
+    {
+      "id": "tinysolver-studio-shared-db",
+      "asked": "2026-09-21",
+      "tags": [
+        "에이전트",
+        "환경변수",
+        "격리",
+        "함정",
+        "MacBook Air"
+      ],
+      "q": "새로 깐 Tinysolver Studio 가 기존 codeg 랑 대화 세션·폴더가 똑같이 보인다 — 의도된 건가?",
+      "a": "아니다. 격리는 돼 있고, 앱을 띄운 방식 때문에 깨졌다. codeg 앱 안에서 도는 에이전트 셸에서 open -a 로 띄워 그 셸의 CODEG_DATA_DIR(= 기존 앱 데이터 폴더)를 물려받았다. 앱은 그 변수를 '운영자가 고정한 뿌리'로 보고 일부러 존중한다.",
+      "why": [
+        "실측: 새 앱이 연 DB 가 ~/Library/Application Support/app.codeg/codeg.db (lsof). 자기 폴더 me.tinysolver.studio 는 만들어지지도 않았다.",
+        "원인 확증: 그 프로세스 환경에 그 세션에만 있는 CLAUDE_CODE_SESSION_ID 가 들어 있었다. 부모 사슬은 zsh → claude 에이전트 → node → /Applications/codeg.app.",
+        "머신 설정이 아니다 — launchctl getenv CODEG_DATA_DIR 은 비어 있다. Finder·Dock 으로 띄우면 자기 폴더를 쓴다.",
+        "식별자 변경 자체는 먹었다: WebKit 저장소 ~/Library/WebKit/me.tinysolver.studio · 홈 디렉터리 ~/.tinysolver-studio. 어긋난 것은 DB 뿌리 하나뿐이었다.",
+        "공유된 것: 폴더 15 · 대화 43 · 원격 연결 4 · 로그. 고쳐도 완전히는 안 갈린다 — 대화 행은 포인터이고 내용은 ~/.claude · ~/.codex 에 있어 두 앱이 같이 읽는다(에이전트 CLI 세션 통합이 이 제품의 본업).",
+        "일반화: open -a 는 호출한 셸의 환경을 넘긴다. 에이전트 셸에서 앱을 띄우면 부모 앱이 내려준 변수를 물려받는다 — 앱 코드도 설정도 멀쩡한데 상태만 섞인다."
+      ],
+      "where": "MacBook Air — /Applications/Tinysolver Studio.app 와 /Applications/codeg.app",
+      "enforce": "없음(환경변수 상속이라 스크립트가 못 막는다). 규칙은 docs/reference/machine-conventions.md §11 — 에이전트 세션에서 앱을 띄워 검증했으면 사람이 쓰는 경로(Finder·Dock)로 한 번 더 띄워 본다",
+      "status": {
+        "kind": "trap",
+        "text": "구조가 아니라 함정. codeg 로 띄우는 모든 앱에 있다. 되돌리기는 앱을 끄고 Finder·Dock 으로 다시 띄우거나 env -u CODEG_DATA_DIR open -a '<앱>'.",
+        "open": [
+          "오너가 '그래도 괜찮다'고 해 2026-09-21 현재 그대로 둔다 — 갈라야 할 때 위 한 줄"
+        ]
+      },
+      "refs": [
+        "https://github.com/k-codepoet/my-devops/blob/main/docs/reference/machine-conventions.md",
+        "https://github.com/k-codepoet/my-devops/blob/main/docs/plans/tinysolver/studio-release.md"
+      ]
+    },
+    {
+      "id": "studio-upstream-follow",
+      "asked": "2026-09-21",
+      "tags": [
+        "tinysolver-studio",
+        "업스트림",
+        "fork",
+        "크론",
+        "linux-1"
+      ],
+      "q": "업스트림 codeg 가 새 버전을 내면 tinysolver-studio 는 어떻게 따라가나? 자동으로 합쳐지나",
+      "a": "감지·머지·PR 까지만 자동이다(linux-1 크론 매일 07:20). main 은 자동으로 안 옮긴다 — 이름을 갈아 놓은 fork 라 판단이 필요해서 land 는 사람이 한다.",
+      "why": [
+        "흐름: 크론 → scripts/studio-upstream-sync.sh → 업스트림 최신 v* 태그가 main 에 없으면 별도 worktree 에서 머지 → 브랜드 불변식 검사 → 브랜치 push + PR → 알림(tinysolver.studio.upstream). 충돌·불변식 위반이면 아무것도 남기지 않고 알린다.",
+        "오너의 작업 트리에서 머지하지 않는 이유 — 충돌 마커가 쓰고 있는 체크아웃에 남는다. worktree 는 ~/.cache 아래에 만든다.",
+        "그 worktree 는 ~/.gitconfig 경로 규칙(includeIf) 밖이라 tinysolver 신원·ssh 키가 안 걸린다. 스크립트가 git -c user.name/user.email/core.sshCommand 로 명시해 넘긴다 — 안 하면 choigawoon 으로 커밋되고 push 도 막힌다.",
+        "tauri.conf.json 은 릴리스마다 반드시 충돌한다(우리가 고친 productName·identifier 사이에 업스트림이 올리는 version 이 끼어 있다). 해소가 늘 같아 자동화했다: version 만 업스트림, 나머지는 우리 것. --theirs 로 파일째 받으면 안 된다 — updater endpoints [](업스트림 릴리스로 자동 업데이트되는 것을 막는다) · deep-link schemes [](codeg:// 를 안 빼앗는다) · devUrl 3100 이 같이 날아간다.",
+        "검사는 이 fork 의 studio-check.yml 이 한다. 업스트림 test.yml 은 pull_request 에도 걸려 있지만 fork 라 PR 이 열리는 순간에는 런이 안 생겼다(PR #1 에 check-run 0 실측). push 는 도니까 upstream-sync/** push 에 걸었다.",
+        "게이트 문턱을 업스트림과 같게 맞춘다 — 첫 머지에서 '우리 검사는 초록인데 PR 은 빨강'을 밟았다(lint · clippy 가 우리 쪽에 없었다).",
+        "브랜드 검사 패턴은 조각으로 둔다 — 붙여 적으면 git grep 이 자기 파일을 잡아 되돌림으로 오판한다. CLAUDE.md 의 pkill -f 자기매치와 같은 함정."
+      ],
+      "where": "linux-1 크론 studio-upstream-sync(매일 07:20, run-job.sh 래퍼) · 스크립트·워크플로는 tinysolver-studio repo",
+      "enforce": "scripts/studio-upstream-sync.sh(가드·자동 해소·불변식) · .github/workflows/studio-check.yml(브랜드 불변식 · lint · typecheck · vitest · build · cargo check · clippy) — 둘 다 tinysolver-studio repo",
+      "status": {
+        "kind": "keep",
+        "text": "이름을 갈아 놓은 fork 인 동안은 land 를 사람이 하는 게 맞다. 업스트림이 건드리는 줄과 우리가 건드리는 줄이 겹치는 한 자동 land 는 이름을 조용히 되돌릴 수 있다.",
+        "open": [
+          "첫 회차(v0.31.1)만 겪었다 — 충돌 종류가 더 나오면 자동 해소 목록을 늘린다",
+          "tinysolver-studio 는 버드뷰 alsoRepos 라 gen-why 가 그 repo 의 why.json 을 안 걷는다(products[].home 만 따라간다) — 그래서 이 항목이 my-devops 에 있다"
+        ]
+      },
+      "refs": [
+        "scripts/studio-upstream-sync.sh",
+        ".github/workflows/studio-check.yml",
+        "https://github.com/k-codepoet/my-devops/blob/main/docs/plans/tinysolver/studio-release.md",
+        "https://github.com/k-codepoet/my-devops/blob/main/codepoet-mac-mini-1/services/notify-hub/routes/tinysolver.json"
+      ]
+    },
+    {
+      "id": "tinysolver-studio-name",
+      "asked": "2026-09-20",
+      "tags": [
+        "tinysolver-studio",
+        "codeg",
+        "이름",
+        "라이선스",
+        "fork"
+      ],
+      "q": "codeg 는 무슨 뜻인가? 왜 codeg-gameeditor 를 tinysolver-studio 로 바꿨나",
+      "a": "codeg = Code Generation. 여러 AI 코딩 에이전트를 한곳에 모으는 업스트림 워크스페이스 이름이다 — '코딩 도구'라는 뜻이라 콘텐츠 제작(글·웹툰·영상·게임·책·강의) 의도가 담기지 않아 이름을 갈랐다.",
+      "why": [
+        "업스트림 README 가 'Codeg (Code Generation) is a multi-agent coding workspace' 라고 스스로 푼다. 이름 앞에 codeg 를 남기면 'codeg 의 부가기능'으로 읽힌다.",
+        "gameeditor 도 틀렸다 — 게임은 만들려는 여섯 가지 중 하나일 뿐이다. 매체가 늘어도 안 틀려지는 이름으로 갔다.",
+        "라이선스 장애는 없다. 업스트림은 Apache-2.0 이라 fork·개명·재배포·상업적 이용이 모두 허용된다. 다만 6조가 상표는 주지 않으므로 제품명에 Codeg 를 넣는 것은 라이선스가 보장하는 영역 밖이고, 출처 설명은 허용된다.",
+        "그래서 존중은 이름이 아니라 귀속 표기로 한다 — README 첫머리에 upstream(xintaofei/codeg) 링크 · Apache-2.0 고지 · 비제휴 문구. LICENSE 는 그대로 두고 수정 이력은 git 이 남긴다.",
+        "코드 안쪽의 codeg-engine · __codeg/ · codeg-project.json · CODEG_* 환경변수 · ~/.codeg/npm-global 은 일부러 남겼다 — 업스트림 파생 이름이거나 기존 프로젝트 파일을 읽는 데 쓰인다.",
+        "식별자는 me.tinysolver.studio 로 갈았다(앱 데이터 경로가 여기서 갈린다). 머신을 옮기는 김에 바꿔 이어 올 상태가 없었다."
+      ],
+      "where": "tiny-solver/tinysolver-studio — 2026-09-20 k-codepoet 에서 이전·개명, 작업 자리 linux-1 ~/tinysolver.me/",
+      "enforce": "scripts/repo-to-tinysolver.sh(테넌트 이전: 트리·stash·미푸시·살아있는 세션 가드 → transfer → clone → HEAD 대조 → 원본 제거) · src-tauri/src/brand.rs(구분되는 이름을 한곳에 선언)",
+      "status": {
+        "kind": "keep",
+        "text": "이 이름으로 끝까지 간다(오너 확정). 업스트림 fork 라는 사실은 GitHub fork 표시와 README 귀속 표기에 남는다.",
+        "open": [
+          "공개 배포·사업화 단계에서 상표·귀속 표기를 한 번 더 점검"
+        ]
+      },
+      "refs": [
+        "src-tauri/src/brand.rs",
+        "https://github.com/k-codepoet/my-devops/blob/main/docs/plans/identity/tenant-split.md",
+        "https://github.com/k-codepoet/my-devops/blob/main/docs/plans/tinysolver/studio-release.md",
+        "https://github.com/k-codepoet/my-devops/blob/main/scripts/repo-to-tinysolver.sh"
+      ]
+    },
+    {
+      "id": "tinysolver-studio-build",
+      "asked": "2026-09-20",
+      "tags": [
+        "tinysolver-studio",
+        "빌드",
+        "배포",
+        "github-actions",
+        "macOS",
+        "linux-1"
+      ],
+      "q": "tinysolver-studio 는 왜 홈랩에서 안 빌드하고 GitHub 에서 빌드하나? 다른 건 다 로컬 self-build 인데",
+      "a": "리눅스에서 macOS 앱을 만들 수 없어서다. 작업 머신은 linux-1 인데 쓰는 곳은 맥이다 — 사람은 linux-1 에서 태그만 끊고, 빌드는 GitHub 러너가 하고, 맥은 결과물만 받는다.",
+      "why": [
+        "Tauri 번들링과 앱이 링크하는 Apple 프레임워크는 macOS 호스트를 요구한다. 교차 컴파일이 안 되는 구간이라 '배포 호스트에서 로컬 self-build' 규칙이 여기서만 성립하지 않는다.",
+        "나머지 서비스는 배포 대상이 컨테이너(같은 홈랩 안)라 로컬 빌드가 성립한다. 데스크톱 앱은 배포 대상이 남의 OS 다 — 그래서 규칙이 갈린다.",
+        "사람이 하는 동작은 한 줄이다: linux-1 에서 scripts/studio-release.sh → studio-v* 태그 하나만 push. 맥은 릴리스에서 받는다.",
+        "실측 09-20: 첫 릴리스 studio-v0.31.0-20260920.1 — 5개 작업(드래프트·앱·서버 2종·공개) 전부 성공, 약 32분(캐시 없는 첫 빌드). MacBook Air 설치·기동 확인.",
+        "업스트림 release.yml 은 v*.*.* 태그에 반응하고 Apple Developer ID 시크릿을 요구한다(이 fork 엔 없다). 파일은 병합 충돌을 피하려 그대로 두고, git push --tags 를 안 쓰는 것으로 피한다."
+      ],
+      "where": "정본 체크아웃 linux-1 ~/tinysolver.me/tinysolver-studio · 빌드 GitHub Actions(studio-release.yml) · 설치 대상 MacBook Air /Applications/Tinysolver Studio.app",
+      "enforce": "scripts/studio-release.sh(main 깨끗·push 상태 확인 후 태그 1개만 push) · studio-release.yml(전부 성공해야 릴리스 공개) · scripts/studio-install-macos.sh(sha256 + 서명 검증 후 교체)",
+      "status": {
+        "kind": "keep",
+        "text": "맥 앱을 쓰는 동안은 이 모양이 맞다. Developer ID 를 사면 서명 단계만 바뀌고 구조는 그대로다.",
+        "open": [
+          "ad-hoc 서명이라 업데이트마다 macOS 가 폴더·로컬 네트워크 권한을 다시 물을 수 있다",
+          "서버 tarball(linux-x64 · darwin-arm64)은 만들기만 하고 아직 쓰는 자리가 없다"
+        ]
+      },
+      "refs": [
+        "scripts/studio-release.sh",
+        ".github/workflows/studio-release.yml",
+        "scripts/studio-install-macos.sh",
+        "https://github.com/k-codepoet/my-devops/blob/main/docs/plans/tinysolver/studio-release.md",
+        "https://github.com/k-codepoet/my-devops/blob/main/docs/reference/machine-conventions.md"
       ]
     }
   ]
