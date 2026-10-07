@@ -57,6 +57,14 @@
         "aw-3d-assemble",
         "aw-gen-connect"
       ]
+    },
+    {
+      "id": "blender-video",
+      "date": "2026-10-07",
+      "from": "오너",
+      "text": "Studio 에서 Blender 와 genai 를 이어 영상까지 — 3D 로 먼저 장면 · 카메라 파이프라인을 잡고, 렌더한 그림으로 이미지를 생성하고, 그걸로 영상을 생성하는 형태(3D 우선 → 그림 → 영상)",
+      "status": "new",
+      "items": []
     }
   ],
   "topics": [
