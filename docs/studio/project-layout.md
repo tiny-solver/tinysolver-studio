@@ -27,7 +27,7 @@
 │   ├── world.md            세계관·규칙·장소·용어집
 │   ├── characters/         캐릭터당 <slug>.md, _template.md 복사
 │   └── story/              synopsis.md, episodes/
-├── assets/                 원본 에셋 + manifest.json (game-asset-contract 규칙)
+├── assets/                 원본 에셋 + manifest.json (game-asset-contract 규칙 · 생성 재료는 generated/ 아래, 출처는 항목의 source)
 │   ├── characters/<slug>/
 │   ├── backgrounds/
 │   └── ui/
@@ -73,6 +73,7 @@
 - `outputs`: 정렬·중복 제거된 kebab-case. 없는 결과물 폴더는 만들지 않는다.
 - `engine`: game 결과물이 있고 템플릿이 엔진을 제공할 때만 존재. `build`는 패키징 전 실행할 셸 명령(선택). `start`는 사람이 읽는 실행 방법이다. 엔진이 프로젝트 밖에 있으므로 Studio 밖에서 돌리려면 빌드를 서빙한다.
 - `paths`: 레이어 위치 선언. 도구는 하드코딩 대신 이 값을 읽는다.
+- `generate`(선택): `{ "url": "https://…" }` — Studio 가 그림·3D 생성에 부르는 생성기(genai API 모양)의 주소. 편집기 재료 패널의 **연결**이나 손으로 쓴다. 자격 증명은 두지 않는다.
 - `agents`: 역할별 선호 에이전트. `null`이면 사용자가 고른 에이전트. 매니페스트에 두는 이유는 프로젝트와 함께 이동하기 위해서다.
 
 ## 템플릿

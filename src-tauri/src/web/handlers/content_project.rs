@@ -92,3 +92,15 @@ pub async fn get_content_preview(
 ) -> Result<Json<crate::content_preview::ContentPreviewInfo>, AppCommandError> {
     Ok(Json(cp_commands::get_content_preview(params.root).await?))
 }
+
+#[derive(Deserialize)]
+pub struct StudioRunParams {
+    pub root: String,
+    pub op: crate::studio_tools::StudioOp,
+}
+
+/// The editor's side of the `studio_*` operations (see
+/// [`crate::studio_tools::studio_run`]).
+pub async fn studio_run(Json(params): Json<StudioRunParams>) -> Json<serde_json::Value> {
+    Json(crate::studio_tools::studio_run(params.root, params.op).await)
+}

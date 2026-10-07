@@ -18,6 +18,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 use crate::commands::content_project as cp;
+use crate::studio_assets;
 use crate::studio_scene;
 
 /// One studio operation, carried inside a broker request.
@@ -34,6 +35,19 @@ pub enum StudioOp {
         #[serde(default)]
         version: Option<String>,
         target: String,
+    },
+    /// The material register `<assets>/manifest.json` ([`crate::studio_assets`]).
+    ListAssets,
+    /// Fetch a URL into `<assets>/` and register it with its provenance.
+    ImportAsset(studio_assets::ImportRequest),
+    /// Call the project's generator (optionally feeding a material back in)
+    /// and import the result.
+    GenerateAsset(studio_assets::GenerateRequest),
+    /// Set or clear `generate.url` in the manifest. The editor's Connect
+    /// button; agents edit the manifest directly.
+    ConnectGenerator {
+        #[serde(default)]
+        url: Option<String>,
     },
 }
 
@@ -133,7 +147,18 @@ pub async fn run(root: PathBuf, op: StudioOp) -> Value {
                 }),
             }
         }
+        StudioOp::ListAssets => studio_assets::list(&root).await,
+        StudioOp::ImportAsset(req) => studio_assets::import(&root, req).await,
+        StudioOp::GenerateAsset(req) => studio_assets::generate(&root, req).await,
+        StudioOp::ConnectGenerator { url } => studio_assets::connect(&root, url).await,
     }
+}
+
+/// The editor's door to the same operations the MCP tools run: one command,
+/// one implementation, so a button and an agent cannot drift apart.
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
+pub async fn studio_run(root: String, op: StudioOp) -> Value {
+    run(PathBuf::from(root.trim()), op).await
 }
 
 fn scenes_note(scenes: &[cp::ContentScene]) -> bool {

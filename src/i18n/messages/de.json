@@ -6422,7 +6422,25 @@
     "gameState": "Spielvariablen",
     "gameStateEmpty": "noch keine",
     "gameReset": "Neu starten",
-    "gameResetHint": "Startet das Spiel aus der gespeicherten Szene neu und löscht seine Variablen."
+    "gameResetHint": "Startet das Spiel aus der gespeicherten Szene neu und löscht seine Variablen.",
+    "materials": {
+      "title": "Material",
+      "refresh": "Neu laden",
+      "noGenerator": "Kein Generator verbunden. Adresse eingeben, um hier Bilder zu zeichnen und in 3D zu heben — Ergebnisse landen mit Herkunft in assets/.",
+      "generatorUrl": "Generator-Adresse",
+      "connect": "Verbinden",
+      "generator": "Generator",
+      "prompt": "Prompt",
+      "promptPlaceholder": "Was gezeichnet werden soll (transparentes PNG)",
+      "generateImage": "Zeichnen",
+      "generating": "Zeichnet… etwa eine Minute",
+      "empty": "Noch kein Material. Zeichne eins oder lass den Agenten eins importieren.",
+      "missing": "Datei fehlt",
+      "from": "aus {id}",
+      "faces": "{count} Flächen",
+      "make3d": "In 3D",
+      "lifting": "Erzeugt 3D… einige Minuten"
+    }
   },
   "Browser": {
     "toolbar": {

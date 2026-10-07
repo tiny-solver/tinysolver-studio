@@ -417,6 +417,107 @@
     }
   },
   {
+    "name": "studio_list_assets",
+    "description": "List the materials of the Tinysolver Studio content project: every entry of assets/manifest.json (id, file relative to assets/, kind image|model, bytes, width/height for images, and `source` — where it came from: workflow, prompt, seed, the `from` material it was made from, the original url) plus whether the file is on disk, and the project's connected generator (codeg-project.json `generate.url`, or null). Call it before generating or placing a material so you use real ids. Read-only.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "project": {
+          "type": "string",
+          "description": "Absolute path of the content project root. Omit it: the default is this session's working directory, which is the project when you were opened in one."
+        }
+      }
+    }
+  },
+  {
+    "name": "studio_import_asset",
+    "description": "Bring a generated or downloaded file into the project as a material: fetches `url` (http(s) or a base64 data: URL; png/jpg/webp/gif images, glb/gltf models), writes it under assets/ (default assets/generated/images or assets/generated/models), and registers it in assets/manifest.json with `source` — pass what made it (workflow, prompt, seed, from: the material id it was made from) so the material can be traced and remade. When the url is an output of the project's connected generator, the generator's copy is deleted after the import (the project keeps the file). Use this after generating with your own image/3D tools (e.g. a genai generate_image / generate_3d result url). The Studio's material panel shows the new material at once.",
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "url"
+      ],
+      "properties": {
+        "url": {
+          "type": "string",
+          "description": "The file to fetch: http(s) URL or base64 data: URL."
+        },
+        "id": {
+          "type": "string",
+          "description": "Material id (letters, digits, - and _). Default: from the file name; a taken id gets a -2 suffix."
+        },
+        "dir": {
+          "type": "string",
+          "description": "Folder under assets/ (e.g. characters/mina). Default by kind: generated/images or generated/models."
+        },
+        "source": {
+          "type": "object",
+          "description": "Provenance kept on the entry: workflow, prompt, seed, from (material id), params (target_faces, texture_size, …)."
+        },
+        "project": {
+          "type": "string",
+          "description": "Absolute path of the content project root. Omit it: the default is this session's working directory, which is the project when you were opened in one."
+        }
+      }
+    }
+  },
+  {
+    "name": "studio_generate_asset",
+    "description": "Make a new material with the project's connected generator (codeg-project.json `generate.url`, the genai API) and import it with its provenance — the same operation as the Studio editor's Generate and Make 3D buttons. `kind: \"image\"` draws from `prompt` (default workflow qwen-image-21-rgba: a transparent PNG; with `from`, that image material is the img2img source). `kind: \"3d\"` lifts the image material `from` into a textured GLB (TRELLIS.2; `target_faces` 1000–2000000, e.g. 10000 for a game prop; `texture_size` 1024|2048|4096 — file size is mostly texture). For text → 3D, generate the image first, then 3d from it. Takes a minute or more (3D ~70s warm, longer when the generator's queue is busy); the generator machine can be switched off — the result then says so. If no generator is connected the result says how to connect one; ask the user for the address.",
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "image",
+            "3d"
+          ]
+        },
+        "from": {
+          "type": "string",
+          "description": "Id of an image material fed in as source_image. Required for 3d."
+        },
+        "prompt": {
+          "type": "string",
+          "description": "What to draw. Required for image."
+        },
+        "workflow": {
+          "type": "string",
+          "description": "Generator workflow name. Default qwen-image-21-rgba (image) or trellis2 (3d)."
+        },
+        "seed": {
+          "type": "integer",
+          "description": "Default: random, recorded on the material."
+        },
+        "target_faces": {
+          "type": "integer",
+          "minimum": 1000,
+          "maximum": 2000000
+        },
+        "texture_size": {
+          "type": "integer",
+          "enum": [
+            1024,
+            2048,
+            4096
+          ]
+        },
+        "id": {
+          "type": "string",
+          "description": "Id for the new material."
+        },
+        "project": {
+          "type": "string",
+          "description": "Absolute path of the content project root. Omit it: the default is this session's working directory, which is the project when you were opened in one."
+        }
+      }
+    }
+  },
+  {
     "name": "browser_list_tabs",
     "description": "List the pages open in codeg's built-in browser — the browser panel inside the app, not the user's Chrome or Safari. Each tab comes back with its `tabId`, the site it is on, and whether it is shared with you. READING A PAGE REQUIRES THE USER TO SHARE THAT TAB: they press \"Share with agents\" in the tab's own toolbar, and only they can do it — there is no tool that grants it, and asking again does not help. Sharing is per tab and per site, and ends by itself the moment the page navigates somewhere else, so a tab that was readable a minute ago may not be now. A tab's title is only shown once it is shared, because the title is part of the page. Call this before browser_snapshot to find out which tab to read, or to tell the user which tab they need to share.",
     "inputSchema": {

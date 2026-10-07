@@ -564,7 +564,7 @@
       "then": [],
       "id": "aw-gen-material",
       "p": 1,
-      "status": "todo",
+      "status": "decided",
       "q": "① 생성 ↔ 재료 — genai 결과를 assets/ 로 받고, 재료를 다시 genai 입력으로",
       "want": "에이전트(MCP studio_*)와 편집기 버튼이 같은 명령으로 genai 결과를 assets/ 에 받아 manifest 에 출처(workflow · prompt · seed · 원본 재료 id)를 남기고, 고른 재료 하나를 그대로 source_image 로 다시 넣는다. genai /outputs 사본은 받은 뒤 지운다",
       "now": "assets/manifest.json 은 빈 목록으로 스캐폴드만 된다. 생성기 연결 · 출처 기록 · 다시 넣기가 없다",
@@ -572,7 +572,12 @@
       "refs": [
         "my-devops design-principles B13(genai 에 사용처를 넣지 않는다)",
         "#studio-asset-gen 가안 C"
-      ]
+      ],
+      "decided": {
+        "date": "2026-10-07",
+        "pick": "done",
+        "note": "studio_assets.rs + MCP studio_list_assets · studio_import_asset · studio_generate_asset + 편집기 재료 패널(그리기 · 3D 로 · 연결). 생성기 주소는 aw-gen-connect 권장안 A(매니페스트 generate.url)로 구현 — 오너가 B 를 고르면 옮긴다. 실제 genai 로 그림 → 3D 왕복 확인(roadmap checks 10-07)"
+      }
     },
     {
       "topic": "workbench",

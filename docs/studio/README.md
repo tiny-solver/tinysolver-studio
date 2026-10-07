@@ -86,10 +86,27 @@ pnpm dev
 
 - 명령은 전체 배치가 검증된 경우에만 적용된다. 실패하면 원본을 유지한다.
 - 행동은 명령이 따로 없다. `node.update`의 `props.script`에 이름, `{ name, …설정 }`, 또는 그 배열을 쓴다(`null`이면 제거). 인스펙터의 **행동** 섹션이 이 값을 편집하며, 선택 목록과 내장 스크립트의 기본 설정은 엔진이 `codeg:ready`로 알려 준 것이다(`src/lib/studio/behaviors.ts`).
-- 에이전트는 같은 명령을 MCP 도구로 쓴다. 콘텐츠 프로젝트 폴더에서 연 세션에는 codeg-mcp 동반 프로세스가 `studio_list_scenes`·`studio_read_scene`·`studio_apply_scene_commands`·`studio_build`를 노출한다. 검증기는 `src-tauri/src/studio_scene.rs`(이 문서의 `document.ts`와 같은 규칙)이고, 파일에 쓰면 편집기와 미리보기가 감시 스트림으로 알아챈다.
+- 에이전트는 같은 명령을 MCP 도구로 쓴다. 콘텐츠 프로젝트 폴더에서 연 세션에는 codeg-mcp 동반 프로세스가 `studio_list_scenes`·`studio_read_scene`·`studio_apply_scene_commands`·`studio_build`·`studio_publish`와 재료 도구 `studio_list_assets`·`studio_import_asset`·`studio_generate_asset`을 노출한다. 검증기는 `src-tauri/src/studio_scene.rs`(이 문서의 `document.ts`와 같은 규칙)이고, 파일에 쓰면 편집기와 미리보기가 감시 스트림으로 알아챈다.
 - 편집기 → 에이전트: 헤더의 **대화로 보내기**가 장면 파일 배지와 함께 현재 장면·선택한 노드·미리보기 런타임 오류를 옆 대화의 입력창에 넣는다. 전송은 사용자가 한다. 게임 보기의 오류 띠에도 같은 버튼이 있다.
 - 미리보기 서버는 서빙하는 HTML에 오류 보고 스크립트를 주입한다(`codeg:error` postMessage). 엔진을 에이전트가 새로 썼더라도 예외·거부된 프로미스·`console.error`·리소스 로드 실패가 편집기에 뜬다. 빌드 산출물에는 들어가지 않는다.
 - 같은 자리에 미리보기 표식 `window.__codegPreview`를 심는다. 엔진은 이 표식이 있는 iframe에서만 편집기 프로토콜(`codeg:*`)을 말한다 — afterplay처럼 게임을 iframe에 띄우는 다른 곳에 편집기 메시지를 보내지 않는다. 플랫폼 층 이전에 만든 프로젝트의 importmap에는 `codeg-platform` 항목을 미리보기·빌드가 채워 준다(프로젝트 파일은 고치지 않는다).
+
+## 재료 — 생성 ↔ 재료 (asset-workbench ①)
+
+AI 생성물을 프로젝트의 재료로 받고, 재료를 다시 생성 입력으로 넣는다. 편집기 사이드바의 **재료** 패널과 에이전트의 MCP 도구가 **같은 명령**(`studio_tools::StudioOp` — 편집기는 `studio_run` 하나로 부른다)을 쓴다.
+
+| 명령 (MCP 도구) | 편집기 | 내용 |
+| --- | --- | --- |
+| `list_assets` (`studio_list_assets`) | 패널 목록 · 감시 스트림으로 자동 갱신 | `assets/manifest.json` 항목 + 파일 존재 여부 + 연결된 생성기 |
+| `import_asset` (`studio_import_asset`) | — (에이전트가 자기 genai 도구로 만든 것을 받을 때) | URL(http(s) · base64 data:)을 `assets/generated/{images,models}/`로 받아 등록. 출처 `source`(workflow · prompt · seed · from · url)를 남긴다. 생성기 `/outputs/` 의 파일이면 받은 뒤 생성기 사본을 지운다(`DELETE /api/outputs?path=`) |
+| `generate_asset` (`studio_generate_asset`) | **그리기**(프롬프트) · 재료의 **3D 로** | 생성기를 불러(`/api/images/generate` · `/api/3d/generate`) 결과를 `import_asset`으로 받는다. `from` 재료를 `source_image`로 넣는다. 3D 기본값은 버튼 기준 1만 면 · 텍스처 2048 |
+| `connect_generator` (편집기 전용) | 생성기 주소 넣고 **연결** | `codeg-project.json`의 `generate.url`을 쓴다 |
+
+- 생성기 주소는 프로젝트 매니페스트 `generate.url`에 둔다(decide `aw-gen-connect` 권장안 A — `publish.command`와 같은 자리). 주소만 있고 자격 증명은 없다. 비어 있으면 생성 명령이 그 사실과 고치는 법을 돌려준다.
+- 생성기는 **부르기만** 한다 — 무엇에 쓸지는 넘기지 않는다(genai 에 사용처를 넣지 않는다). 보관 책임은 프로젝트이고, 생성기 쪽 사본은 받은 뒤 지운다.
+- 생성기가 꺼져 있으면(linux-2 on-demand) 명령이 `ok: false`와 읽을 수 있는 메모를 돌려준다. 3D 는 대기열에 따라 1~10분.
+- 등록부는 JSON 값으로 고쳐서 모르는 필드(game-asset-contract 의 `role`·`sheet` 등)를 보존하고, 키 순서(`id`·`file`·`kind`…)를 지켜 쓴다.
+- 구현: `src-tauri/src/studio_assets.rs`(목록 · 받기 · 생성 · 연결), `src/components/studio/studio-materials.tsx`(패널).
 
 ## 구조
 

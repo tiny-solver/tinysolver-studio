@@ -259,7 +259,8 @@ impl CompanionFeatures {
             // cannot leave the strongest tool as the only one present.
             "browser_eval" => self.browser && self.browser_eval,
             "studio_list_scenes" | "studio_read_scene" | "studio_apply_scene_commands"
-            | "studio_build" | "studio_publish" => self.studio,
+            | "studio_build" | "studio_publish" | "studio_list_assets" | "studio_import_asset"
+            | "studio_generate_asset" => self.studio,
             "delegate_to_agent" | "get_delegation_status" | "cancel_delegation"
             | "resume_delegation" => self.delegation,
             _ => false,
@@ -739,7 +740,8 @@ async fn build_tools_call_spawn(
             register_and_spawn(inflight, id, None, round_trip, render_session_result).await
         }
         "studio_list_scenes" | "studio_read_scene" | "studio_apply_scene_commands"
-        | "studio_build" | "studio_publish" => {
+        | "studio_build" | "studio_publish" | "studio_list_assets" | "studio_import_asset"
+        | "studio_generate_asset" => {
             let op = match parse_studio_op(&name, &arguments) {
                 Ok(op) => op,
                 Err(msg) => return LineAction::Respond(err(id, -32602, msg)),
@@ -2628,6 +2630,25 @@ fn studio_scene_arg(tool: &str, arguments: &Value) -> Result<String, String> {
 pub fn parse_studio_op(tool: &str, arguments: &Value) -> Result<StudioOp, String> {
     match tool {
         "studio_list_scenes" => Ok(StudioOp::ListScenes),
+        "studio_list_assets" => Ok(StudioOp::ListAssets),
+        "studio_import_asset" => {
+            let mut args = arguments.clone();
+            if let Some(obj) = args.as_object_mut() {
+                obj.remove("project");
+            }
+            serde_json::from_value(args)
+                .map(StudioOp::ImportAsset)
+                .map_err(|e| format!("studio_import_asset: {e} (needs `url`)"))
+        }
+        "studio_generate_asset" => {
+            let mut args = arguments.clone();
+            if let Some(obj) = args.as_object_mut() {
+                obj.remove("project");
+            }
+            serde_json::from_value(args)
+                .map(StudioOp::GenerateAsset)
+                .map_err(|e| format!("studio_generate_asset: {e} (needs `kind`: image or 3d)"))
+        }
         "studio_build" => Ok(StudioOp::Build),
         "studio_publish" => {
             let target = arguments
@@ -2728,6 +2749,39 @@ fn render_studio_ok_text(outcome: &Value) -> String {
             lines.push(note.to_string());
         }
         return lines.join("\n");
+    }
+    if let Some(assets) = outcome.get("assets").and_then(Value::as_array) {
+        let generator = outcome
+            .get("generator")
+            .and_then(Value::as_str)
+            .map(|g| format!("generator {g}"))
+            .unwrap_or_else(|| "no generator connected".into());
+        let mut lines = vec![format!(
+            "{} material(s) in {}/ · {generator}",
+            assets.len(),
+            str_of("assets_dir")
+        )];
+        for a in assets {
+            lines.push(format!("- {}", serde_json::to_string(a).unwrap_or_default()));
+        }
+        let note = str_of("note");
+        if !note.is_empty() {
+            lines.push(note.to_string());
+        }
+        return lines.join("\n");
+    }
+    if let Some(asset) = outcome.get("asset").filter(|a| a.is_object()) {
+        let id = asset.get("id").and_then(Value::as_str).unwrap_or("?");
+        let gone = match outcome.get("remote_deleted").and_then(Value::as_bool) {
+            Some(true) => " The generator's copy was deleted.",
+            Some(false) => " The generator's copy could not be deleted (left in place).",
+            None => "",
+        };
+        return format!(
+            "Material `{id}` saved at {}.{gone}\n{}",
+            str_of("path"),
+            serde_json::to_string_pretty(asset).unwrap_or_default()
+        );
     }
     if let Some(file) = outcome.get("file") {
         return format!(
@@ -3770,12 +3824,15 @@ mod tests {
         browser_eval: false,
     };
 
-    const STUDIO_TOOLS: [&str; 5] = [
+    const STUDIO_TOOLS: [&str; 8] = [
         "studio_list_scenes",
         "studio_read_scene",
         "studio_apply_scene_commands",
         "studio_build",
         "studio_publish",
+        "studio_list_assets",
+        "studio_import_asset",
+        "studio_generate_asset",
     ];
 
     #[tokio::test]
@@ -3808,6 +3865,9 @@ mod tests {
             ("studio_build", json!({ "project": "/tmp/p" })),
             ("studio_publish", json!({})),
             ("studio_publish", json!({ "target": "command", "version": "v2-20260920-0101" })),
+            ("studio_list_assets", json!({})),
+            ("studio_import_asset", json!({ "url": "https://x/a.png", "source": { "seed": 1 } })),
+            ("studio_generate_asset", json!({ "kind": "3d", "from": "cup", "target_faces": 10000 })),
         ] {
             let line = json!({
                 "jsonrpc": "2.0", "id": 40, "method": "tools/call",
@@ -3842,6 +3902,8 @@ mod tests {
                 "commands",
             ),
             ("studio_publish", json!({ "target": "itch" }), "target"),
+            ("studio_import_asset", json!({ "id": "x" }), "url"),
+            ("studio_generate_asset", json!({ "prompt": "cup" }), "kind"),
         ] {
             let line = json!({
                 "jsonrpc": "2.0", "id": 41, "method": "tools/call",
@@ -3888,6 +3950,15 @@ mod tests {
             parse_studio_op("studio_publish", &json!({ "target": "command", "version": " v3 " })).unwrap(),
             StudioOp::Publish { version: Some("v3".into()), target: "command".into() }
         );
+        let StudioOp::GenerateAsset(req) = parse_studio_op(
+            "studio_generate_asset",
+            &json!({ "kind": "3d", "from": "cup", "texture_size": 2048, "project": "/p" }),
+        )
+        .unwrap() else {
+            panic!("generate parses to GenerateAsset")
+        };
+        assert_eq!(req.from.as_deref(), Some("cup"));
+        assert_eq!(req.texture_size, Some(2048));
     }
 
     #[test]
