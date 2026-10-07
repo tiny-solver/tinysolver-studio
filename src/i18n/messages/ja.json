@@ -6422,7 +6422,25 @@
     "gameState": "ゲーム変数",
     "gameStateEmpty": "まだありません",
     "gameReset": "リスタート",
-    "gameResetHint": "保存済みのシーンからゲームをやり直し、変数を消去します。"
+    "gameResetHint": "保存済みのシーンからゲームをやり直し、変数を消去します。",
+    "materials": {
+      "title": "素材",
+      "refresh": "再読み込み",
+      "noGenerator": "生成器が接続されていません。アドレスを入れるとここで画像を描き 3D に起こせます — 結果は出所とともに assets/ に入ります。",
+      "generatorUrl": "生成器のアドレス",
+      "connect": "接続",
+      "generator": "生成器",
+      "prompt": "プロンプト",
+      "promptPlaceholder": "描くもの（透過 PNG）",
+      "generateImage": "描く",
+      "generating": "描画中… 約1分",
+      "empty": "素材はまだありません。描くか、エージェントに取り込ませてください。",
+      "missing": "ファイルなし",
+      "from": "{id} から",
+      "faces": "{count} 面",
+      "make3d": "3D にする",
+      "lifting": "3D 生成中… 数分"
+    }
   },
   "Browser": {
     "toolbar": {

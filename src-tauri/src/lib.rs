@@ -29,6 +29,7 @@ pub mod content_engine;
 pub mod content_preview;
 pub mod content_publish;
 pub mod studio_agent_cli;
+pub mod studio_assets;
 pub mod studio_scene;
 pub mod studio_tools;
 pub mod db;
@@ -1732,6 +1733,7 @@ mod tauri_app {
                 content_project::publish_content_build,
                 content_project::unpublish_content_game,
                 content_project::get_content_preview,
+                crate::studio_tools::studio_run,
                 game_preview::game_preview_fingerprint,
                 system_settings::get_system_proxy_settings,
                 system_settings::update_system_proxy_settings,

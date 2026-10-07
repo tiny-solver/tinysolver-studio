@@ -1297,6 +1297,7 @@ pub fn build_router(
             "/get_content_preview",
             post(handlers::content_project::get_content_preview),
         )
+        .route("/studio_run", post(handlers::content_project::studio_run))
         .route(
             "/game_preview_fingerprint",
             post(handlers::game_preview::game_preview_fingerprint),

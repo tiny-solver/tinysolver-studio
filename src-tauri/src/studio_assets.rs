@@ -1,0 +1,874 @@
+//! Materials of a content project: the files under `<assets>/` and their
+//! register `<assets>/manifest.json`, plus the round trip to a generator.
+//!
+//! Three verbs, shared by the editor's material panel and the companion's
+//! `studio_*` MCP tools (both go through [`crate::studio_tools::run`]):
+//!
+//! - **list** — the register, each entry with whether its file is on disk.
+//! - **import** — fetch a URL (or `data:` URL) into `<assets>/`, register it
+//!   with where it came from (`source`). When the URL is an output of the
+//!   project's generator, the generator's copy is deleted afterwards: the
+//!   project keeps the material, the generator is not storage.
+//! - **generate** — call the generator named in `codeg-project.json`
+//!   (`generate.url`) for an image or a 3D model, optionally feeding an
+//!   existing material back in as `source_image`, then import the result
+//!   with its provenance (workflow · prompt · seed · `from` material id).
+//!
+//! The generator is only *called* — nothing here tells it what the result is
+//! for. Its API is the genai shape (`/api/images/generate`,
+//! `/api/3d/generate`, `/api/outputs`); a different service can answer the
+//! same three routes.
+//!
+//! The register is edited as JSON values so fields this module does not know
+//! (game-asset-contract's `role`, `sheet`, …) survive every write.
+
+use std::path::{Path, PathBuf};
+use std::time::Duration;
+
+use base64::Engine as _;
+use serde::Deserialize;
+use serde_json::{json, Map, Value};
+
+use crate::commands::content_project as cp;
+use crate::studio_scene;
+
+/// Largest file `import` accepts. A GLB at texture 4096 is ~30MB.
+const MAX_BYTES: usize = 200 * 1024 * 1024;
+const MANIFEST: &str = "manifest.json";
+/// The image workflow `generate` uses when none is given: a transparent PNG,
+/// the shape a 3D lift wants as its input.
+const DEFAULT_IMAGE_WORKFLOW: &str = "qwen-image-21-rgba";
+const DEFAULT_3D_WORKFLOW: &str = "trellis2";
+
+/// What `import` is asked to fetch.
+#[derive(Debug, Clone, Default, Deserialize, serde::Serialize, PartialEq)]
+pub struct ImportRequest {
+    pub url: String,
+    /// Material id (letters, digits, - and _). Derived from the URL's file
+    /// name when absent; a taken id gets a `-2`, `-3`… suffix.
+    #[serde(default)]
+    pub id: Option<String>,
+    /// Folder under `<assets>/`. Defaults to `generated/images` or
+    /// `generated/models` by the file's kind.
+    #[serde(default)]
+    pub dir: Option<String>,
+    /// Provenance stored on the entry as `source` (workflow, prompt, seed,
+    /// from, …). Free-form object.
+    #[serde(default)]
+    pub source: Option<Value>,
+}
+
+/// What `generate` is asked to make.
+#[derive(Debug, Clone, Default, Deserialize, serde::Serialize, PartialEq)]
+pub struct GenerateRequest {
+    /// `image` or `3d`.
+    pub kind: String,
+    /// An existing material fed in as `source_image`. Required for `3d`.
+    #[serde(default)]
+    pub from: Option<String>,
+    #[serde(default)]
+    pub prompt: Option<String>,
+    #[serde(default)]
+    pub workflow: Option<String>,
+    #[serde(default)]
+    pub seed: Option<i64>,
+    #[serde(default)]
+    pub target_faces: Option<u32>,
+    #[serde(default)]
+    pub texture_size: Option<u32>,
+    /// Id for the new material (see [`ImportRequest::id`]).
+    #[serde(default)]
+    pub id: Option<String>,
+}
+
+fn assets_dir(root: &Path, manifest: Option<&cp::ContentProjectManifest>) -> PathBuf {
+    let rel = manifest
+        .map(|m| m.paths.assets.clone())
+        .unwrap_or_else(|| "assets".into());
+    root.join(rel)
+}
+
+async fn project(root: &Path) -> Result<Option<cp::ContentProjectManifest>, String> {
+    cp::read_content_project(root.to_string_lossy().to_string())
+        .await
+        .map_err(|e| e.message)
+}
+
+/// The generator's base URL from the manifest, without a trailing slash.
+pub fn generator_url(manifest: Option<&cp::ContentProjectManifest>) -> Option<String> {
+    manifest
+        .and_then(|m| m.generate.as_ref())
+        .map(|g| g.url.trim().trim_end_matches('/').to_string())
+        .filter(|u| !u.is_empty())
+}
+
+async fn read_register(dir: &Path) -> Result<Value, String> {
+    let path = dir.join(MANIFEST);
+    match tokio::fs::read_to_string(&path).await {
+        Ok(raw) => {
+            let mut value: Value = serde_json::from_str(&raw)
+                .map_err(|e| format!("assets/{MANIFEST} is not valid JSON: {e}"))?;
+            let obj = value
+                .as_object_mut()
+                .ok_or_else(|| format!("assets/{MANIFEST} must be an object"))?;
+            match obj.get("assets") {
+                None => {
+                    obj.insert("assets".into(), json!([]));
+                }
+                Some(Value::Array(_)) => {}
+                Some(_) => return Err(format!("assets/{MANIFEST}: `assets` must be a list")),
+            }
+            Ok(value)
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            Ok(json!({ "schema": 1, "assets": [] }))
+        }
+        Err(e) => Err(format!("Could not read assets/{MANIFEST}: {e}")),
+    }
+}
+
+/// Pretty JSON with chosen keys first (in that order) and the rest after —
+/// `serde_json`'s map is sorted, which would shuffle a hand-kept file on
+/// every write. `children` orders the objects of one array field the same way.
+pub struct Ordered<'a> {
+    pub value: &'a Value,
+    pub first: &'a [&'a str],
+    pub children: Option<(&'a str, &'a [&'a str])>,
+}
+
+impl serde::Serialize for Ordered<'_> {
+    fn serialize<S: serde::Serializer>(&self, ser: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::{SerializeMap, SerializeSeq};
+        struct Items<'a>(&'a [Value], &'a [&'a str]);
+        impl serde::Serialize for Items<'_> {
+            fn serialize<S: serde::Serializer>(&self, ser: S) -> Result<S::Ok, S::Error> {
+                let mut seq = ser.serialize_seq(Some(self.0.len()))?;
+                for item in self.0 {
+                    seq.serialize_element(&Ordered { value: item, first: self.1, children: None })?;
+                }
+                seq.end()
+            }
+        }
+        let Some(map) = self.value.as_object() else {
+            return self.value.serialize(ser);
+        };
+        let mut out = ser.serialize_map(Some(map.len()))?;
+        let keys = self
+            .first
+            .iter()
+            .copied()
+            .filter(|k| map.contains_key(*k))
+            .chain(map.keys().map(String::as_str).filter(|k| !self.first.contains(k)));
+        for key in keys {
+            let v = &map[key];
+            match (self.children, v.as_array()) {
+                (Some((field, order)), Some(items)) if field == key => {
+                    out.serialize_entry(key, &Items(items, order))?
+                }
+                _ => out.serialize_entry(key, v)?,
+            }
+        }
+        out.end()
+    }
+}
+
+const REGISTER_ORDER: &[&str] = &["schema", "container"];
+const ENTRY_ORDER: &[&str] = &[
+    "id", "file", "kind", "bytes", "width", "height", "added_at", "source",
+];
+
+async fn write_register(dir: &Path, value: &Value) -> Result<(), String> {
+    let ordered = Ordered {
+        value,
+        first: REGISTER_ORDER,
+        children: Some(("assets", ENTRY_ORDER)),
+    };
+    let mut body = serde_json::to_string_pretty(&ordered).map_err(|e| e.to_string())?;
+    body.push('\n');
+    let path = dir.join(MANIFEST);
+    let tmp = dir.join(format!("{MANIFEST}.tmp"));
+    tokio::fs::write(&tmp, body)
+        .await
+        .map_err(|e| format!("Could not write assets/{MANIFEST}: {e}"))?;
+    tokio::fs::rename(&tmp, &path)
+        .await
+        .map_err(|e| format!("Could not write assets/{MANIFEST}: {e}"))
+}
+
+fn entries(register: &Value) -> &[Value] {
+    register["assets"].as_array().map(Vec::as_slice).unwrap_or(&[])
+}
+
+fn find<'a>(register: &'a Value, id: &str) -> Option<&'a Value> {
+    entries(register).iter().find(|e| e["id"] == id)
+}
+
+/// `image` · `model` · `other`, by extension.
+pub fn kind_of(file: &str) -> &'static str {
+    match ext_of(file).as_str() {
+        "png" | "jpg" | "jpeg" | "webp" | "gif" => "image",
+        "glb" | "gltf" => "model",
+        _ => "other",
+    }
+}
+
+fn ext_of(file: &str) -> String {
+    Path::new(file)
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase()
+}
+
+fn ext_for_mime(mime: &str) -> Option<&'static str> {
+    match mime.split(';').next().unwrap_or("").trim() {
+        "image/png" => Some("png"),
+        "image/jpeg" => Some("jpg"),
+        "image/webp" => Some("webp"),
+        "image/gif" => Some("gif"),
+        "model/gltf-binary" => Some("glb"),
+        "model/gltf+json" => Some("gltf"),
+        _ => None,
+    }
+}
+
+/// A relative folder under `<assets>/`: no absolute paths, no `..`.
+fn safe_dir(dir: &str) -> Result<String, String> {
+    let trimmed = dir.trim().trim_matches('/');
+    if trimmed.is_empty() {
+        return Ok(String::new());
+    }
+    if trimmed.contains('\\')
+        || trimmed
+            .split('/')
+            .any(|seg| seg.is_empty() || seg == "." || seg == ".." || !studio_scene::is_id(seg))
+    {
+        return Err(format!(
+            "dir `{dir}`: a folder under assets/ made of letters, digits, - and _ segments"
+        ));
+    }
+    Ok(trimmed.to_string())
+}
+
+/// `hero_idle_120x180.png` → `hero_idle_120x180`; anything else folded into
+/// the id alphabet.
+fn id_from_name(name: &str) -> String {
+    let stem = Path::new(name)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("");
+    let folded: String = stem
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' { c } else { '-' })
+        .take(60)
+        .collect();
+    let folded = folded.trim_matches('-').to_string();
+    if folded.is_empty() {
+        "material".into()
+    } else {
+        folded
+    }
+}
+
+/// First few ascii words of a prompt as an id (`a cute teacup` →
+/// `a-cute-teacup`); `image` when nothing ascii is left.
+fn id_from_prompt(prompt: &str) -> String {
+    let words: Vec<String> = prompt
+        .split(|c: char| !c.is_ascii_alphanumeric())
+        .filter(|w| !w.is_empty())
+        .take(4)
+        .map(str::to_ascii_lowercase)
+        .collect();
+    if words.is_empty() {
+        "image".into()
+    } else {
+        words.join("-")
+    }
+}
+
+fn unique_id(register: &Value, wanted: &str) -> String {
+    if find(register, wanted).is_none() {
+        return wanted.to_string();
+    }
+    (2..)
+        .map(|n| format!("{wanted}-{n}"))
+        .find(|candidate| find(register, candidate).is_none())
+        .expect("an unused suffix exists")
+}
+
+/// The register as a tool result: each entry plus `exists`.
+pub async fn list(root: &Path) -> Value {
+    let manifest = match project(root).await {
+        Ok(m) => m,
+        Err(note) => return fail(note),
+    };
+    let dir = assets_dir(root, manifest.as_ref());
+    let register = match read_register(&dir).await {
+        Ok(r) => r,
+        Err(note) => return fail(note),
+    };
+    let items: Vec<Value> = entries(&register)
+        .iter()
+        .map(|entry| {
+            let mut entry = entry.clone();
+            let exists = entry["file"]
+                .as_str()
+                .map(|f| dir.join(f).is_file())
+                .unwrap_or(false);
+            if let Some(obj) = entry.as_object_mut() {
+                obj.insert("exists".into(), json!(exists));
+            }
+            entry
+        })
+        .collect();
+    let generator = generator_url(manifest.as_ref());
+    json!({
+        "ok": true,
+        "assets_dir": rel(root, &dir),
+        "generator": generator,
+        "assets": items,
+        "note": if generator.is_none() {
+            "No generator connected. Set `generate.url` in codeg-project.json (ask the user for the address) to use studio_generate_asset; studio_import_asset works without one."
+        } else { "" },
+    })
+}
+
+fn fail(note: impl Into<String>) -> Value {
+    json!({ "ok": false, "note": note.into() })
+}
+
+fn rel(root: &Path, path: &Path) -> String {
+    path.strip_prefix(root)
+        .unwrap_or(path)
+        .to_string_lossy()
+        .replace('\\', "/")
+}
+
+fn http() -> Result<reqwest::Client, String> {
+    reqwest::Client::builder()
+        .connect_timeout(Duration::from_secs(10))
+        .timeout(Duration::from_secs(15 * 60))
+        .build()
+        .map_err(|e| e.to_string())
+}
+
+/// Bytes and a guessed extension for a `data:` or http(s) URL.
+async fn fetch(url: &str) -> Result<(Vec<u8>, Option<String>), String> {
+    if let Some(rest) = url.strip_prefix("data:") {
+        let (meta, payload) = rest
+            .split_once(',')
+            .ok_or_else(|| "data: URL without a comma".to_string())?;
+        if !meta.ends_with(";base64") {
+            return Err("data: URL must be base64".into());
+        }
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(payload.trim())
+            .map_err(|e| format!("data: URL: {e}"))?;
+        let mime = meta.trim_end_matches(";base64");
+        return Ok((bytes, ext_for_mime(mime).map(str::to_string)));
+    }
+    if !(url.starts_with("http://") || url.starts_with("https://")) {
+        return Err("url must be http(s):// or a base64 data: URL".into());
+    }
+    let resp = http()?
+        .get(url)
+        .send()
+        .await
+        .map_err(|e| format!("Could not fetch {url}: {e}"))?;
+    if !resp.status().is_success() {
+        return Err(format!("Fetching {url} answered {}", resp.status()));
+    }
+    if resp.content_length().is_some_and(|n| n as usize > MAX_BYTES) {
+        return Err(format!("{url} is larger than {} MB", MAX_BYTES / 1024 / 1024));
+    }
+    let mime_ext = resp
+        .headers()
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .and_then(ext_for_mime)
+        .map(str::to_string);
+    let bytes = resp
+        .bytes()
+        .await
+        .map_err(|e| format!("Could not read {url}: {e}"))?;
+    if bytes.len() > MAX_BYTES {
+        return Err(format!("{url} is larger than {} MB", MAX_BYTES / 1024 / 1024));
+    }
+    let url_ext = Some(ext_of(url.split(['?', '#']).next().unwrap_or(url))).filter(|e| !e.is_empty());
+    Ok((bytes.to_vec(), url_ext.or(mime_ext)))
+}
+
+/// Where a generator output lives on the generator (`3d/2026/10/07/x.glb`),
+/// when `url` is one of its `/outputs/` files.
+fn generator_output_path(generator: Option<&str>, url: &str) -> Option<String> {
+    let base = generator?;
+    let rest = url.strip_prefix(base)?.strip_prefix("/outputs/")?;
+    let path = rest.split(['?', '#']).next().unwrap_or("");
+    (!path.is_empty() && !path.split('/').any(|s| s == "..")).then(|| path.to_string())
+}
+
+/// Fetch `req.url` into `<assets>/`, register it, and drop the generator's
+/// copy when it was one of the generator's outputs.
+pub async fn import(root: &Path, req: ImportRequest) -> Value {
+    let manifest = match project(root).await {
+        Ok(m) => m,
+        Err(note) => return fail(note),
+    };
+    let dir = assets_dir(root, manifest.as_ref());
+    let generator = generator_url(manifest.as_ref());
+    let url = req.url.trim().to_string();
+    if let Some(id) = req.id.as_deref() {
+        if !studio_scene::is_id(id) {
+            return fail("id: letters, digits, - and _ (max 100)");
+        }
+    }
+    if req.source.as_ref().is_some_and(|s| !s.is_object()) {
+        return fail("source must be an object (workflow, prompt, seed, from, …)");
+    }
+    let (bytes, ext) = match fetch(&url).await {
+        Ok(v) => v,
+        Err(note) => return fail(note),
+    };
+    let ext = match ext.filter(|e| kind_of(&format!("x.{e}")) != "other") {
+        Some(e) => e,
+        None => return fail("Only images (png, jpg, webp, gif) and models (glb, gltf) are materials."),
+    };
+    let kind = kind_of(&format!("x.{ext}"));
+    let sub = match req.dir.as_deref() {
+        Some(d) => match safe_dir(d) {
+            Ok(d) => d,
+            Err(note) => return fail(note),
+        },
+        None => if kind == "model" { "generated/models" } else { "generated/images" }.to_string(),
+    };
+
+    let mut register = match read_register(&dir).await {
+        Ok(r) => r,
+        Err(note) => return fail(note),
+    };
+    let wanted = req.id.clone().unwrap_or_else(|| {
+        let name = url
+            .split(['?', '#'])
+            .next()
+            .unwrap_or("")
+            .rsplit('/')
+            .next()
+            .unwrap_or("");
+        id_from_name(if url.starts_with("data:") { "material" } else { name })
+    });
+    let id = unique_id(&register, &wanted);
+    let file = if sub.is_empty() {
+        format!("{id}.{ext}")
+    } else {
+        format!("{sub}/{id}.{ext}")
+    };
+    let path = dir.join(&file);
+    if path.exists() {
+        return fail(format!("{} already exists and is not in the register — pick another id", rel(root, &path)));
+    }
+    if let Some(parent) = path.parent() {
+        if let Err(e) = tokio::fs::create_dir_all(parent).await {
+            return fail(format!("Could not create {}: {e}", rel(root, parent)));
+        }
+    }
+    if let Err(e) = tokio::fs::write(&path, &bytes).await {
+        return fail(format!("Could not write {}: {e}", rel(root, &path)));
+    }
+
+    let mut entry = Map::new();
+    entry.insert("id".into(), json!(id));
+    entry.insert("file".into(), json!(file));
+    entry.insert("kind".into(), json!(kind));
+    entry.insert("bytes".into(), json!(bytes.len()));
+    if kind == "image" {
+        if let Ok((w, h)) = image::ImageReader::new(std::io::Cursor::new(&bytes))
+            .with_guessed_format()
+            .map_err(|e| e.to_string())
+            .and_then(|r| r.into_dimensions().map_err(|e| e.to_string()))
+        {
+            entry.insert("width".into(), json!(w));
+            entry.insert("height".into(), json!(h));
+        }
+    }
+    entry.insert("added_at".into(), json!(chrono::Utc::now().to_rfc3339()));
+    let mut source = req.source.clone().unwrap_or_else(|| json!({}));
+    if !url.starts_with("data:") {
+        source["url"] = json!(url);
+    }
+    if source.as_object().is_some_and(|s| !s.is_empty()) {
+        entry.insert("source".into(), source);
+    }
+    let entry = Value::Object(entry);
+    register["assets"]
+        .as_array_mut()
+        .expect("read_register guarantees a list")
+        .push(entry.clone());
+    if let Err(note) = write_register(&dir, &register).await {
+        let _ = tokio::fs::remove_file(&path).await;
+        return fail(note);
+    }
+
+    // The project now holds the material; the generator's copy goes.
+    let mut remote_deleted = Value::Null;
+    if let (Some(base), Some(out)) = (
+        generator.as_deref(),
+        generator_output_path(generator.as_deref(), &url),
+    ) {
+        remote_deleted = json!(delete_remote(base, &out).await);
+    }
+    json!({
+        "ok": true,
+        "asset": entry,
+        "path": rel(root, &path),
+        "remote_deleted": remote_deleted,
+        "note": "Registered in assets/manifest.json. The Studio's material panel picks it up from disk.",
+    })
+}
+
+async fn delete_remote(base: &str, path: &str) -> bool {
+    let Ok(client) = http() else { return false };
+    client
+        .delete(format!("{base}/api/outputs"))
+        .query(&[("path", path)])
+        .send()
+        .await
+        .is_ok_and(|r| r.status().is_success())
+}
+
+async fn data_url(path: &Path) -> Result<String, String> {
+    let bytes = tokio::fs::read(path)
+        .await
+        .map_err(|e| format!("Could not read {}: {e}", path.display()))?;
+    let mime = match ext_of(&path.to_string_lossy()).as_str() {
+        "jpg" | "jpeg" => "image/jpeg",
+        "webp" => "image/webp",
+        "gif" => "image/gif",
+        _ => "image/png",
+    };
+    Ok(format!(
+        "data:{mime};base64,{}",
+        base64::engine::general_purpose::STANDARD.encode(bytes)
+    ))
+}
+
+/// The body sent to the generator and the provenance kept on the material.
+/// Pure, so the shape is testable without a generator.
+pub fn generator_call(
+    req: &GenerateRequest,
+    source_image: Option<String>,
+    seed: i64,
+) -> Result<(&'static str, Value, Value), String> {
+    let prompt = req.prompt.as_deref().map(str::trim).filter(|p| !p.is_empty());
+    let mut source = json!({ "kind": req.kind, "seed": seed });
+    if let Some(p) = prompt {
+        source["prompt"] = json!(p);
+    }
+    if let Some(from) = &req.from {
+        source["from"] = json!(from);
+    }
+    match req.kind.as_str() {
+        "image" => {
+            let prompt = prompt.ok_or("kind `image` needs a `prompt`")?;
+            let workflow = req.workflow.clone().unwrap_or_else(|| DEFAULT_IMAGE_WORKFLOW.into());
+            let mut body = json!({
+                "prompt": prompt,
+                "provider": "comfyui",
+                "workflow": workflow,
+                "seed": seed,
+            });
+            if let Some(img) = source_image {
+                body["source_image"] = json!(img);
+            }
+            source["workflow"] = json!(workflow);
+            Ok(("/api/images/generate", body, source))
+        }
+        "3d" => {
+            let img = source_image.ok_or("kind `3d` needs `from`: an image material to lift")?;
+            let workflow = req.workflow.clone().unwrap_or_else(|| DEFAULT_3D_WORKFLOW.into());
+            if let Some(t) = req.texture_size {
+                if ![1024, 2048, 4096].contains(&t) {
+                    return Err("texture_size must be 1024, 2048 or 4096".into());
+                }
+            }
+            if let Some(f) = req.target_faces {
+                if !(1000..=2_000_000).contains(&f) {
+                    return Err("target_faces must be between 1000 and 2000000".into());
+                }
+            }
+            let mut body = json!({ "source_image": img, "workflow": workflow, "seed": seed });
+            let mut params = Map::new();
+            if let Some(f) = req.target_faces {
+                body["target_faces"] = json!(f);
+                params.insert("target_faces".into(), json!(f));
+            }
+            if let Some(t) = req.texture_size {
+                body["texture_size"] = json!(t);
+                params.insert("texture_size".into(), json!(t));
+            }
+            source["workflow"] = json!(workflow);
+            if !params.is_empty() {
+                source["params"] = Value::Object(params);
+            }
+            Ok(("/api/3d/generate", body, source))
+        }
+        other => Err(format!("kind `{other}`: use `image` or `3d`")),
+    }
+}
+
+/// Generate with the project's generator and import the result.
+pub async fn generate(root: &Path, req: GenerateRequest) -> Value {
+    let manifest = match project(root).await {
+        Ok(m) => m,
+        Err(note) => return fail(note),
+    };
+    let Some(base) = generator_url(manifest.as_ref()) else {
+        return fail("No generator connected. Set `generate.url` in codeg-project.json (ask the user for the address), or press Connect in the Studio's material panel.");
+    };
+    let dir = assets_dir(root, manifest.as_ref());
+    let source_image = match req.from.as_deref() {
+        None => None,
+        Some(from) => {
+            let register = match read_register(&dir).await {
+                Ok(r) => r,
+                Err(note) => return fail(note),
+            };
+            let Some(entry) = find(&register, from) else {
+                return fail(format!("No material `{from}`. Call studio_list_assets for the ids."));
+            };
+            let file = entry["file"].as_str().unwrap_or("");
+            if kind_of(file) != "image" {
+                return fail(format!("`{from}` is not an image; only images feed a generator."));
+            }
+            match data_url(&dir.join(file)).await {
+                Ok(d) => Some(d),
+                Err(note) => return fail(note),
+            }
+        }
+    };
+    let seed = req.seed.unwrap_or_else(|| rand::random::<u32>() as i64);
+    let (route, body, source) = match generator_call(&req, source_image, seed) {
+        Ok(v) => v,
+        Err(note) => return fail(note),
+    };
+    let client = match http() {
+        Ok(c) => c,
+        Err(note) => return fail(note),
+    };
+    let resp = match client.post(format!("{base}{route}")).json(&body).send().await {
+        Ok(r) => r,
+        Err(e) => {
+            return fail(format!(
+                "The generator at {base} did not answer ({e}). It may be switched off — try again later."
+            ))
+        }
+    };
+    let status = resp.status();
+    let result: Value = resp.json().await.unwrap_or(Value::Null);
+    if !status.is_success() {
+        let detail = result.get("detail").map(Value::to_string).unwrap_or_default();
+        return fail(format!("The generator answered {status}. {detail}"));
+    }
+    let list_key = if req.kind == "3d" { "models" } else { "images" };
+    let Some(out) = result[list_key].get(0) else {
+        return fail("The generator answered without a result.");
+    };
+    let id = req.id.clone().or_else(|| match (&req.from, req.kind.as_str()) {
+        (Some(from), "3d") => Some(format!("{from}-3d")),
+        (Some(from), _) => Some(format!("{from}-redraw")),
+        (None, _) => req.prompt.as_deref().map(id_from_prompt),
+    });
+    let url = match (out["url"].as_str(), out["path"].as_str()) {
+        (Some(u), _) if u.starts_with("http") => u.to_string(),
+        (Some(u), _) => format!("{base}{u}"),
+        (None, Some(p)) => format!("{base}/outputs/{p}"),
+        _ => return fail("The generator's result has no url."),
+    };
+    import(
+        root,
+        ImportRequest {
+            url,
+            id,
+            dir: None,
+            source: Some(source),
+        },
+    )
+    .await
+}
+
+/// Set (or clear, with `None`) `generate.url` in the manifest.
+pub async fn connect(root: &Path, url: Option<String>) -> Value {
+    let url = url.map(|u| u.trim().trim_end_matches('/').to_string()).filter(|u| !u.is_empty());
+    if let Some(u) = &url {
+        if !(u.starts_with("http://") || u.starts_with("https://")) {
+            return fail("The generator address must start with http:// or https://");
+        }
+    }
+    match cp::set_generator(root, url.clone()).await {
+        Ok(()) => json!({ "ok": true, "generator": url }),
+        Err(e) => fail(e.message),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    async fn project() -> (tempfile::TempDir, PathBuf) {
+        let dir = tempfile::tempdir().unwrap();
+        let path = cp::create_content_project(
+            "assets-check".into(),
+            dir.path().to_string_lossy().to_string(),
+            "web-three".into(),
+            vec!["game".into()],
+        )
+        .await
+        .unwrap();
+        (dir, PathBuf::from(path))
+    }
+
+    fn png_data_url() -> String {
+        let mut bytes = Vec::new();
+        image::RgbaImage::new(3, 2)
+            .write_to(&mut std::io::Cursor::new(&mut bytes), image::ImageFormat::Png)
+            .unwrap();
+        format!(
+            "data:image/png;base64,{}",
+            base64::engine::general_purpose::STANDARD.encode(bytes)
+        )
+    }
+
+    #[tokio::test]
+    async fn import_registers_with_provenance_and_keeps_unknown_fields() {
+        let (_tmp, root) = project().await;
+        let reg = root.join("assets/manifest.json");
+        let mut seeded: Value = serde_json::from_str(&std::fs::read_to_string(&reg).unwrap()).unwrap();
+        seeded["assets"] = json!([{ "id": "old", "file": "ui/old.png", "role": "ui-frame" }]);
+        std::fs::write(&reg, seeded.to_string()).unwrap();
+
+        let out = import(
+            &root,
+            ImportRequest {
+                url: png_data_url(),
+                id: Some("old".into()),
+                dir: None,
+                source: Some(json!({ "workflow": "qwen-image-21-rgba", "seed": 7, "prompt": "a cup" })),
+            },
+        )
+        .await;
+        assert_eq!(out["ok"], true, "{out}");
+        assert_eq!(out["asset"]["id"], "old-2", "a taken id gets a suffix");
+        assert_eq!(out["asset"]["file"], "generated/images/old-2.png");
+        assert_eq!(out["asset"]["width"], 3);
+        assert_eq!(out["asset"]["source"]["seed"], 7);
+        assert!(root.join("assets/generated/images/old-2.png").is_file());
+
+        let listed = list(&root).await;
+        assert_eq!(listed["ok"], true);
+        let items = listed["assets"].as_array().unwrap();
+        assert_eq!(items.len(), 2);
+        assert_eq!(items[0]["role"], "ui-frame", "unknown fields survive");
+        assert_eq!(items[0]["exists"], false);
+        assert_eq!(items[1]["exists"], true);
+        assert!(listed["generator"].is_null());
+    }
+
+    #[tokio::test]
+    async fn refusals_are_readable() {
+        let (_tmp, root) = project().await;
+        let bad_dir = import(
+            &root,
+            ImportRequest { url: png_data_url(), dir: Some("../x".into()), ..Default::default() },
+        )
+        .await;
+        assert_eq!(bad_dir["ok"], false);
+        let bad_kind = import(
+            &root,
+            ImportRequest { url: "data:text/plain;base64,aGk=".into(), ..Default::default() },
+        )
+        .await;
+        assert_eq!(bad_kind["ok"], false);
+        let no_gen = generate(
+            &root,
+            GenerateRequest { kind: "image".into(), prompt: Some("x".into()), ..Default::default() },
+        )
+        .await;
+        assert_eq!(no_gen["ok"], false);
+        assert!(no_gen["note"].as_str().unwrap().contains("generate.url"));
+
+        let mpath = root.join("codeg-project.json");
+        let mut m: Value = serde_json::from_str(&std::fs::read_to_string(&mpath).unwrap()).unwrap();
+        m["custom"] = json!({ "keep": true });
+        std::fs::write(&mpath, m.to_string()).unwrap();
+        let connected = connect(&root, Some("http://gen.local/".into())).await;
+        assert_eq!(connected["generator"], "http://gen.local");
+        let raw = std::fs::read_to_string(&mpath).unwrap();
+        assert!(raw.starts_with("{\n  \"schema\""), "scaffold order kept: {raw}");
+        assert!(raw.contains("\"keep\": true"), "unknown fields kept");
+        let missing_from = generate(
+            &root,
+            GenerateRequest { kind: "3d".into(), from: Some("nope".into()), ..Default::default() },
+        )
+        .await;
+        assert!(missing_from["note"].as_str().unwrap().contains("studio_list_assets"));
+        assert_eq!(list(&root).await["generator"], "http://gen.local");
+        assert_eq!(connect(&root, None).await["ok"], true);
+        assert!(list(&root).await["generator"].is_null());
+    }
+
+    #[test]
+    fn generator_call_shapes() {
+        let req = GenerateRequest {
+            kind: "3d".into(),
+            from: Some("cup".into()),
+            target_faces: Some(10_000),
+            texture_size: Some(2048),
+            ..Default::default()
+        };
+        let (route, body, source) = generator_call(&req, Some("data:x".into()), 5).unwrap();
+        assert_eq!(route, "/api/3d/generate");
+        assert_eq!(body["source_image"], "data:x");
+        assert_eq!(body["target_faces"], 10_000);
+        assert_eq!(source["from"], "cup");
+        assert_eq!(source["workflow"], "trellis2");
+        assert_eq!(source["params"]["texture_size"], 2048);
+
+        assert!(generator_call(&GenerateRequest { kind: "3d".into(), ..Default::default() }, None, 1).is_err());
+        let bad_tex = GenerateRequest { kind: "3d".into(), texture_size: Some(999), ..Default::default() };
+        assert!(generator_call(&bad_tex, Some("d".into()), 1).is_err());
+        let img = GenerateRequest { kind: "image".into(), prompt: Some(" a cup ".into()), ..Default::default() };
+        let (route, body, source) = generator_call(&img, None, 9).unwrap();
+        assert_eq!(route, "/api/images/generate");
+        assert_eq!(body["workflow"], "qwen-image-21-rgba");
+        assert_eq!(source["prompt"], "a cup");
+        assert!(body.get("source_image").is_none());
+    }
+
+    #[test]
+    fn writes_keep_a_readable_key_order() {
+        let v = json!({ "schema": 1, "assets": [{ "source": {}, "file": "a.png", "id": "a" }], "container": "1x1" });
+        let text = serde_json::to_string(&Ordered {
+            value: &v,
+            first: REGISTER_ORDER,
+            children: Some(("assets", ENTRY_ORDER)),
+        })
+        .unwrap();
+        assert_eq!(
+            text,
+            r#"{"schema":1,"container":"1x1","assets":[{"id":"a","file":"a.png","source":{}}]}"#
+        );
+        assert_eq!(id_from_prompt("A cute teacup, red glaze"), "a-cute-teacup-red");
+        assert_eq!(id_from_prompt("빨간 찻잔"), "image");
+    }
+
+    #[test]
+    fn generator_outputs_are_recognised() {
+        let base = Some("https://gen.example");
+        assert_eq!(
+            generator_output_path(base, "https://gen.example/outputs/3d/2026/10/07/a.glb").as_deref(),
+            Some("3d/2026/10/07/a.glb")
+        );
+        assert_eq!(generator_output_path(base, "https://other/outputs/a.png"), None);
+        assert_eq!(generator_output_path(base, "https://gen.example/outputs/../x"), None);
+        assert_eq!(generator_output_path(None, "https://gen.example/outputs/a.png"), None);
+    }
+}

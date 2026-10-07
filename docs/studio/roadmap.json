@@ -1,7 +1,7 @@
 {
   "title": "Content Studio",
   "subtitle": "재료를 만들고, 가공하고, 바로 확인하는 웹 제작 작업공간",
-  "updated": "2026-09-19",
+  "updated": "2026-10-07",
   "version": "0.5 · engine concepts in the editor",
   "goal": "대화로 게임을 고치고, 편집기와 미리보기에서 바로 보고, 빌드하고, 링크로 출시한다.",
   "firstSlice": [
@@ -82,7 +82,7 @@
       "id": "S6",
       "title": "제작 공정과 분야별 확장",
       "status": "planned",
-      "detail": "에셋 업로드(편집기 → assets/), 타임라인·애니메이션 클립, 타일맵, 오디오, 3D 지형·재질·내비게이션, 가공 작업·의존성·캐시·재생성, 0.2.x 프로젝트 이전 도구, publish 프리셋 UI, 매니페스트 agents 역할 반영.",
+      "detail": "재료 작업대(asset-workbench): ① 생성 ↔ 재료 — 완료(아래 checks 2026-10-07), ② 재료 서랍(업로드 · GLB 미리보기 · 면 수 · 텍스처 · 용량, 옛 에셋 업로드 흡수), ③ 기준 프리셋 · 검사, ④ 3D 조립(GLB 노드). 그 밖에 타임라인·애니메이션 클립, 타일맵, 오디오, 3D 지형·재질·내비게이션, 가공 작업·의존성·캐시·재생성, 0.2.x 프로젝트 이전 도구, publish 프리셋 UI, 매니페스트 agents 역할 반영.",
       "acceptance": "원본 변경의 영향을 추적하고 필요한 산출물만 재생성한다."
     }
   ],
@@ -193,7 +193,8 @@
     "2026-09-20 · 관리형 엔진: content_engine·content_preview·content_project Rust 테스트 통과(예약 경로는 바이너리에서 서빙되고 폴더가 가릴 수 없음, 빌드에 __codeg/ 실체화, 진입 HTML에 외부 URL 없음, 프로젝트 폴더에는 쓰지 않음). Playwright 루프(codeg-server 3082, 새 web-three 프로젝트): 편집 모드에서 hero.y 고정 → 미리보기에서 float로 변함 → 편집으로 돌아오면 원래 값. 빌드 폴더를 별도 정적 서버로 띄워 캔버스 렌더·플레이 모드·타 출처 요청 0건·페이지 오류 0건 확인.",
     "2026-09-20 · 출시: content_publish(slug, 등록·재지정·내리기, 경로 제한, 미리보기 스크립트 없음)·publish_content_build(local 기록, publish.command 없을 때 거절, 자리표시자·환경 변수·마지막 URL 추출, 비정상 종료 실패, 링크 재지정 시 이전 빌드 기록 이동) Rust 테스트 통과, companion studio_publish 테스트 통과. Playwright 루프(codeg-server 3082): 빌드 → 출시 → 새 브라우저 컨텍스트(토큰 없음)에서 /play/loop-check/ 200·캔버스 렌더·주입 스크립트 없음 → 내리기 → 404. publish.command는 가짜 명령으로만 검증했고 실제 Cloudflare/Netlify/itch.io 배포는 해 보지 않았다.",
     "2026-09-20 · 편집기의 엔진 개념: behaviors·document(action.set/remove) Vitest, studio_scene Rust 테스트 통과. Playwright 루프(codeg-server 3082): hero 선택 → float의 amplitude 12→40이 파일에 { name, amplitude }로 저장 → pulse 추가로 배열 저장 → 액션 act_count 생성·단계 적용·onClick 연결이 파일에 반영 → 미리보기에서 게임 변수 패널에 setup의 taps 표시 → 캔버스의 hero 클릭으로 score 5·taps 1 → 다시 시작으로 score 사라지고 taps 0 → 편집으로 돌아오면 패널 없음. 이 과정에서 setup이 한 번만 실행돼 재시작 후 변수 초기값이 사라지는 엔진 결함을 찾아, 재시작마다 state·리스너를 비우고 setup을 다시 돌리도록 고쳤다.",
-    "2026-09-20 · 이름을 Tinysolver Studio로 확정하고 linux-1(tiny-solver/tinysolver-studio)로 이전. 식별자 me.tinysolver.studio, 홈 디렉터리 ~/.tinysolver-studio, 키체인 서비스 tinysolver-studio. 엔진(codeg-engine)·__codeg/·CODEG_* 환경 변수·codeg-project.json은 업스트림 파생 이름이라 그대로 둔다."
+    "2026-09-20 · 이름을 Tinysolver Studio로 확정하고 linux-1(tiny-solver/tinysolver-studio)로 이전. 식별자 me.tinysolver.studio, 홈 디렉터리 ~/.tinysolver-studio, 키체인 서비스 tinysolver-studio. 엔진(codeg-engine)·__codeg/·CODEG_* 환경 변수·codeg-project.json은 업스트림 파생 이름이라 그대로 둔다.",
+    "2026-10-07 · 재료 ①(생성 ↔ 재료): studio_assets Rust 테스트(받기 · 출처 · 모르는 필드 보존 · 키 순서 · 거부 메모 · 생성기 호출 모양)와 companion studio_* 도구 목록 · 인자 테스트 통과. codeg-server(3181) + next dev 로 실제 genai(https://genai.home.codepoet.me)에 연결: studio_run generate_asset image → assets/generated/images/teacup.png(1024², 출처 workflow · prompt · seed) · genai 사본 삭제 확인(404). 같은 재료를 from 으로 3d(1만 면 · 텍스처 2048) → GLB 18.2MB(대기열 때문에 9분 30초). 편집기 재료 패널에서 프롬프트 → 그리기 버튼 → 6초 뒤 새 재료가 감시 스트림으로 목록에 뜨는 것을 Playwright 스크린샷으로 확인. 1만 면 · 2048 GLB 가 18MB 라 웹 ≤5MB 기준을 넘는다 — ③ 기준 검사에서 경고로 잡는다."
   ],
   "maintenance": "기능 변경 시 roadmap.json의 상태·완료 기준·검증 결과를 갱신하고 pnpm studio:plan을 실행한다. HTML을 직접 수정하지 않는다.",
   "sources": [

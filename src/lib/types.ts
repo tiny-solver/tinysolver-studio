@@ -3973,6 +3973,74 @@ export interface ContentProjectManifest {
   agents: Record<string, string | null>
   /** Shell command that deploys a build to an outside host. */
   publish?: { command: string } | null
+  /** The generator the Studio calls for images and 3D models (genai API). */
+  generate?: { url: string } | null
+}
+
+/** Where a material came from — kept on its `assets/manifest.json` entry. */
+export interface StudioAssetSource {
+  kind?: "image" | "3d"
+  workflow?: string
+  prompt?: string
+  seed?: number
+  /** The material it was made from. */
+  from?: string
+  params?: { target_faces?: number; texture_size?: number }
+  url?: string
+  [key: string]: unknown
+}
+
+/** One entry of `assets/manifest.json`, as `studio_list_assets` returns it. */
+export interface StudioAsset {
+  id: string
+  /** Relative to the assets directory. */
+  file: string
+  kind?: "image" | "model" | "other"
+  bytes?: number
+  width?: number
+  height?: number
+  added_at?: string
+  source?: StudioAssetSource
+  /** Whether the file is on disk. */
+  exists: boolean
+  [key: string]: unknown
+}
+
+/** The operations shared by the editor and the companion's `studio_*` MCP
+ *  tools (`src-tauri/src/studio_tools.rs` `StudioOp`). */
+export type StudioOp =
+  | { op: "list_assets" }
+  | {
+      op: "import_asset"
+      url: string
+      id?: string
+      dir?: string
+      source?: StudioAssetSource
+    }
+  | {
+      op: "generate_asset"
+      kind: "image" | "3d"
+      from?: string
+      prompt?: string
+      workflow?: string
+      seed?: number
+      target_faces?: number
+      texture_size?: 1024 | 2048 | 4096
+      id?: string
+    }
+  | { op: "connect_generator"; url: string | null }
+
+/** `{ ok, note?, ... }` — a refusal is `ok: false` with a readable note. */
+export interface StudioOutcome {
+  ok: boolean
+  note?: string
+  [key: string]: unknown
+}
+
+export interface StudioAssetList extends StudioOutcome {
+  assets_dir: string
+  generator: string | null
+  assets: StudioAsset[]
 }
 
 export interface GitSettings {
