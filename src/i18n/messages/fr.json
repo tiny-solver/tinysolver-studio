@@ -6422,7 +6422,25 @@
     "gameState": "Variables du jeu",
     "gameStateEmpty": "aucune pour l’instant",
     "gameReset": "Redémarrer",
-    "gameResetHint": "Redémarre le jeu depuis la scène enregistrée et efface ses variables."
+    "gameResetHint": "Redémarre le jeu depuis la scène enregistrée et efface ses variables.",
+    "materials": {
+      "title": "Matériaux",
+      "refresh": "Actualiser",
+      "noGenerator": "Aucun générateur connecté. Saisissez son adresse pour dessiner des images et les passer en 3D ici — les résultats arrivent dans assets/ avec leur origine.",
+      "generatorUrl": "Adresse du générateur",
+      "connect": "Connecter",
+      "generator": "Générateur",
+      "prompt": "Prompt",
+      "promptPlaceholder": "Quoi dessiner (PNG transparent)",
+      "generateImage": "Dessiner",
+      "generating": "Dessin en cours… environ une minute",
+      "empty": "Aucun matériau. Dessinez-en un ou demandez à l'agent d'en importer un.",
+      "missing": "fichier manquant",
+      "from": "depuis {id}",
+      "faces": "{count} faces",
+      "make3d": "Passer en 3D",
+      "lifting": "Création 3D… quelques minutes"
+    }
   },
   "Browser": {
     "toolbar": {

@@ -68,6 +68,7 @@ import {
   DrawSection,
   StatePanel,
 } from "./studio-engine-panels"
+import { StudioMaterials } from "./studio-materials"
 import { StudioStage } from "./studio-stage"
 import { useChatBridge, useEngineErrorList } from "./use-chat-bridge"
 import "./studio.css"
@@ -778,6 +779,12 @@ export function StudioWorkspace({
               ))
             )}
           </div>
+          {target && (
+            <StudioMaterials
+              root={target.root}
+              previewBase={preview?.base ?? null}
+            />
+          )}
           {hasEngine && (
             <div className="studio-builds">
               <h2>{t("builds")}</h2>

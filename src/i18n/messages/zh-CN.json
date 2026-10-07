@@ -6422,7 +6422,25 @@
     "gameState": "游戏变量",
     "gameStateEmpty": "暂无",
     "gameReset": "重新开始",
-    "gameResetHint": "从已保存的场景重新开始游戏并清除变量。"
+    "gameResetHint": "从已保存的场景重新开始游戏并清除变量。",
+    "materials": {
+      "title": "素材",
+      "refresh": "刷新",
+      "noGenerator": "未连接生成器。填写地址后即可在此绘图并转为 3D——结果连同来源存入 assets/。",
+      "generatorUrl": "生成器地址",
+      "connect": "连接",
+      "generator": "生成器",
+      "prompt": "提示词",
+      "promptPlaceholder": "要画什么（透明 PNG）",
+      "generateImage": "绘制",
+      "generating": "绘制中…约一分钟",
+      "empty": "还没有素材。画一个，或让智能体导入。",
+      "missing": "文件缺失",
+      "from": "来自 {id}",
+      "faces": "{count} 面",
+      "make3d": "转为 3D",
+      "lifting": "生成 3D 中…需几分钟"
+    }
   },
   "Browser": {
     "toolbar": {

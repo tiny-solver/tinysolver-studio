@@ -189,6 +189,8 @@ import type {
   TokenUsageSyncStatus,
   ContentOutputKind,
   ContentProjectManifest,
+  StudioOp,
+  StudioOutcome,
   ContentScene,
   ContentBuild,
   ContentPreviewInfo,
@@ -3306,6 +3308,20 @@ export async function readContentProject(
 /** Scenes under the game output's content directory, sorted by id. */
 export async function listContentScenes(root: string): Promise<ContentScene[]> {
   return getTransport().call("list_content_scenes", { root })
+}
+
+/** Run one of the operations the companion's `studio_*` MCP tools run, so a
+ *  button and an agent go through the same code. Generation takes about a
+ *  minute (3D ~70s warm), hence the long timeout. */
+export async function studioRun<T extends StudioOutcome = StudioOutcome>(
+  root: string,
+  op: StudioOp
+): Promise<T> {
+  return getTransport().call(
+    "studio_run",
+    { root, op },
+    { timeoutMs: 15 * 60 * 1000 }
+  )
 }
 
 /** Packaged builds of the game output, newest first. */

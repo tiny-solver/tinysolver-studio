@@ -125,6 +125,21 @@ pub struct ContentProjectManifest {
     /// the Studio's own `/play/<slug>/` link needs no configuration.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub publish: Option<PublishConfig>,
+    /// The generator the Studio calls for images and 3D models (the genai
+    /// API shape). Absent until the user connects one; no credentials live
+    /// here — the address is all there is.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub generate: Option<GenerateConfig>,
+    /// Fields this version does not know, kept so a rewrite (connecting a
+    /// generator) does not drop what a newer tool or the user added.
+    #[serde(flatten)]
+    pub extra: BTreeMap<String, serde_json::Value>,
+}
+
+/// `generate` in the manifest: the generator's base URL.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GenerateConfig {
+    pub url: String,
 }
 
 /// `publish` in the manifest: one shell command, run from the project root,
@@ -262,6 +277,8 @@ pub async fn create_content_project(
             .map(|role| (role.to_string(), None))
             .collect(),
         publish: None,
+        generate: None,
+        extra: BTreeMap::new(),
     };
 
     let root_for_task = root.clone();
@@ -297,6 +314,24 @@ pub async fn read_content_project(
         )));
     }
     Ok(Some(manifest))
+}
+
+/// Set or clear `generate.url` in the manifest. Unknown fields ride along
+/// in `extra`; known ones keep the scaffold's order.
+pub async fn set_generator(root: &Path, url: Option<String>) -> Result<(), AppCommandError> {
+    let Some(mut manifest) = read_content_project(root.to_string_lossy().to_string()).await? else {
+        return Err(AppCommandError::invalid_input(format!(
+            "{MANIFEST_FILE} not found — not a content project"
+        )));
+    };
+    manifest.generate = url.map(|url| GenerateConfig { url });
+    let mut body = serde_json::to_string_pretty(&manifest)
+        .map_err(|e| AppCommandError::io_error(e.to_string()))?;
+    body.push('\n');
+    let path = root.join(MANIFEST_FILE);
+    let tmp = root.join(format!("{MANIFEST_FILE}.tmp"));
+    tokio::fs::write(&tmp, body).await.map_err(AppCommandError::io)?;
+    tokio::fs::rename(&tmp, &path).await.map_err(AppCommandError::io)
 }
 
 // ---------------------------------------------------------------------------
@@ -1137,7 +1172,7 @@ const STARTER_SCENE: &str = r##"{
 }
 "##;
 
-const SCENE_CONTRACT_RULES: &str = "## 장면 문서와 미리보기\n\n- 장면은 `outputs/game/content/<scene>.studio.json`이고 엔진과 Tinysolver Studio가 같은 파일을 읽는다. 스키마는 `outputs/game/content/README.md`에 있다.\n- 엔진은 Tinysolver Studio가 제공하는 `codeg-engine`이다(`outputs/game/ENGINE.md`). 프로젝트에 엔진 코드는 없고, 복사해 와서 고치지도 않는다. 이 게임만의 규칙은 `outputs/game/src/scripts/index.js`의 스크립트와 `src/main.js`의 `ops`·`setup`에 쓰고, 노드의 `props.script`로 붙인다. 엔진에 없는 것은 `engine.THREE`·`engine.world`로 직접 그린다.\n- 스크립트는 플레이 모드에서만 돈다. 편집 모드에서는 장면이 문서 그대로 그려진다.\n- Tinysolver Studio 안에서 열렸다면 `studio_list_scenes`·`studio_read_scene`·`studio_apply_scene_commands`·`studio_build`·`studio_publish` 도구가 있다. 배치·표시·텍스트·색·추가/삭제/순서는 `studio_apply_scene_commands`로 고친다(검증되고 원자적이며 모르는 필드를 보존한다). `logic.actions`와 엔진 코드는 파일을 직접 고친다.\n- 미리보기는 런타임 오류(예외·거부된 프로미스·console.error)를 편집기에 올리고, 사용자가 그것을 대화로 보낼 수 있다. 오류를 삼키지 말고 던지거나 console.error로 남긴다.\n- 배포 빌드는 Tinysolver Studio의 빌드 버튼이 만든다. `build/game/<version>/`에 `outputs/game`과 `assets`를 복사하고(문서 `*.md`는 빠진다) 엔진과 플랫폼 층(`__codeg/`)을 넣어 zip을 만든다. 빌드는 CDN 없이 혼자 돈다.\n- 같은 게임이 미리보기 · 독립 웹 · afterplay · 데스크톱 · 폰 앱에서 돈다. 저장 · 플레이어 · 순위 · 공유 · 광고는 `codeg-platform`(`import { platform } from \"codeg-platform\"`)으로만 부르고, 없는 능력은 `platform.has()`로 보고 UI를 숨긴다. 바깥 네트워크(CDN · 웹폰트) · `localStorage` 직접 · `alert`/`window.open` · Service Worker를 쓰지 않는다 — `outputs/game/ENGINE.md`의 \"어디서든 돌려면\". 빌드 결과의 `warnings`가 이 규칙 위반이다. 있으면 고친다.\n- 출시는 빌드 목록의 출시 버튼이나 `studio_publish`다. 기본은 Tinysolver Studio가 `/play/<프로젝트>/`로 서빙하는 링크이고, 외부 호스트는 `codeg-project.json`의 `publish.command`(빌드 폴더는 `$CODEG_BUILD_DIR`)로 올린다. 어느 호스트·계정인지는 사용자에게 묻는다. 빌드 전 명령이 필요하면 `codeg-project.json`의 `engine.build`에 적는다.\n\n";
+const SCENE_CONTRACT_RULES: &str = "## 장면 문서와 미리보기\n\n- 장면은 `outputs/game/content/<scene>.studio.json`이고 엔진과 Tinysolver Studio가 같은 파일을 읽는다. 스키마는 `outputs/game/content/README.md`에 있다.\n- 엔진은 Tinysolver Studio가 제공하는 `codeg-engine`이다(`outputs/game/ENGINE.md`). 프로젝트에 엔진 코드는 없고, 복사해 와서 고치지도 않는다. 이 게임만의 규칙은 `outputs/game/src/scripts/index.js`의 스크립트와 `src/main.js`의 `ops`·`setup`에 쓰고, 노드의 `props.script`로 붙인다. 엔진에 없는 것은 `engine.THREE`·`engine.world`로 직접 그린다.\n- 스크립트는 플레이 모드에서만 돈다. 편집 모드에서는 장면이 문서 그대로 그려진다.\n- Tinysolver Studio 안에서 열렸다면 `studio_list_scenes`·`studio_read_scene`·`studio_apply_scene_commands`·`studio_build`·`studio_publish` 도구가 있다. 재료(이미지 · 3D 모델)는 `studio_list_assets`로 보고, 생성기로 만들 땐 `studio_generate_asset`(재료를 `from`으로 다시 넣을 수 있다), 다른 도구로 만든 결과 URL 은 `studio_import_asset`으로 받는다 — 둘 다 `assets/manifest.json`에 출처(workflow · prompt · seed · from)를 남긴다. 배치·표시·텍스트·색·추가/삭제/순서는 `studio_apply_scene_commands`로 고친다(검증되고 원자적이며 모르는 필드를 보존한다). `logic.actions`와 엔진 코드는 파일을 직접 고친다.\n- 미리보기는 런타임 오류(예외·거부된 프로미스·console.error)를 편집기에 올리고, 사용자가 그것을 대화로 보낼 수 있다. 오류를 삼키지 말고 던지거나 console.error로 남긴다.\n- 배포 빌드는 Tinysolver Studio의 빌드 버튼이 만든다. `build/game/<version>/`에 `outputs/game`과 `assets`를 복사하고(문서 `*.md`는 빠진다) 엔진과 플랫폼 층(`__codeg/`)을 넣어 zip을 만든다. 빌드는 CDN 없이 혼자 돈다.\n- 같은 게임이 미리보기 · 독립 웹 · afterplay · 데스크톱 · 폰 앱에서 돈다. 저장 · 플레이어 · 순위 · 공유 · 광고는 `codeg-platform`(`import { platform } from \"codeg-platform\"`)으로만 부르고, 없는 능력은 `platform.has()`로 보고 UI를 숨긴다. 바깥 네트워크(CDN · 웹폰트) · `localStorage` 직접 · `alert`/`window.open` · Service Worker를 쓰지 않는다 — `outputs/game/ENGINE.md`의 \"어디서든 돌려면\". 빌드 결과의 `warnings`가 이 규칙 위반이다. 있으면 고친다.\n- 출시는 빌드 목록의 출시 버튼이나 `studio_publish`다. 기본은 Tinysolver Studio가 `/play/<프로젝트>/`로 서빙하는 링크이고, 외부 호스트는 `codeg-project.json`의 `publish.command`(빌드 폴더는 `$CODEG_BUILD_DIR`)로 올린다. 어느 호스트·계정인지는 사용자에게 묻는다. 빌드 전 명령이 필요하면 `codeg-project.json`의 `engine.build`에 적는다.\n\n";
 
 const THREE_INDEX_HTML: &str = r#"<!doctype html>
 <html lang="ko">

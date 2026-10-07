@@ -6422,7 +6422,25 @@
     "gameState": "Game variables",
     "gameStateEmpty": "none yet",
     "gameReset": "Restart",
-    "gameResetHint": "Restart the game from the saved scene and clear its variables."
+    "gameResetHint": "Restart the game from the saved scene and clear its variables.",
+    "materials": {
+      "title": "Materials",
+      "refresh": "Refresh",
+      "noGenerator": "No generator connected. Enter its address to draw images and lift them into 3D here — results land in assets/ with where they came from.",
+      "generatorUrl": "Generator address",
+      "connect": "Connect",
+      "generator": "Generator",
+      "prompt": "Prompt",
+      "promptPlaceholder": "What to draw (a transparent PNG)",
+      "generateImage": "Draw",
+      "generating": "Drawing… about a minute",
+      "empty": "No materials yet. Draw one, or have the agent import one.",
+      "missing": "file missing",
+      "from": "from {id}",
+      "faces": "{count} faces",
+      "make3d": "Make 3D",
+      "lifting": "Making 3D… a few minutes"
+    }
   },
   "Browser": {
     "toolbar": {
