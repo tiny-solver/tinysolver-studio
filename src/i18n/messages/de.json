@@ -6468,7 +6468,9 @@
         "pc-hero": "PC- · Konsolen-Held",
         "print-3d": "3D-Druck"
       }
-    }
+    },
+    "yaw": "Drehung links/rechts (°)",
+    "pitch": "Neigung (°)"
   },
   "Browser": {
     "toolbar": {

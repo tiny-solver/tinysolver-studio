@@ -436,21 +436,30 @@ export function createNode(
 
 /**
  * Put a material from `assets/manifest.json` into a scene: declare it
- * (`asset.set`) and add a sprite showing it, scaled to fit about 40% of the
- * container and standing at its centre. One batch, so one undo step.
+ * (`asset.set`) and add a node showing it — a sprite for an image, a
+ * `model` for a GLB — scaled to fit about 40% of the container and standing
+ * at its centre. One batch, so one undo step.
  */
 export function placeMaterialCommands(
   scene: SceneFile,
-  material: { id: string; file: string; width: number; height: number }
+  material: {
+    id: string
+    file: string
+    width?: number
+    height?: number
+    /** `model` (GLB) becomes a `model` node in a square box. */
+    kind?: "image" | "model"
+  }
 ): { commands: SceneCommand[]; nodeId: string } {
   const { width: cw, height: ch } = scene.document.container
-  const scale = Math.min(
-    1,
-    (cw * 0.4) / material.width,
-    (ch * 0.4) / material.height
-  )
-  const w = Math.max(1, Math.round(material.width * scale))
-  const h = Math.max(1, Math.round(material.height * scale))
+  const isModel = material.kind === "model"
+  // A model has no pixel size; it is declared with a nominal square and
+  // drawn fitted into its node's box.
+  const mw = isModel ? MODEL_BOX : (material.width ?? MODEL_BOX)
+  const mh = isModel ? MODEL_BOX : (material.height ?? MODEL_BOX)
+  const scale = Math.min(1, (cw * 0.4) / mw, (ch * 0.4) / mh)
+  const w = Math.max(1, Math.round(mw * scale))
+  const h = Math.max(1, Math.round(mh * scale))
   const taken = new Set(scene.document.nodes.map((n) => n.id))
   let nodeId = material.id
   for (let n = 2; taken.has(nodeId); n++) nodeId = `${material.id}_${n}`
@@ -460,19 +469,14 @@ export function placeMaterialCommands(
     commands: [
       {
         type: "asset.set",
-        asset: {
-          id: material.id,
-          file: material.file,
-          width: material.width,
-          height: material.height,
-        },
+        asset: { id: material.id, file: material.file, width: mw, height: mh },
       },
       {
         type: "node.add",
         node: {
           id: nodeId,
           parent: "root",
-          type: "sprite",
+          type: isModel ? "model" : "sprite",
           transform: {
             x: Math.round(cw / 2),
             y: Math.round(ch / 2 + h / 2),
@@ -481,12 +485,17 @@ export function placeMaterialCommands(
             anchor: "bottom-center",
             z,
           },
-          props: { asset: material.id, interactive: false },
+          props: isModel
+            ? { asset: material.id, yaw: 0, pitch: 0 }
+            : { asset: material.id, interactive: false },
         },
       },
     ],
   }
 }
+
+/** The nominal size a 3D model is declared with (and its first box). */
+const MODEL_BOX = 512
 
 /** A new scene as the scaffold writes it, with the ids an engine expects. */
 export function createStarterScene(sceneId: string, name = sceneId): SceneFile {

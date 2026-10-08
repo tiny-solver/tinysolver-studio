@@ -49,14 +49,15 @@
       "date": "2026-10-07",
       "from": "오너",
       "text": "AI 생성물(이미지 · 3D 모델 등)을 올려 두고 이것저것 실험하는 공간 — 바로 조립해 보고, 만든 것이 곧 재료가 되어 다시 넣을 수 있게. 각 부분(재료 서랍 · 생성 · 기준(면 수 · 텍스처 · 용량) · 3D 조립)을 제어하는 에디터 도구를 만들고, AI 에이전트가 필요할 때 같은 도구를 불러 쓰는 구조. 시각적으로 확인해 가며 고칠 수 있게",
-      "status": "taken",
+      "status": "done",
       "items": [
         "aw-gen-material",
         "aw-drawer",
         "aw-presets",
         "aw-3d-assemble",
         "aw-gen-connect"
-      ]
+      ],
+      "note": "10-08 — 조각 넷 land: ① 생성↔재료(#24) · ② 서랍(#26) · ③ 기준 프리셋 · 검사 · ④ 3D 조립. 생성기 주소 자리(aw-gen-connect)는 오너 고를 것으로 남음(권장안 A 로 구현). genai 쪽 이상(면 수 미적용 · 알파 불투명 · 3D 500)은 roadmap checks 10-08"
     },
     {
       "id": "blender-video",
@@ -663,7 +664,7 @@
       "then": [],
       "id": "aw-3d-assemble",
       "p": 3,
-      "status": "todo",
+      "status": "decided",
       "q": "④ 3D 조립 — 엔진(three-web)에 GLB 노드(놓기 · 돌리기 · 크기)",
       "want": "장면에 GLB 재료를 노드로 놓고 편집기에서 위치 · 회전 · 크기를 바꾸면 미리보기에 바로 보이고, 같은 명령을 에이전트도 쓴다",
       "now": "엔진은 2D 장면 런타임(3D 없음) — roadmap S6 '3D'",
@@ -671,7 +672,12 @@
       "refs": [
         "docs/studio/roadmap.json S6",
         "#s6-pipeline"
-      ]
+      ],
+      "decided": {
+        "date": "2026-10-08",
+        "pick": "done",
+        "note": "엔진 0.5.0 model 노드(GLB 를 노드마다 렌더 타깃에 그려 2D 장면에 섞는다) · yaw/pitch · turntable · 편집기 인스펙터 · 서랍 '장면에 놓기'. 3D 카메라 · 조명 장면 · 지형은 S6 남은 것"
+      }
     },
     {
       "id": "aw-gen-connect",

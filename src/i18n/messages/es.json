@@ -6468,7 +6468,9 @@
         "pc-hero": "Protagonista PC · consola",
         "print-3d": "Impresión 3D"
       }
-    }
+    },
+    "yaw": "Giro horizontal (°)",
+    "pitch": "Giro vertical (°)"
   },
   "Browser": {
     "toolbar": {

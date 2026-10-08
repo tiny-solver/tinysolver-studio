@@ -26,7 +26,7 @@
 /// Project-root-relative directory the engine files appear under.
 pub const RESERVED_DIR: &str = "__codeg";
 
-pub const THREE_WEB_VERSION: &str = "0.4.0";
+pub const THREE_WEB_VERSION: &str = "0.5.0";
 pub const THREE_VERSION: &str = "0.170.0";
 
 pub struct EngineFile {
