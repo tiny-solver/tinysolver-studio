@@ -6446,7 +6446,28 @@
       "preview": "预览",
       "place": "放入场景",
       "tris": "{count} 面",
-      "texture": "纹理 {size}"
+      "texture": "纹理 {size}",
+      "use": "用途",
+      "useNone": "未设定",
+      "useHint": "3D：{faces} 面 · 纹理 {texture}",
+      "useHintNone": "3D 默认：{faces} 面 · 纹理 {texture}",
+      "check": {
+        "tris_over_cap": "{value} 面 — 上限 {limit}",
+        "tris_above": "{value} 面 — 建议不超过 {limit}",
+        "tris_below": "{value} 面 — 通常 {limit} 以上",
+        "texture_above": "纹理 {value}px — 不超过 {limit}px",
+        "bytes_above": "{value} MB — 不超过 {limit} MB",
+        "not_transparent": "不透明 — 背景会一起带上",
+        "closed_mesh_unchecked": "未检查是否为封闭网格"
+      },
+      "presets": {
+        "mobile-prop": "手游道具",
+        "mobile-character": "手游角色",
+        "roblox-meshpart": "Roblox MeshPart",
+        "web-ar": "网页 / AR",
+        "pc-hero": "PC · 主机主角",
+        "print-3d": "3D 打印"
+      }
     }
   },
   "Browser": {

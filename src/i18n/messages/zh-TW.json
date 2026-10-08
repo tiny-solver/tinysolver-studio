@@ -6446,7 +6446,28 @@
       "preview": "預覽",
       "place": "放入場景",
       "tris": "{count} 面",
-      "texture": "紋理 {size}"
+      "texture": "紋理 {size}",
+      "use": "用途",
+      "useNone": "未設定",
+      "useHint": "3D：{faces} 面 · 紋理 {texture}",
+      "useHintNone": "3D 預設：{faces} 面 · 紋理 {texture}",
+      "check": {
+        "tris_over_cap": "{value} 面 — 上限 {limit}",
+        "tris_above": "{value} 面 — 建議不超過 {limit}",
+        "tris_below": "{value} 面 — 通常 {limit} 以上",
+        "texture_above": "紋理 {value}px — 不超過 {limit}px",
+        "bytes_above": "{value} MB — 不超過 {limit} MB",
+        "not_transparent": "不透明 — 背景會一起帶上",
+        "closed_mesh_unchecked": "未檢查是否為封閉網格"
+      },
+      "presets": {
+        "mobile-prop": "手遊道具",
+        "mobile-character": "手遊角色",
+        "roblox-meshpart": "Roblox MeshPart",
+        "web-ar": "網頁 / AR",
+        "pc-hero": "PC · 主機主角",
+        "print-3d": "3D 列印"
+      }
     }
   },
   "Browser": {

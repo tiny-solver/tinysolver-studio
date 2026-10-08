@@ -21,7 +21,13 @@ import {
   DialogDescription,
   DialogTitle,
 } from "@/components/ui/dialog"
-import type { StudioAsset, StudioAssetList, StudioOp } from "@/lib/types"
+import type {
+  StudioAsset,
+  StudioAssetList,
+  StudioFinding,
+  StudioOp,
+  StudioPreset,
+} from "@/lib/types"
 
 /** Defaults for "Make 3D": a game-sized mesh (1만 면 holds its shape thanks
  *  to the normal map) with a texture that stays within the 2048 web limit. */
@@ -86,6 +92,10 @@ export function StudioMaterials({
   const [prompt, setPrompt] = useState("")
   const [generatorDraft, setGeneratorDraft] = useState("")
   const [previewing, setPreviewing] = useState<StudioAsset | null>(null)
+  /** "Where will this be used" — a preset id, or "" for none. Applies to
+   *  what the buttons make next; each material keeps its own `use`. */
+  const [useFor, setUseFor] = useState("")
+  const tp = useTranslations("Studio.materials.presets")
   const fileInput = useRef<HTMLInputElement>(null)
 
   const refresh = useCallback(async () => {
@@ -154,7 +164,12 @@ export function StudioMaterials({
     const text = prompt.trim()
     if (!text) return
     if (
-      await run("image", { op: "generate_asset", kind: "image", prompt: text })
+      await run("image", {
+        op: "generate_asset",
+        kind: "image",
+        prompt: text,
+        ...(useFor ? { use: useFor } : {}),
+      })
     )
       setPrompt("")
   }
@@ -190,6 +205,29 @@ export function StudioMaterials({
           `../../${assetsDir}/${file}`
         )}`
       : null
+
+  const presets: StudioPreset[] = list?.presets ?? []
+  const preset = presets.find((p) => p.id === useFor)
+  const presetLabel = (id: string) => tp(id as "web-ar")
+  const renderUseSelect = (
+    value: string,
+    onChange: (next: string) => void,
+    label: string
+  ) => (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      aria-label={label}
+      disabled={busy}
+    >
+      <option value="">{t("useNone")}</option>
+      {presets.map((p) => (
+        <option key={p.id} value={p.id}>
+          {presetLabel(p.id)}
+        </option>
+      ))}
+    </select>
+  )
 
   const assets = list?.assets ?? []
   const loose = list?.unregistered ?? []
@@ -256,6 +294,21 @@ export function StudioMaterials({
             <small title={generator}>
               {t("generator")} · {generator.replace(/^https?:\/\//, "")}
             </small>
+            <label className="studio-materials-use">
+              <span>{t("use")}</span>
+              {renderUseSelect(useFor, setUseFor, t("use"))}
+            </label>
+            <small>
+              {preset
+                ? t("useHint", {
+                    faces: preset.target_faces.toLocaleString(),
+                    texture: preset.texture_size,
+                  })
+                : t("useHintNone", {
+                    faces: LIFT_3D.target_faces.toLocaleString(),
+                    texture: LIFT_3D.texture_size,
+                  })}
+            </small>
             <textarea
               value={prompt}
               rows={2}
@@ -314,7 +367,7 @@ export function StudioMaterials({
                 op: "generate_asset",
                 kind: "3d",
                 from: asset.id,
-                ...LIFT_3D,
+                ...(useFor ? { use: useFor } : LIFT_3D),
               })
             }
           />
@@ -354,6 +407,27 @@ export function StudioMaterials({
               <DialogDescription>
                 {previewing.file} · {materialFacts(previewing, t).join(" · ")}
               </DialogDescription>
+              <label className="studio-materials-use">
+                <span>{t("use")}</span>
+                {renderUseSelect(
+                  previewing.use ?? "",
+                  (next) => {
+                    void run(`use:${previewing.id}`, {
+                      op: "update_asset",
+                      id: previewing.id,
+                      use: next || null,
+                    }).then(() =>
+                      setPreviewing((p) =>
+                        p ? { ...p, use: next || undefined } : p
+                      )
+                    )
+                  },
+                  t("use")
+                )}
+              </label>
+              <Findings
+                findings={assets.find((a) => a.id === previewing.id)?.check}
+              />
               <div className="studio-material-preview-stage">
                 {previewing.kind === "model" ? (
                   <iframe
@@ -397,7 +471,7 @@ export function StudioMaterials({
 
 type Translate = (
   key: "tris" | "texture" | "missing",
-  values?: Record<string, number>
+  values?: Record<string, string | number>
 ) => string
 
 /** The numbers a material is judged by: kind, pixel size or faces and
@@ -408,7 +482,7 @@ function materialFacts(asset: StudioAsset, t: Translate): string[] {
       ? [
           "GLB",
           typeof asset.triangles === "number"
-            ? t("tris", { count: asset.triangles })
+            ? t("tris", { count: asset.triangles.toLocaleString() })
             : null,
           typeof asset.texture_max === "number"
             ? t("texture", { size: asset.texture_max })
@@ -440,6 +514,7 @@ function MaterialRow({
   onLift: () => void
 }) {
   const t = useTranslations("Studio.materials")
+  const tp = useTranslations("Studio.materials.presets")
   const source = asset.source
   const made = source
     ? [
@@ -472,6 +547,12 @@ function MaterialRow({
         {made.length > 0 && (
           <span title={source?.prompt}>{made.join(" · ")}</span>
         )}
+        {asset.use && (
+          <span className="studio-material-use">
+            {tp(asset.use as "web-ar")}
+          </span>
+        )}
+        <Findings findings={asset.check} />
         {(onPlace || canLift) && (
           <div className="studio-material-actions">
             {onPlace && (
@@ -490,5 +571,33 @@ function MaterialRow({
         )}
       </div>
     </div>
+  )
+}
+
+/** What the material breaks for its `use` (see `studio_presets.rs`). */
+function Findings({ findings }: { findings?: StudioFinding[] }) {
+  const tc = useTranslations("Studio.materials.check")
+  if (!findings?.length) return null
+  return (
+    <ul className="studio-material-check">
+      {findings.map((f) => {
+        const mb = f.code === "bytes_above"
+        const values = {
+          value: mb
+            ? (f.value / 1024 / 1024).toFixed(1)
+            : f.value.toLocaleString(),
+          limit: mb
+            ? Math.round(f.limit / 1024 / 1024)
+            : f.limit.toLocaleString(),
+        }
+        return (
+          <li key={f.code} className={`is-${f.level}`} title={f.message}>
+            {tc.has(f.code as "tris_above")
+              ? tc(f.code as "tris_above", values)
+              : f.message}
+          </li>
+        )
+      })}
+    </ul>
   )
 }

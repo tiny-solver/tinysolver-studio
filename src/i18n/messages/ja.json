@@ -6446,7 +6446,28 @@
       "preview": "プレビュー",
       "place": "シーンに置く",
       "tris": "{count} 面",
-      "texture": "テクスチャ {size}"
+      "texture": "テクスチャ {size}",
+      "use": "用途",
+      "useNone": "未設定",
+      "useHint": "3D：{faces} 面・テクスチャ {texture}",
+      "useHintNone": "3D 既定：{faces} 面・テクスチャ {texture}",
+      "check": {
+        "tris_over_cap": "{value} 面 — 上限 {limit}",
+        "tris_above": "{value} 面 — 推奨 {limit} 以下",
+        "tris_below": "{value} 面 — 通常 {limit} 以上",
+        "texture_above": "テクスチャ {value}px — {limit}px 以下に",
+        "bytes_above": "{value} MB — {limit} MB 未満に",
+        "not_transparent": "透過していない — 背景もついてくる",
+        "closed_mesh_unchecked": "閉じたメッシュかは未検査"
+      },
+      "presets": {
+        "mobile-prop": "モバイル小物",
+        "mobile-character": "モバイルキャラ",
+        "roblox-meshpart": "Roblox MeshPart",
+        "web-ar": "Web / AR",
+        "pc-hero": "PC・コンソール主役",
+        "print-3d": "3D プリント"
+      }
     }
   },
   "Browser": {

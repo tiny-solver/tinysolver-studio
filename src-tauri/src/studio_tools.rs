@@ -43,6 +43,12 @@ pub enum StudioOp {
     /// Call the project's generator (optionally feeding a material back in)
     /// and import the result.
     GenerateAsset(studio_assets::GenerateRequest),
+    /// Set (or clear) where a material will be used (`use`, a preset id).
+    UpdateAsset {
+        id: String,
+        #[serde(default, rename = "use")]
+        use_for: Option<String>,
+    },
     /// Set or clear `generate.url` in the manifest. The editor's Connect
     /// button; agents edit the manifest directly.
     ConnectGenerator {
@@ -150,6 +156,7 @@ pub async fn run(root: PathBuf, op: StudioOp) -> Value {
         StudioOp::ListAssets => studio_assets::list(&root).await,
         StudioOp::ImportAsset(req) => studio_assets::import(&root, req).await,
         StudioOp::GenerateAsset(req) => studio_assets::generate(&root, req).await,
+        StudioOp::UpdateAsset { id, use_for } => studio_assets::update(&root, &id, use_for).await,
         StudioOp::ConnectGenerator { url } => studio_assets::connect(&root, url).await,
     }
 }
