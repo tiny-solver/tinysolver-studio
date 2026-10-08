@@ -64,16 +64,26 @@
       "date": "2026-10-07",
       "from": "오너",
       "text": "Studio 에서 Blender 와 genai 를 이어 영상까지 — 3D 로 먼저 장면 · 카메라 파이프라인을 잡고, 렌더한 그림으로 이미지를 생성하고, 그걸로 영상을 생성하는 형태(3D 우선 → 그림 → 영상)",
-      "status": "new",
-      "items": []
+      "status": "taken",
+      "items": [
+        "bv-route",
+        "bv-where",
+        "bv-blender-run",
+        "bv-video-gen",
+        "bv-camera-path",
+        "bv-vace"
+      ]
     },
     {
       "id": "first-screen",
       "date": "2026-10-07",
       "from": "오너",
       "text": "첫 화면이 지금(채팅창 작업공간)과 달라야 한다 — 대화창은 꺼내서 에이전트로 쓸 수 있되, 기본 흐름이 직관적으로 느껴지게. 예: 채팅에 '○○ 영상 만들어줘' 하면 3D 모델링으로 만들어 샘플 영상까지 가는 흐름이 첫 화면에서 보이게",
-      "status": "new",
-      "items": []
+      "status": "taken",
+      "items": [
+        "fs-layout",
+        "fs-flow"
+      ]
     }
   ],
   "topics": [
@@ -111,6 +121,20 @@
       "role": "제품",
       "ask": "재료 서랍 · 생성↔재료 · 기준 · 3D 조립을 편집기 도구와 에이전트 도구(같은 명령)로",
       "doc": "docs/studio/roadmap.json S6"
+    },
+    {
+      "id": "video",
+      "name": "3D → 그림 → 영상 — Blender 와 genai 를 이어서",
+      "role": "제품",
+      "ask": "3D 로 장면 · 카메라를 먼저 잡고, 렌더한 그림으로 그림 · 영상을 생성하는 공정을 Studio 도구와 MCP 로",
+      "doc": "docs/studio/roadmap.json S6"
+    },
+    {
+      "id": "entry",
+      "name": "첫 화면 — 만드는 흐름이 바로 보이게",
+      "role": "제품",
+      "ask": "채팅 작업공간 대신 '무엇을 만들까요' 에서 단계 카드로 가는 첫 화면",
+      "doc": "docs/studio/README.md"
     }
   ],
   "items": [
@@ -725,6 +749,296 @@
       ],
       "refs": [
         "#studio-asset-gen"
+      ]
+    },
+    {
+      "role": "제품",
+      "asked": "2026-10-08",
+      "goal": "안 적음",
+      "prep": [],
+      "who": [],
+      "learn": [],
+      "unblocks": [],
+      "then": [],
+      "status": "todo",
+      "id": "bv-blender-run",
+      "topic": "video",
+      "p": 2,
+      "from": "ask:blender-video",
+      "q": "① Blender 헤드리스 렌더 — 모델 재료 → 턴테이블 · 키프레임 그림 · mp4",
+      "want": "서랍의 GLB 재료에서 '렌더'(편집기)와 MCP studio_render 가 같은 명령으로 Blender 를 헤드리스로 돌려(입력은 JSON: 프레임 · 해상도 · 카메라 거리) 턴테이블 mp4 와 키프레임 PNG 를 assets/ 재료로 받고 출처(원본 모델 · 설정)를 남긴다. Blender 가 없으면 읽을 수 있는 안내",
+      "now": "Studio 에 Blender 연결이 없다. 실측 스크립트(turntable.py · shot.py)는 handoff 에만 있다 — 맥북에어에서 그림 → 3D → 렌더 → 영상 ≈4분(10-07)",
+      "action": "studio_render.rs(Blender 찾기: 매니페스트 render.blender → PATH → 표준 위치, ffmpeg) + 스크립트를 엔진처럼 내장 · render 명령 · 서랍 '렌더' 단추 · 결과 재료(kind video)와 미리보기",
+      "needs": [
+        "bv-where"
+      ],
+      "refs": [
+        "~/handoff/studio-notes.md (10-07 실측)",
+        "linux-1 ~/handoff/3d-pose-bench/turntable.py · shot.py",
+        "#aw-3d-assemble"
+      ]
+    },
+    {
+      "role": "제품",
+      "asked": "2026-10-08",
+      "goal": "안 적음",
+      "prep": [],
+      "who": [],
+      "learn": [],
+      "unblocks": [],
+      "then": [],
+      "status": "todo",
+      "id": "bv-video-gen",
+      "topic": "video",
+      "p": 2,
+      "from": "ask:blender-video",
+      "q": "② 그림 → 영상 생성 — 렌더 키프레임(또는 아무 이미지 재료)에서 genai i2v",
+      "want": "generate_asset kind video(from 이미지 재료 · 프롬프트에 동작 · 카메라 · Audio) 가 genai /api/videos/generate(minimax-h3-i2v 계열)를 불러 mp4 를 재료로 받고, 그림 편집(qwen-image-21-edit)으로 스타일을 바꾼 키프레임도 같은 길로. 편집기 '영상으로' 단추 · MCP 같은 도구 · 서랍에서 영상 재생",
+      "now": "generate_asset 은 image · 3d 만. 실측: 렌더 첫 프레임 → i2v 768² 4~5초 ≈60초, 모양 · 색이 3D 그대로(동작은 영상 모델이 그린 것)",
+      "action": "generate_asset 에 video · image edit 갈래 + 서랍 video 재료(썸네일 · 재생)",
+      "needs": [
+        "bv-route"
+      ],
+      "refs": [
+        "~/handoff/studio-notes.md",
+        "#aw-gen-material"
+      ]
+    },
+    {
+      "role": "제품",
+      "asked": "2026-10-08",
+      "goal": "안 적음",
+      "prep": [],
+      "who": [],
+      "learn": [],
+      "unblocks": [],
+      "then": [],
+      "status": "todo",
+      "id": "bv-camera-path",
+      "topic": "video",
+      "p": 3,
+      "from": "ask:blender-video",
+      "q": "③ 카메라 경로를 Studio 에서 눈으로 잡아 Blender 입력으로",
+      "want": "3D 노드(aw-3d-assemble)에서 카메라 위치 · 경로를 잡고 그 JSON 을 bv-blender-run 의 입력으로 넘긴다 — 장면 · 카메라를 보면서 고친다",
+      "now": "엔진 model 노드는 yaw · pitch 만. 3D 카메라 · 경로 개념이 없다",
+      "action": "장면 문서에 카메라 경로(키프레임) · 편집기 미리보기 · 렌더 입력 변환",
+      "needs": [
+        "bv-blender-run"
+      ],
+      "refs": [
+        "#aw-3d-assemble",
+        "docs/studio/roadmap.json S6 '3D 카메라'"
+      ]
+    },
+    {
+      "role": "제품",
+      "asked": "2026-10-08",
+      "goal": "안 적음",
+      "prep": [],
+      "who": [],
+      "learn": [],
+      "unblocks": [],
+      "then": [],
+      "status": "todo",
+      "id": "bv-vace",
+      "topic": "video",
+      "p": 3,
+      "from": "ask:blender-video",
+      "q": "④ 길 B — 깊이 · 노멀 패스 영상 → VACE 제어 영상(카메라 · 배치 정확)",
+      "want": "Blender 가 깊이 · 노멀 패스 영상을 내고 genai wan-vace-loop 으로 카메라 · 배치가 정확한 영상을 만든다",
+      "now": "길 A(키프레임 → i2v)만 실측했다",
+      "action": "bv-route 결정 뒤 순서대로",
+      "needs": [
+        "bv-route",
+        "bv-blender-run"
+      ],
+      "refs": [
+        "~/handoff/studio-notes.md 두 길"
+      ]
+    },
+    {
+      "role": "제품",
+      "asked": "2026-10-08",
+      "goal": "안 적음",
+      "prep": [],
+      "who": [],
+      "learn": [],
+      "unblocks": [],
+      "then": [],
+      "status": "todo",
+      "id": "fs-flow",
+      "topic": "entry",
+      "p": 2,
+      "from": "ask:first-screen",
+      "q": "첫 화면 — '무엇을 만들까요?' → 단계 카드로 흐름이 보이게",
+      "want": "fs-layout 에서 고른 모양으로: 입력 한 칸 + 결과 칩(영상 · 3D 모델 · 그림 · 게임 장면) → 프로젝트 폴더 생성 → 단계 카드(그림 → 3D → 장면 · 카메라 → 렌더 → 영상)가 차례로 채워진다. 카드마다 결과 미리보기 · 다시 하기 · 그 단계 편집 도구 열기. 채팅은 오른쪽 서랍. 카드 = 재료 작업대의 편집 도구 = 같은 MCP 도구",
+      "now": "첫 화면은 업스트림 그대로의 채팅 작업공간. 단계 도구는 재료 서랍(asset-workbench)에 있다",
+      "action": "첫 화면은 fork 쪽 새 경로로(업스트림 파일은 진입점 한 곳만) · 단계 카드는 studio_run 명령을 그대로 부른다 · 영상 단계는 bv-* 가 들어오면 켜진다",
+      "needs": [
+        "fs-layout"
+      ],
+      "refs": [
+        "~/handoff/studio-notes.md §2",
+        "#bv-blender-run",
+        "#bv-video-gen"
+      ]
+    },
+    {
+      "id": "bv-route",
+      "rule": "none",
+      "topic": "video",
+      "p": 2,
+      "status": "open",
+      "role": "제품",
+      "asked": "2026-10-08",
+      "q": "영상 길을 어느 것부터 — A 키프레임 → i2v, B 깊이 · 노멀 → VACE 제어 영상",
+      "now": "A 는 10-07 실측(≈60초 · 모양 · 색 유지 · 동작은 모델이 그림). B 는 카메라 · 배치가 정확하지만 아직 안 돌려 봤다",
+      "facets": [
+        "정확도",
+        "속도",
+        "선행"
+      ],
+      "options": [
+        {
+          "key": "A",
+          "title": "A 먼저 — 렌더 키프레임 → (그림 편집) → i2v",
+          "facets": {
+            "정확도": "모양 · 색 유지, 카메라 · 동작은 영상 모델 몫",
+            "속도": "≈1분",
+            "선행": "bv-blender-run"
+          }
+        },
+        {
+          "key": "B",
+          "title": "B 먼저 — 패스 영상 → VACE",
+          "facets": {
+            "정확도": "카메라 · 배치 정확",
+            "속도": "미측정",
+            "선행": "bv-blender-run + 패스 렌더 스크립트"
+          }
+        },
+        {
+          "key": "AB",
+          "title": "A 를 내고 바로 B",
+          "facets": {
+            "정확도": "둘 다",
+            "속도": "A 먼저",
+            "선행": "bv-blender-run"
+          }
+        }
+      ],
+      "pick": "A",
+      "reason": "실측이 있고 지금 생성기로 바로 된다. B 는 A 의 Blender 렌더 틀 위에 패스 출력만 더하면 된다",
+      "needs": [],
+      "unblocks": [
+        "bv-video-gen",
+        "bv-vace"
+      ],
+      "then": [],
+      "refs": [
+        "~/handoff/studio-notes.md 두 길"
+      ]
+    },
+    {
+      "id": "bv-where",
+      "rule": "none",
+      "topic": "video",
+      "p": 2,
+      "status": "open",
+      "role": "제품",
+      "asked": "2026-10-08",
+      "q": "Blender 를 어디서 돌리나",
+      "now": "Blender 5.2 는 오너 맥북(/Applications) · linux-2(snap). linux-1 엔 없다. 사용자 PC 렌더가 기본 원칙(studio-where-runs). Blender MCP 는 필요 없었다(헤드리스 스크립트로 충분)",
+      "facets": [
+        "사용자 준비",
+        "원가",
+        "오너 환경"
+      ],
+      "options": [
+        {
+          "key": "A",
+          "title": "사용자 PC 의 Blender — Studio 가 찾아 헤드리스로 부른다",
+          "facets": {
+            "사용자 준비": "Blender 설치",
+            "원가": "0",
+            "오너 환경": "맥북 그대로"
+          }
+        },
+        {
+          "key": "B",
+          "title": "생성기 쪽(linux-2) 원격 렌더 — genai 에 렌더 API",
+          "facets": {
+            "사용자 준비": "없음",
+            "원가": "GPU 시간",
+            "오너 환경": "linux-2 on-demand 에 묶임 · genai 에 일을 더함"
+          }
+        },
+        {
+          "key": "C",
+          "title": "A 먼저, 없으면 B 로 넘기는 연결 틀(studio-asset-gen C 와 같은 모양)",
+          "facets": {
+            "사용자 준비": "있으면 로컬",
+            "원가": "없을 때만",
+            "오너 환경": "둘 다"
+          }
+        }
+      ],
+      "pick": "A",
+      "reason": "원칙이 사용자 PC 렌더이고, 생성기에 사용처를 넣지 않는다(B13). 원격은 연결 틀이 생긴 뒤 공급자 하나로 더한다",
+      "needs": [],
+      "unblocks": [
+        "bv-blender-run"
+      ],
+      "then": [],
+      "refs": [
+        "#studio-asset-gen",
+        "~/handoff/studio-notes.md"
+      ]
+    },
+    {
+      "id": "fs-layout",
+      "rule": "upstream-receive-only",
+      "topic": "entry",
+      "p": 2,
+      "status": "open",
+      "role": "제품",
+      "asked": "2026-10-08",
+      "q": "첫 화면 모양 — 무엇이 먼저 보이나",
+      "now": "지금 첫 화면은 업스트림(codeg) 채팅 작업공간. 업스트림 파일은 되도록 고치지 않는다",
+      "facets": [
+        "첫 인상",
+        "채팅",
+        "업스트림 충돌"
+      ],
+      "options": [
+        {
+          "key": "A",
+          "title": "'무엇을 만들까요?' 입력 + 결과 칩 + 최근 프로젝트 · 재료 미리보기 → 단계 카드 가로 진행 · 채팅은 오른쪽 서랍",
+          "facets": {
+            "첫 인상": "만드는 흐름",
+            "채팅": "서랍(접기/펼치기)",
+            "업스트림 충돌": "fork 쪽 새 화면 · 진입점 한 곳만"
+          }
+        },
+        {
+          "key": "B",
+          "title": "지금 작업공간 유지 + 위쪽 '만들기' 띠(입력 · 칩) — 누르면 단계 카드 패널",
+          "facets": {
+            "첫 인상": "채팅 + 만들기",
+            "채팅": "그대로",
+            "업스트림 충돌": "작업공간 파일을 고쳐야 함"
+          }
+        }
+      ],
+      "pick": "A",
+      "reason": "오너 요청이 '지금과 달라야 한다'이고, 새 경로로 두면 업스트림 파일은 진입점 하나만 건드린다",
+      "needs": [],
+      "unblocks": [
+        "fs-flow"
+      ],
+      "then": [],
+      "refs": [
+        "~/handoff/studio-notes.md §2"
       ]
     }
   ]
