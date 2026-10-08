@@ -1,4 +1,4 @@
-// codeg-engine · three-web runtime v0.4.0
+// codeg-engine · three-web runtime v0.5.0
 //
 // Tinysolver Studio 가 제공하는 2D 장면 런타임이다. 프로젝트에 복사되지 않는다.
 // 미리보기 서버가 `__codeg/engine/three-web/runtime.js` 로 서빙하고, 빌드가
@@ -16,9 +16,14 @@
 //      스크립트·행동·입력이 멈추고 장면이 문서 그대로 그려진다.
 //
 // 좌표계: 컨테이너 픽셀, 원점 좌상단, y 아래 방향.
+//
+// 3D 모델: `type: "model"` 노드는 `props.asset` 의 GLB 를 자기 상자(w × h) 안에
+// 맞춰 그린다. 노드마다 작은 3D 장면을 렌더 타깃에 그리고 그 결과를 평면에 붙이므로
+// 배치 · z 순서 · 표시 · 회전(평면) · 크기는 다른 노드와 같다. 3D 방향은
+// `props.yaw`(좌우, 도) · `props.pitch`(위아래, 도), 내장 행동 `turntable` 이 yaw 를 돌린다.
 import * as THREE from "three"
 
-export const VERSION = "0.4.0"
+export const VERSION = "0.5.0"
 export { THREE }
 
 const ID = /^[a-zA-Z0-9_-]{1,100}$/
@@ -138,6 +143,123 @@ export async function start(options = {}) {
     return tex
   }
 
+  // ── 3D 모델 ─────────────────────────────────────────────────────
+  // GLTFLoader 는 모델 노드가 처음 나올 때 읽는다(모델 없는 게임은 받지 않는다).
+  let gltfLoader = null
+  const gltfs = new Map() // file → Promise<gltf>
+  const views = new Map() // node id → { file, rt, scene, cam, holder, w, h }
+
+  function loadGltf(file) {
+    if (!gltfs.has(file)) {
+      gltfs.set(
+        file,
+        (async () => {
+          if (!gltfLoader) {
+            const { GLTFLoader } = await import(
+              new URL(
+                "../../vendor/addons/loaders/GLTFLoader.js",
+                import.meta.url
+              ).href
+            )
+            gltfLoader = new GLTFLoader()
+          }
+          return gltfLoader.loadAsync(new URL(file, assetBase).href)
+        })()
+      )
+    }
+    return gltfs.get(file)
+  }
+
+  function disposeView(id) {
+    const v = views.get(id)
+    if (!v) return
+    v.rt.dispose()
+    views.delete(id)
+  }
+
+  /** The render target a model node shows; built once per node and file. */
+  function modelTexture(node) {
+    const p = node.props || {}
+    const a = assets.get(p.asset)
+    if (!a || a.missing) {
+      if (p.asset && !reported.has(p.asset)) {
+        reported.add(p.asset)
+        console.warn(`[asset missing] ${p.asset} → 모델 없이 빈 상자`)
+      }
+      disposeView(node.id)
+      return null
+    }
+    const t = node.transform
+    const ratio = Math.min(devicePixelRatio || 1, 2)
+    const w = Math.max(16, Math.min(2048, Math.round(t.w * ratio)))
+    const h = Math.max(16, Math.min(2048, Math.round(t.h * ratio)))
+    let v = views.get(node.id)
+    if (v && (v.file !== a.file || v.w !== w || v.h !== h)) {
+      disposeView(node.id)
+      v = null
+    }
+    if (!v) {
+      const rt = new THREE.WebGLRenderTarget(w, h, { samples: 4 })
+      rt.texture.colorSpace = THREE.SRGBColorSpace
+      const scene = new THREE.Scene()
+      scene.add(new THREE.HemisphereLight(0xffffff, 0x444455, 2.2))
+      const key = new THREE.DirectionalLight(0xffffff, 2.4)
+      key.position.set(3, 5, 4)
+      scene.add(key)
+      const rim = new THREE.DirectionalLight(0xbfd4ff, 1.0)
+      rim.position.set(-4, 2, -3)
+      scene.add(rim)
+      const cam = new THREE.PerspectiveCamera(30, w / h, 0.01, 100)
+      const holder = new THREE.Group()
+      scene.add(holder)
+      v = { file: a.file, rt, scene, cam, holder, w, h }
+      views.set(node.id, v)
+      const view = v
+      loadGltf(a.file)
+        .then((gltf) => {
+          if (views.get(node.id) !== view) return
+          const model = gltf.scene.clone(true)
+          // 가운데로 옮기고 반지름 1 로 맞춘 뒤, 상자에 꼭 들어가게 카메라를 뺀다.
+          const box = new THREE.Box3().setFromObject(model)
+          const sphere = box.getBoundingSphere(new THREE.Sphere())
+          const r = sphere.radius || 1
+          model.position.sub(sphere.center)
+          const fit = new THREE.Group()
+          fit.add(model)
+          fit.scale.setScalar(1 / r)
+          view.holder.add(fit)
+          const vfov = (view.cam.fov * Math.PI) / 180
+          const hfov = 2 * Math.atan(Math.tan(vfov / 2) * view.cam.aspect)
+          view.cam.position.set(0, 0, 1.02 / Math.sin(Math.min(vfov, hfov) / 2))
+          view.cam.lookAt(0, 0, 0)
+        })
+        .catch((err) => console.error(`[model] ${a.file} 를 읽지 못했다:`, err))
+    }
+    return v.rt.texture
+  }
+
+  function renderModels() {
+    if (views.size === 0) return
+    const clear = renderer.getClearColor(new THREE.Color())
+    const alpha = renderer.getClearAlpha()
+    renderer.setClearColor(0x000000, 0)
+    for (const [id, v] of views) {
+      const node = nodes.get(id)
+      if (!node || node.props?.visible === false) continue
+      const p = node.props || {}
+      v.holder.rotation.set(
+        ((Number(p.pitch) || 0) * Math.PI) / 180,
+        ((Number(p.yaw) || 0) * Math.PI) / 180,
+        0
+      )
+      renderer.setRenderTarget(v.rt)
+      renderer.clear()
+      renderer.render(v.scene, v.cam)
+    }
+    renderer.setRenderTarget(null)
+    renderer.setClearColor(clear, alpha)
+  }
+
   // ── 장면 ────────────────────────────────────────────────────────
   let source = null // 받은 문서 그대로. 모드 전환·reset 의 기준.
   let doc = null // 실행 중에 바뀌는 사본.
@@ -198,6 +320,17 @@ export async function start(options = {}) {
         opacity,
         side: THREE.DoubleSide,
       })
+    if (node.type === "model") {
+      const map = modelTexture(node)
+      return map
+        ? new THREE.MeshBasicMaterial({
+            map,
+            transparent: true,
+            opacity,
+            side: THREE.DoubleSide,
+          })
+        : new THREE.MeshBasicMaterial({ visible: false })
+    }
     if (node.type === "rect")
       return new THREE.MeshBasicMaterial({
         color: new THREE.Color(p.color || "#888888"),
@@ -338,6 +471,8 @@ export async function start(options = {}) {
     handles.clear()
     nodes = new Map((D.nodes || []).map((n) => [n.id, n]))
     assets = new Map((D.assets || []).map((a) => [a.id, a]))
+    for (const id of [...views.keys()])
+      if (nodes.get(id)?.type !== "model") disposeView(id)
     for (const node of nodes.values()) buildNode(node)
     // 게임이 (다시) 시작한다: 변수와 리스너를 비우고, 플레이 모드면 setup 과
     // 스크립트를 처음부터 돌린다. 편집 모드에서는 아무것도 돌지 않는다.
@@ -836,6 +971,7 @@ export async function start(options = {}) {
       stepTweens(dt)
       emit("update", dt)
     }
+    renderModels()
     renderer.render(world, camera)
   })
 
@@ -850,6 +986,7 @@ export const builtinScriptDefaults = {
   blink: { period: 1 },
   frames: { frames: [], fps: 8 },
   mover: { speed: 320, bounds: true },
+  turntable: { speed: 45 },
 }
 
 // ── 내장 행동 ─────────────────────────────────────────────────────
@@ -873,6 +1010,14 @@ export const builtinScripts = {
       update(dt) {
         node.props.rotation = ((node.props.rotation || 0) + speed * dt) % 360
         node.moveBy(0, 0)
+      },
+    }
+  },
+  /** 3D 모델을 제자리에서 돌린다(yaw). { speed: 45 } 도/초 */
+  turntable(node, _engine, { speed = 45 } = {}) {
+    return {
+      update(dt) {
+        node.props.yaw = ((Number(node.props.yaw) || 0) + speed * dt) % 360
       },
     }
   },

@@ -395,12 +395,14 @@ export function StudioWorkspace({
     if (dispatch([{ type: "node.add", node }])) setSelectedId(node.id)
   }
   function placeMaterial(asset: StudioAsset) {
-    if (!current.current || !asset.width || !asset.height) return
+    if (!current.current) return
+    if (asset.kind !== "model" && (!asset.width || !asset.height)) return
     const { commands, nodeId } = placeMaterialCommands(current.current, {
       id: asset.id,
       file: asset.file,
       width: asset.width,
       height: asset.height,
+      kind: asset.kind === "model" ? "model" : "image",
     })
     if (dispatch(commands)) setSelectedId(nodeId)
   }
@@ -1049,7 +1051,7 @@ export function StudioWorkspace({
                   {t("visible")}
                 </label>
                 <DrawSection node={selected} onProps={updateProps} />
-                {selected.type === "sprite" && (
+                {(selected.type === "sprite" || selected.type === "model") && (
                   <label>
                     {t("asset")}
                     <select
@@ -1064,14 +1066,43 @@ export function StudioWorkspace({
                       }
                     >
                       <option value="">{t("noAsset")}</option>
-                      {scene!.document.assets.map((a) => (
-                        <option key={a.id} value={a.id}>
-                          {a.id}
-                          {a.missing ? ` (${t("missingAsset")})` : ""}
-                        </option>
-                      ))}
+                      {scene!.document.assets
+                        .filter(
+                          (a) =>
+                            /\.(glb|gltf)$/i.test(a.file) ===
+                            (selected.type === "model")
+                        )
+                        .map((a) => (
+                          <option key={a.id} value={a.id}>
+                            {a.id}
+                            {a.missing ? ` (${t("missingAsset")})` : ""}
+                          </option>
+                        ))}
                     </select>
                   </label>
+                )}
+                {selected.type === "model" && (
+                  <div className="studio-fields-grid">
+                    {(["yaw", "pitch"] as const).map((key) => (
+                      <label key={key}>
+                        {t(key)}
+                        <input
+                          type="number"
+                          step={5}
+                          aria-label={t(key)}
+                          value={
+                            typeof selected.props[key] === "number"
+                              ? (selected.props[key] as number)
+                              : 0
+                          }
+                          onChange={(e) => {
+                            if (e.target.value !== "")
+                              updateProps({ [key]: Number(e.target.value) })
+                          }}
+                        />
+                      </label>
+                    ))}
+                  </div>
                 )}
                 {selected.type === "text" && (
                   <>

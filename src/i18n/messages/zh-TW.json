@@ -6468,7 +6468,9 @@
         "pc-hero": "PC · 主機主角",
         "print-3d": "3D 列印"
       }
-    }
+    },
+    "yaw": "左右旋轉(°)",
+    "pitch": "上下旋轉(°)"
   },
   "Browser": {
     "toolbar": {
