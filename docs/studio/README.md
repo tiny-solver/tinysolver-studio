@@ -17,7 +17,7 @@
 | --- | --- | --- |
 | 문서 | 엔진과 편집기가 공유하는 장면 파일 `outputs/game/content/<scene>.studio.json`, 검증된 명령, etag 저장 | 프로젝트 폴더 안에서만 |
 | 도구 | iframe 위 오버레이로 선택·드래그, 인스펙터(transform·그리기 속성·행동·클릭 액션), 액션 단계 편집, 플레이 중 게임 변수와 다시 시작, 장면 추가·전환 | 이미지 업로드·타일맵·타임라인은 후속 |
-| 엔진 | Studio가 제공하는 관리형 런타임 `codeg-engine`(three-web 0.4.0). 프로젝트에는 장면과 스크립트만 있고, 미리보기 서버가 `__codeg/`로 서빙하며 빌드가 같은 경로에 넣는다 | 편집/플레이 모드, 스크립트, 트윈, 입력. 3D·물리·타일맵은 없다 |
+| 엔진 | Studio가 제공하는 관리형 런타임 `codeg-engine`(three-web 0.5.0). 0.5.0 부터 `model` 노드(GLB 를 노드마다 렌더 타깃에 그려 평면에 붙인다 — 배치 · z · 표시는 2D 노드와 같고 3D 방향은 `props.yaw`·`pitch`, 행동 `turntable`). 프로젝트에는 장면과 스크립트만 있고, 미리보기 서버가 `__codeg/`로 서빙하며 빌드가 같은 경로에 넣는다 | 편집/플레이 모드, 스크립트, 트윈, 입력, GLB 모델 노드. 3D 카메라 · 조명 장면 · 물리 · 타일맵은 없다 |
 | 플랫폼 층 | 게임은 저장·플레이어·순위·공유·광고를 `codeg-platform` 하나로 부른다. importmap이 `__codeg/platform/current.js`를 가리키고, 그 파일이 대상의 어댑터다 — 미리보기는 `studio`(가짜판), 빌드는 `web`. 같은 게임 코드가 대상만 바꿔 돈다 | 대상은 지금 `studio`·`web`. afterplay·Tauri·Capacitor는 다음 단계 |
 | 출시 | 빌드 버튼 → `build/game/<version>/` + zip(엔진·플랫폼 어댑터 포함, CDN 없음, 문서 `*.md` 제외). "어디서든 돌려면" 검사 결과가 빌드의 `warnings`로 남는다. 빌드마다 **출시** → Studio의 `/play/<slug>/` 링크, **배포** → 매니페스트의 `publish.command` | 외부 호스트 계정·자격 증명은 호출되는 CLI의 것 |
 

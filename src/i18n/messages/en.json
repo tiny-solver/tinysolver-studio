@@ -6468,7 +6468,9 @@
         "pc-hero": "PC · console hero",
         "print-3d": "3D print"
       }
-    }
+    },
+    "yaw": "Yaw (°)",
+    "pitch": "Pitch (°)"
   },
   "Browser": {
     "toolbar": {

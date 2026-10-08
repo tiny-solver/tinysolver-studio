@@ -6468,7 +6468,9 @@
         "pc-hero": "Héros PC · console",
         "print-3d": "Impression 3D"
       }
-    }
+    },
+    "yaw": "Lacet (°)",
+    "pitch": "Tangage (°)"
   },
   "Browser": {
     "toolbar": {

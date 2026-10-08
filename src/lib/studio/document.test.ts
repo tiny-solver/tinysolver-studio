@@ -420,3 +420,19 @@ describe("placeMaterialCommands", () => {
     )
   })
 })
+
+describe("placeMaterialCommands for a GLB", () => {
+  it("adds a model node in a square box with yaw and pitch", () => {
+    const scene = parseScene(agentScene())
+    const { commands, nodeId } = placeMaterialCommands(scene, {
+      id: "cup3d",
+      file: "generated/models/cup3d.glb",
+      kind: "model",
+    })
+    const next = applyCommands(scene, commands)
+    const node = next.document.nodes.find((n) => n.id === nodeId)!
+    expect(node.type).toBe("model")
+    expect(node.transform.w).toBe(node.transform.h)
+    expect(node.props).toMatchObject({ asset: "cup3d", yaw: 0, pitch: 0 })
+  })
+})

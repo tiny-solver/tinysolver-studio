@@ -1,4 +1,4 @@
-# codeg-engine (three-web) 0.4.0
+# codeg-engine (three-web) 0.5.0
 
 Tinysolver Studio가 제공하는 2D 장면 런타임이다. **프로젝트 안에 엔진 코드는 없다.** 미리보기 서버가 `__codeg/` 아래로 서빙하고, 빌드 버튼이 같은 경로에 넣어 준다. 그래서 Studio가 새 버전을 내면 모든 프로젝트가 같이 좋아진다. 엔진을 복사해 와서 고치지 않는다. 이 게임만의 규칙은 `src/`에 쓴다.
 
@@ -34,13 +34,15 @@ start({
 | `props.interactive` + `props.onClick` | 클릭하면 `logic.actions[onClick]` 실행 |
 | `props.visible` `opacity` `rotation`(도) `scale` `flipX` `tint` | 그리기 |
 | `props.asset` / `placeholder` | sprite 의 에셋 id / 에셋이 없을 때 색 |
+| `type: "model"` + `props.asset` | GLB 에셋(`document.assets` 의 `file` 이 `.glb`)을 노드 상자 안에 맞춰 그린다. 위치 · z · `visible` · `opacity` · `rotation`(평면) · `scale` 은 다른 노드와 같다 |
+| `props.yaw` `pitch` (도) | model 의 3D 방향 — 좌우 · 위아래로 돌린다 |
 | `props.text` `size` `color` `align` `weight` `font` | text |
 | `logic.actions.<name>` | `[{ "op": …, "if"?: { "key": "coins", "atLeast": 3 } }]` |
 
 내장 op: `toggle {id}` · `setVisible {id,value}` · `say {text}` · `swapAsset {id,asset}` · `setText {id,text}` · `move {id,x,y,by?,duration?}` · `set {key,value}` · `add {key,value}` · `goto {scene}` · `run {action}`.
 `if` 조건: `equals`, `atLeast`, `not`, 또는 키만 주면 truthy.
 
-내장 스크립트: `float {amplitude,period}` · `spin {speed}` · `pulse {amount,period}` · `blink {period}` · `frames {frames:[assetId…],fps}` · `mover {speed,bounds}`(방향키/WASD).
+내장 스크립트: `float {amplitude,period}` · `spin {speed}` · `pulse {amount,period}` · `blink {period}` · `frames {frames:[assetId…],fps}` · `mover {speed,bounds}`(방향키/WASD) · `turntable {speed}`(model 의 yaw 를 돌린다, 도/초).
 
 ## 스크립트
 

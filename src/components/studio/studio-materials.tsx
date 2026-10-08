@@ -352,10 +352,9 @@ export function StudioMaterials({
             }
             onPlace={
               onPlace &&
-              asset.kind === "image" &&
               asset.exists &&
-              asset.width &&
-              asset.height
+              (asset.kind === "model" ||
+                (asset.kind === "image" && asset.width && asset.height))
                 ? () => onPlace(asset)
                 : undefined
             }
