@@ -136,6 +136,8 @@ pub(crate) fn content_type(path: &Path) -> &'static str {
         Some("webp") => "image/webp",
         Some("gif") => "image/gif",
         Some("svg") => "image/svg+xml",
+        Some("glb") => "model/gltf-binary",
+        Some("gltf") => "model/gltf+json",
         Some("ico") => "image/x-icon",
         Some("mp3") => "audio/mpeg",
         Some("ogg") => "audio/ogg",

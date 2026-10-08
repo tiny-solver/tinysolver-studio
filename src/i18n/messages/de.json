@@ -6437,9 +6437,16 @@
       "empty": "Noch kein Material. Zeichne eins oder lass den Agenten eins importieren.",
       "missing": "Datei fehlt",
       "from": "aus {id}",
-      "faces": "{count} Flächen",
       "make3d": "In 3D",
-      "lifting": "Erzeugt 3D… einige Minuten"
+      "lifting": "Erzeugt 3D… einige Minuten",
+      "upload": "Bilder oder GLB hochladen",
+      "uploading": "Lädt {name} hoch…",
+      "unregistered": "In assets/, aber nicht registriert:",
+      "register": "Registrieren",
+      "preview": "Vorschau",
+      "place": "In die Szene",
+      "tris": "{count} Dreiecke",
+      "texture": "Textur {size}"
     }
   },
   "Browser": {

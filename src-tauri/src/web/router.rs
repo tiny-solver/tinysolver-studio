@@ -1297,7 +1297,13 @@ pub fn build_router(
             "/get_content_preview",
             post(handlers::content_project::get_content_preview),
         )
-        .route("/studio_run", post(handlers::content_project::studio_run))
+        // A material upload rides as a base64 data: URL inside the JSON
+        // (a 200MB GLB is ~270MB encoded), past axum's 2MiB default.
+        .route(
+            "/studio_run",
+            post(handlers::content_project::studio_run)
+                .layer(DefaultBodyLimit::max(300 * 1024 * 1024)),
+        )
         .route(
             "/game_preview_fingerprint",
             post(handlers::game_preview::game_preview_fingerprint),

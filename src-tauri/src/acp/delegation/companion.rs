@@ -2636,9 +2636,12 @@ pub fn parse_studio_op(tool: &str, arguments: &Value) -> Result<StudioOp, String
             if let Some(obj) = args.as_object_mut() {
                 obj.remove("project");
             }
-            serde_json::from_value(args)
-                .map(StudioOp::ImportAsset)
-                .map_err(|e| format!("studio_import_asset: {e} (needs `url`)"))
+            let req: crate::studio_assets::ImportRequest = serde_json::from_value(args)
+                .map_err(|e| format!("studio_import_asset: {e} (needs `url` or `file`)"))?;
+            if req.url.trim().is_empty() && req.file.as_deref().is_none_or(|f| f.trim().is_empty()) {
+                return Err("studio_import_asset needs `url` (to fetch) or `file` (already under assets/)".into());
+            }
+            Ok(StudioOp::ImportAsset(req))
         }
         "studio_generate_asset" => {
             let mut args = arguments.clone();

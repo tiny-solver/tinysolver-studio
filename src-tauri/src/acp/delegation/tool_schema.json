@@ -350,7 +350,7 @@
   },
   {
     "name": "studio_apply_scene_commands",
-    "description": "Edit a scene with a validated command batch and write it to disk — the same validator the Studio editor uses, applied atomically (one invalid command rejects the whole batch and nothing is written). The editor and the running game preview reload from disk on their own, so the user sees the result immediately. PREFER THIS over rewriting the .studio.json by hand for placement, visibility, text, color, add/remove/reorder: it keeps ids, bounds and anchors valid and preserves every field it does not know (logic, engine props). Edit files directly only for things the commands cannot express (new script or op code in outputs/game/src/, assets). Commands: {type:'node.update', id, transform?:{x?,y?,w?,h?,anchor?,z?}, props?:{...shallow merge}} · {type:'node.add', node:{id, parent?:'root'|<node id>, type:'sprite'|'rect'|'text', transform:{x,y,w,h,anchor?,z?}, props?}} · {type:'node.remove', id} (children go too) · {type:'node.reorder', id, direction:'forward'|'backward'} (to the very front/back) · {type:'scene.update', name} · {type:'action.set', name, steps:[{op, ...args, if?:{key, equals|atLeast|not}}]} (sets logic.actions[name]; built-in ops: toggle, setVisible, say, swapAsset, setText, move, set, add, goto, run, plus the project's own from src/main.js) · {type:'action.remove', name}. Behaviors: set props.script to a registered script name, {name, ...config}, or a list of them (built-ins: float, spin, pulse, blink, frames, mover; project scripts live in outputs/game/src/scripts/index.js); null removes it. Drawing props: visible, opacity, rotation (degrees), scale, flipX, tint. Coordinates are container pixels; anchor is top-left (default), center or bottom-center; a node with a parent is positioned relative to that parent's top-left. A sprite's props.asset names an entry of document.assets; props.onClick names a key of logic.actions.",
+    "description": "Edit a scene with a validated command batch and write it to disk — the same validator the Studio editor uses, applied atomically (one invalid command rejects the whole batch and nothing is written). The editor and the running game preview reload from disk on their own, so the user sees the result immediately. PREFER THIS over rewriting the .studio.json by hand for placement, visibility, text, color, add/remove/reorder: it keeps ids, bounds and anchors valid and preserves every field it does not know (logic, engine props). Edit files directly only for things the commands cannot express (new script or op code in outputs/game/src/, assets). Commands: {type:'node.update', id, transform?:{x?,y?,w?,h?,anchor?,z?}, props?:{...shallow merge}} · {type:'node.add', node:{id, parent?:'root'|<node id>, type:'sprite'|'rect'|'text', transform:{x,y,w,h,anchor?,z?}, props?}} · {type:'node.remove', id} (children go too) · {type:'node.reorder', id, direction:'forward'|'backward'} (to the very front/back) · {type:'scene.update', name} · {type:'action.set', name, steps:[{op, ...args, if?:{key, equals|atLeast|not}}]} (sets logic.actions[name]; built-in ops: toggle, setVisible, say, swapAsset, setText, move, set, add, goto, run, plus the project's own from src/main.js) · {type:'action.remove', name} · {type:'asset.set', asset:{id, file (relative to assets/), width, height}} (declare a material in document.assets, same id replaces — then a sprite can name it in props.asset; studio_list_assets has the files and sizes) · {type:'asset.remove', id} (refused while a node uses it). Behaviors: set props.script to a registered script name, {name, ...config}, or a list of them (built-ins: float, spin, pulse, blink, frames, mover; project scripts live in outputs/game/src/scripts/index.js); null removes it. Drawing props: visible, opacity, rotation (degrees), scale, flipX, tint. Coordinates are container pixels; anchor is top-left (default), center or bottom-center; a node with a parent is positioned relative to that parent's top-left. A sprite's props.asset names an entry of document.assets; props.onClick names a key of logic.actions.",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -418,7 +418,7 @@
   },
   {
     "name": "studio_list_assets",
-    "description": "List the materials of the Tinysolver Studio content project: every entry of assets/manifest.json (id, file relative to assets/, kind image|model, bytes, width/height for images, and `source` — where it came from: workflow, prompt, seed, the `from` material it was made from, the original url) plus whether the file is on disk, and the project's connected generator (codeg-project.json `generate.url`, or null). Call it before generating or placing a material so you use real ids. Read-only.",
+    "description": "List the materials of the Tinysolver Studio content project: every entry of assets/manifest.json (id, file relative to assets/, kind image|model, bytes, width/height for images, and `source` — where it came from: workflow, prompt, seed, the `from` material it was made from, the original url) plus whether the file is on disk, model numbers (triangles, vertices, textures [w,h], texture_max — read from the GLB), `unregistered` image/model files under assets/ that no entry names (register them with studio_import_asset `file`), and the project's connected generator (codeg-project.json `generate.url`, or null). Call it before generating or placing a material so you use real ids. Read-only.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -431,16 +431,14 @@
   },
   {
     "name": "studio_import_asset",
-    "description": "Bring a generated or downloaded file into the project as a material: fetches `url` (http(s) or a base64 data: URL; png/jpg/webp/gif images, glb/gltf models), writes it under assets/ (default assets/generated/images or assets/generated/models), and registers it in assets/manifest.json with `source` — pass what made it (workflow, prompt, seed, from: the material id it was made from) so the material can be traced and remade. When the url is an output of the project's connected generator, the generator's copy is deleted after the import (the project keeps the file). Use this after generating with your own image/3D tools (e.g. a genai generate_image / generate_3d result url). The Studio's material panel shows the new material at once.",
+    "description": "Bring a generated or downloaded file into the project as a material: fetches `url` (http(s) or a base64 data: URL; png/jpg/webp/gif images, glb/gltf models), writes it under assets/ (default assets/generated/images or assets/generated/models), and registers it in assets/manifest.json with `source` — pass what made it (workflow, prompt, seed, from: the material id it was made from) so the material can be traced and remade. When the url is an output of the project's connected generator, the generator's copy is deleted after the import (the project keeps the file). Give `file` instead of `url` to register a file that is already under assets/. Use this after generating with your own image/3D tools (e.g. a genai generate_image / generate_3d result url). The Studio's material panel shows the new material at once.",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "url"
-      ],
+      "required": [],
       "properties": {
         "url": {
           "type": "string",
-          "description": "The file to fetch: http(s) URL or base64 data: URL."
+          "description": "The file to fetch: http(s) URL or base64 data: URL. Give this or `file`."
         },
         "id": {
           "type": "string",
@@ -457,6 +455,10 @@
         "project": {
           "type": "string",
           "description": "Absolute path of the content project root. Omit it: the default is this session's working directory, which is the project when you were opened in one."
+        },
+        "file": {
+          "type": "string",
+          "description": "A file already under assets/ (e.g. props/chest.glb) to register in place instead of fetching — for files you or the user put there. studio_list_assets lists these as `unregistered`."
         }
       }
     }

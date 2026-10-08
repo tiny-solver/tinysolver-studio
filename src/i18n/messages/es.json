@@ -6437,9 +6437,16 @@
       "empty": "Aún no hay materiales. Dibuja uno o pide al agente que lo importe.",
       "missing": "falta el archivo",
       "from": "de {id}",
-      "faces": "{count} caras",
       "make3d": "Pasar a 3D",
-      "lifting": "Creando 3D… unos minutos"
+      "lifting": "Creando 3D… unos minutos",
+      "upload": "Subir imágenes o GLB",
+      "uploading": "Subiendo {name}…",
+      "unregistered": "En assets/ sin registrar:",
+      "register": "Registrar",
+      "preview": "Vista previa",
+      "place": "Poner en la escena",
+      "tris": "{count} caras",
+      "texture": "textura {size}"
     }
   },
   "Browser": {

@@ -6437,9 +6437,16 @@
       "empty": "Aucun matériau. Dessinez-en un ou demandez à l'agent d'en importer un.",
       "missing": "fichier manquant",
       "from": "depuis {id}",
-      "faces": "{count} faces",
       "make3d": "Passer en 3D",
-      "lifting": "Création 3D… quelques minutes"
+      "lifting": "Création 3D… quelques minutes",
+      "upload": "Importer des images ou un GLB",
+      "uploading": "Import de {name}…",
+      "unregistered": "Dans assets/ mais non enregistrés :",
+      "register": "Enregistrer",
+      "preview": "Aperçu",
+      "place": "Placer dans la scène",
+      "tris": "{count} triangles",
+      "texture": "texture {size}"
     }
   },
   "Browser": {

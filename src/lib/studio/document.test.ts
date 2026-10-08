@@ -5,6 +5,7 @@ import {
   fromLegacyProjectFile,
   nodeRect,
   parseScene,
+  placeMaterialCommands,
   sceneActions,
 } from "./document"
 
@@ -342,5 +343,80 @@ describe("action commands", () => {
     ])
     expect(sceneActions(next)).toEqual({ hi: [{ op: "say", text: "hi" }] })
     expect(sceneActions(bare)).toEqual({})
+  })
+})
+
+describe("asset commands", () => {
+  const empty = () =>
+    parseScene({
+      schema: 1,
+      id: "main",
+      name: "m",
+      document: {
+        container: { width: 100, height: 100 },
+        assets: [],
+        nodes: [],
+      },
+    })
+
+  it("declares a material by id and guards the ones in use", () => {
+    const next = applyCommands(empty(), [
+      {
+        type: "asset.set",
+        asset: { id: "cup", file: "cup.png", width: 64, height: 32 },
+      },
+      {
+        type: "asset.set",
+        asset: { id: "cup", file: "cup2.png", width: 8, height: 8 },
+      },
+      {
+        type: "node.add",
+        node: {
+          id: "c",
+          parent: "root",
+          type: "sprite",
+          transform: { x: 0, y: 0, w: 8, h: 8, anchor: "top-left", z: 0 },
+          props: { asset: "cup" },
+        },
+      },
+    ])
+    expect(next.document.assets).toHaveLength(1)
+    expect(next.document.assets[0].file).toBe("cup2.png")
+    expect(() =>
+      applyCommands(next, [{ type: "asset.remove", id: "cup" }])
+    ).toThrow(/used by node c/)
+    const freed = applyCommands(next, [
+      { type: "node.remove", id: "c" },
+      { type: "asset.remove", id: "cup" },
+    ])
+    expect(freed.document.assets).toHaveLength(0)
+    expect(() =>
+      applyCommands(empty(), [
+        {
+          type: "asset.set",
+          asset: { id: "x", file: "../x.png", width: 1, height: 1 },
+        },
+      ])
+    ).toThrow(/relative to assets/)
+  })
+})
+
+describe("placeMaterialCommands", () => {
+  it("declares the material and adds a fitted sprite in one batch", () => {
+    const scene = parseScene(agentScene())
+    const { commands, nodeId } = placeMaterialCommands(scene, {
+      id: "chest",
+      file: "generated/images/chest.png",
+      width: 1024,
+      height: 1024,
+    })
+    const next = applyCommands(scene, commands)
+    const node = next.document.nodes.find((n) => n.id === nodeId)!
+    expect(nodeId).toBe("chest_2")
+    expect(node.props.asset).toBe("chest")
+    expect(node.transform.w).toBe(432)
+    expect(next.document.assets.find((a) => a.id === "chest")?.file).toBe(
+      "generated/images/chest.png"
+    )
   })
 })

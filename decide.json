@@ -603,14 +603,19 @@
       "then": [],
       "id": "aw-drawer",
       "p": 2,
-      "status": "todo",
+      "status": "decided",
       "q": "② 재료 서랍 — 업로드 · 목록 · 미리보기(이미지 · GLB) · 면 수 · 텍스처 · 용량",
       "want": "편집기 재료 서랍에서 파일을 올리고, 이미지 · GLB 를 미리 보고, 면 수 · 텍스처 크기 · 용량이 보인다. s6-asset-upload 를 흡수",
       "now": "①의 재료 패널은 목록과 이미지 썸네일만",
       "action": "업로드 명령(같은 검증기) · GLB 미리보기(벤더 three 재사용) · GLB 헤더에서 면 수 · 텍스처 크기 읽기 · MCP 에도 같은 정보",
       "refs": [
         "#s6-asset-upload"
-      ]
+      ],
+      "decided": {
+        "date": "2026-10-08",
+        "pick": "done",
+        "note": "올리기 · 손으로 둔 파일 등록 · 이미지/GLB 미리보기(three 벤더링) · 면 수 · 텍스처 · 용량 · 장면에 놓기(asset.set). s6-asset-upload 의 '장면 파일에 선언'까지 포함. genai 이상 둘(면 수 미적용 · 알파 불투명)은 roadmap checks 10-08"
+      }
     },
     {
       "topic": "workbench",
