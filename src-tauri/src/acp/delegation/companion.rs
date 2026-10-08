@@ -260,7 +260,7 @@ impl CompanionFeatures {
             "browser_eval" => self.browser && self.browser_eval,
             "studio_list_scenes" | "studio_read_scene" | "studio_apply_scene_commands"
             | "studio_build" | "studio_publish" | "studio_list_assets" | "studio_import_asset"
-            | "studio_generate_asset" => self.studio,
+            | "studio_generate_asset" | "studio_update_asset" => self.studio,
             "delegate_to_agent" | "get_delegation_status" | "cancel_delegation"
             | "resume_delegation" => self.delegation,
             _ => false,
@@ -741,7 +741,7 @@ async fn build_tools_call_spawn(
         }
         "studio_list_scenes" | "studio_read_scene" | "studio_apply_scene_commands"
         | "studio_build" | "studio_publish" | "studio_list_assets" | "studio_import_asset"
-        | "studio_generate_asset" => {
+        | "studio_generate_asset" | "studio_update_asset" => {
             let op = match parse_studio_op(&name, &arguments) {
                 Ok(op) => op,
                 Err(msg) => return LineAction::Respond(err(id, -32602, msg)),
@@ -2643,6 +2643,22 @@ pub fn parse_studio_op(tool: &str, arguments: &Value) -> Result<StudioOp, String
             }
             Ok(StudioOp::ImportAsset(req))
         }
+        "studio_update_asset" => {
+            let id = arguments
+                .get("id")
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .ok_or("studio_update_asset requires a material `id` (call studio_list_assets for the ids)")?
+                .to_string();
+            let use_for = arguments
+                .get("use")
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(str::to_string);
+            Ok(StudioOp::UpdateAsset { id, use_for })
+        }
         "studio_generate_asset" => {
             let mut args = arguments.clone();
             if let Some(obj) = args.as_object_mut() {
@@ -2780,9 +2796,31 @@ fn render_studio_ok_text(outcome: &Value) -> String {
             Some(false) => " The generator's copy could not be deleted (left in place).",
             None => "",
         };
+        let head = if str_of("path").is_empty() {
+            format!("Material `{id}` updated.")
+        } else {
+            format!("Material `{id}` saved at {}.{gone}", str_of("path"))
+        };
+        let findings: Vec<String> = outcome
+            .get("check")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .map(|f| {
+                format!(
+                    "- [{}] {}",
+                    f.get("level").and_then(Value::as_str).unwrap_or(""),
+                    f.get("message").and_then(Value::as_str).unwrap_or("")
+                )
+            })
+            .collect();
+        let check = if findings.is_empty() {
+            String::new()
+        } else {
+            format!("\nCheck against its use:\n{}", findings.join("\n"))
+        };
         return format!(
-            "Material `{id}` saved at {}.{gone}\n{}",
-            str_of("path"),
+            "{head}{check}\n{}",
             serde_json::to_string_pretty(asset).unwrap_or_default()
         );
     }
@@ -3827,7 +3865,7 @@ mod tests {
         browser_eval: false,
     };
 
-    const STUDIO_TOOLS: [&str; 8] = [
+    const STUDIO_TOOLS: [&str; 9] = [
         "studio_list_scenes",
         "studio_read_scene",
         "studio_apply_scene_commands",
@@ -3836,6 +3874,7 @@ mod tests {
         "studio_list_assets",
         "studio_import_asset",
         "studio_generate_asset",
+        "studio_update_asset",
     ];
 
     #[tokio::test]
@@ -3871,6 +3910,7 @@ mod tests {
             ("studio_list_assets", json!({})),
             ("studio_import_asset", json!({ "url": "https://x/a.png", "source": { "seed": 1 } })),
             ("studio_generate_asset", json!({ "kind": "3d", "from": "cup", "target_faces": 10000 })),
+            ("studio_update_asset", json!({ "id": "cup", "use": "web-ar" })),
         ] {
             let line = json!({
                 "jsonrpc": "2.0", "id": 40, "method": "tools/call",
@@ -3907,6 +3947,7 @@ mod tests {
             ("studio_publish", json!({ "target": "itch" }), "target"),
             ("studio_import_asset", json!({ "id": "x" }), "url"),
             ("studio_generate_asset", json!({ "prompt": "cup" }), "kind"),
+            ("studio_update_asset", json!({ "use": "web-ar" }), "id"),
         ] {
             let line = json!({
                 "jsonrpc": "2.0", "id": 41, "method": "tools/call",

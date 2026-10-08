@@ -6446,7 +6446,28 @@
       "preview": "Vista previa",
       "place": "Poner en la escena",
       "tris": "{count} caras",
-      "texture": "textura {size}"
+      "texture": "textura {size}",
+      "use": "Uso",
+      "useNone": "Sin definir",
+      "useHint": "3D: {faces} caras · textura {texture}",
+      "useHintNone": "3D por defecto: {faces} caras · textura {texture}",
+      "check": {
+        "tris_over_cap": "{value} caras — máximo {limit}",
+        "tris_above": "{value} caras — mejor ≤ {limit}",
+        "tris_below": "{value} caras — suele ser {limit}+",
+        "texture_above": "textura {value}px — ≤ {limit}px",
+        "bytes_above": "{value} MB — menos de {limit} MB",
+        "not_transparent": "No es transparente — arrastra su fondo",
+        "closed_mesh_unchecked": "Malla cerrada sin comprobar"
+      },
+      "presets": {
+        "mobile-prop": "Objeto móvil",
+        "mobile-character": "Personaje móvil",
+        "roblox-meshpart": "Roblox MeshPart",
+        "web-ar": "Web / AR",
+        "pc-hero": "Protagonista PC · consola",
+        "print-3d": "Impresión 3D"
+      }
     }
   },
   "Browser": {

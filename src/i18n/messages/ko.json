@@ -6446,7 +6446,28 @@
       "preview": "미리보기",
       "place": "장면에 놓기",
       "tris": "{count}면",
-      "texture": "텍스처 {size}"
+      "texture": "텍스처 {size}",
+      "use": "쓸 곳",
+      "useNone": "정하지 않음",
+      "useHint": "3D: {faces}면 · 텍스처 {texture}",
+      "useHintNone": "3D 기본: {faces}면 · 텍스처 {texture}",
+      "check": {
+        "tris_over_cap": "{value}면 — 상한 {limit}",
+        "tris_above": "{value}면 — 권장 {limit} 이하",
+        "tris_below": "{value}면 — 보통 {limit} 이상",
+        "texture_above": "텍스처 {value}px — {limit}px 이하로",
+        "bytes_above": "{value} MB — {limit} MB 아래로",
+        "not_transparent": "투명하지 않음 — 배경까지 따라간다",
+        "closed_mesh_unchecked": "닫힌 메시인지 검사 안 함"
+      },
+      "presets": {
+        "mobile-prop": "모바일 소품",
+        "mobile-character": "모바일 캐릭터",
+        "roblox-meshpart": "Roblox MeshPart",
+        "web-ar": "웹 · AR",
+        "pc-hero": "PC · 콘솔 주인공",
+        "print-3d": "3D 프린트"
+      }
     }
   },
   "Browser": {
