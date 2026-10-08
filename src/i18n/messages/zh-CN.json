@@ -6437,9 +6437,16 @@
       "empty": "还没有素材。画一个，或让智能体导入。",
       "missing": "文件缺失",
       "from": "来自 {id}",
-      "faces": "{count} 面",
       "make3d": "转为 3D",
-      "lifting": "生成 3D 中…需几分钟"
+      "lifting": "生成 3D 中…需几分钟",
+      "upload": "上传图片或 GLB",
+      "uploading": "正在上传 {name}…",
+      "unregistered": "在 assets/ 中但未登记：",
+      "register": "登记",
+      "preview": "预览",
+      "place": "放入场景",
+      "tris": "{count} 面",
+      "texture": "纹理 {size}"
     }
   },
   "Browser": {

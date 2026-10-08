@@ -4001,6 +4001,13 @@ export interface StudioAsset {
   height?: number
   added_at?: string
   source?: StudioAssetSource
+  /** Models: read from the GLB. */
+  triangles?: number
+  vertices?: number
+  /** [width, height] of each embedded texture. */
+  textures?: [number, number][]
+  /** Largest texture side. */
+  texture_max?: number
   /** Whether the file is on disk. */
   exists: boolean
   [key: string]: unknown
@@ -4012,7 +4019,10 @@ export type StudioOp =
   | { op: "list_assets" }
   | {
       op: "import_asset"
-      url: string
+      /** http(s) or base64 data: URL to fetch… */
+      url?: string
+      /** …or a file already under assets/ to register in place. */
+      file?: string
       id?: string
       dir?: string
       source?: StudioAssetSource
@@ -4041,6 +4051,8 @@ export interface StudioAssetList extends StudioOutcome {
   assets_dir: string
   generator: string | null
   assets: StudioAsset[]
+  /** Image/model files under assets/ that no entry names. */
+  unregistered: string[]
 }
 
 export interface GitSettings {

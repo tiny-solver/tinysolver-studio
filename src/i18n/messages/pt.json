@@ -6437,9 +6437,16 @@
       "empty": "Ainda sem materiais. Desenhe um ou peça ao agente para importar.",
       "missing": "arquivo ausente",
       "from": "de {id}",
-      "faces": "{count} faces",
       "make3d": "Levar a 3D",
-      "lifting": "Criando 3D… alguns minutos"
+      "lifting": "Criando 3D… alguns minutos",
+      "upload": "Enviar imagens ou GLB",
+      "uploading": "Enviando {name}…",
+      "unregistered": "Em assets/ mas não registrados:",
+      "register": "Registrar",
+      "preview": "Pré-visualizar",
+      "place": "Pôr na cena",
+      "tris": "{count} triângulos",
+      "texture": "textura {size}"
     }
   },
   "Browser": {

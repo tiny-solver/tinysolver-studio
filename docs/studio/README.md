@@ -83,6 +83,8 @@ pnpm dev
 | `node.reorder` | `id`, `direction`: forward(맨 앞 z) 또는 backward(맨 뒤 z) |
 | `action.set` | `name`, `steps`: `[{ op, …, if? }]` → `logic.actions[name]` |
 | `action.remove` | `name` |
+| `asset.set` | `asset`: `{ id, file, width, height }` → `document.assets`(같은 id 면 바꾼다) |
+| `asset.remove` | `id`; 그 에셋을 쓰는 노드가 있으면 거부 |
 
 - 명령은 전체 배치가 검증된 경우에만 적용된다. 실패하면 원본을 유지한다.
 - 행동은 명령이 따로 없다. `node.update`의 `props.script`에 이름, `{ name, …설정 }`, 또는 그 배열을 쓴다(`null`이면 제거). 인스펙터의 **행동** 섹션이 이 값을 편집하며, 선택 목록과 내장 스크립트의 기본 설정은 엔진이 `codeg:ready`로 알려 준 것이다(`src/lib/studio/behaviors.ts`).
@@ -106,7 +108,14 @@ AI 생성물을 프로젝트의 재료로 받고, 재료를 다시 생성 입력
 - 생성기는 **부르기만** 한다 — 무엇에 쓸지는 넘기지 않는다(genai 에 사용처를 넣지 않는다). 보관 책임은 프로젝트이고, 생성기 쪽 사본은 받은 뒤 지운다.
 - 생성기가 꺼져 있으면(linux-2 on-demand) 명령이 `ok: false`와 읽을 수 있는 메모를 돌려준다. 3D 는 대기열에 따라 1~10분.
 - 등록부는 JSON 값으로 고쳐서 모르는 필드(game-asset-contract 의 `role`·`sheet` 등)를 보존하고, 키 순서(`id`·`file`·`kind`…)를 지켜 쓴다.
-- 구현: `src-tauri/src/studio_assets.rs`(목록 · 받기 · 생성 · 연결), `src/components/studio/studio-materials.tsx`(패널).
+### 재료 서랍 (asset-workbench ②)
+
+- **올리기** — 패널 머리의 올리기 단추로 이미지(png · jpg · webp · gif)와 GLB 를 여러 개 고른다. `import_asset`에 base64 data: URL 로 실려 `assets/uploads/`에 들어간다(웹 서버 경로 `/api/studio_run` 은 300MB 까지).
+- **손으로 둔 파일** — `assets/` 아래 있지만 등록부에 없는 이미지 · 모델은 `list_assets`의 `unregistered`로 나오고 **등록** 단추(= `import_asset`의 `file`)로 제자리 등록한다. 에이전트도 같은 인자를 쓴다.
+- **숫자** — 이미지는 `width`·`height`, 모델은 GLB 를 읽어 `triangles`·`vertices`·`textures`([w, h])·`texture_max`. 받을 때 등록부에 쓰고, 숫자가 없는 옛 항목은 목록을 낼 때 파일에서 읽는다(등록부는 고치지 않는다).
+- **미리보기** — 썸네일을 누르면 이미지는 크게, GLB 는 미리보기 서버의 `__codeg/viewer/model.html?src=…`(벤더링한 three 0.170 GLTFLoader · OrbitControls, 빌드에는 안 들어간다)로 돌려 본다. 출처(workflow · prompt · seed · from)도 함께.
+- **장면에 놓기** — 이미지 재료를 열린 장면에 선언(`asset.set`)하고 sprite 노드를 하나 더한다(컨테이너 40% 안으로 맞춤, 한 번의 실행 취소). 장면 명령 `asset.set`·`asset.remove`는 두 검증기(`document.ts` · `studio_scene.rs`)에 같이 있다.
+- 구현: `src-tauri/src/studio_assets.rs`(목록 · 받기 · 생성 · 연결 · GLB 숫자), `src/components/studio/studio-materials.tsx`(서랍), `src-tauri/engines/viewer/model.html`.
 
 ## 구조
 

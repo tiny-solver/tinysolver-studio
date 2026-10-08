@@ -6437,9 +6437,16 @@
       "empty": "還沒有素材。畫一個，或讓代理匯入。",
       "missing": "檔案遺失",
       "from": "來自 {id}",
-      "faces": "{count} 面",
       "make3d": "轉為 3D",
-      "lifting": "產生 3D 中…需幾分鐘"
+      "lifting": "產生 3D 中…需幾分鐘",
+      "upload": "上傳圖片或 GLB",
+      "uploading": "正在上傳 {name}…",
+      "unregistered": "在 assets/ 中但未登記：",
+      "register": "登記",
+      "preview": "預覽",
+      "place": "放入場景",
+      "tris": "{count} 面",
+      "texture": "紋理 {size}"
     }
   },
   "Browser": {

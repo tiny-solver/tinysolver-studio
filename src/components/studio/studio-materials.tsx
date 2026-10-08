@@ -1,45 +1,92 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { useTranslations } from "next-intl"
-import { Box, ImageIcon, Plug, RefreshCw, Sparkles } from "lucide-react"
+import {
+  Box,
+  FilePlus2,
+  ImageIcon,
+  Plug,
+  RefreshCw,
+  Sparkles,
+  SquarePlus,
+  Upload,
+} from "lucide-react"
 import { studioRun } from "@/lib/api"
 import { toErrorMessage } from "@/lib/app-error"
 import { getWorkspaceStateStore } from "@/hooks/use-workspace-state-store"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import type { StudioAsset, StudioAssetList, StudioOp } from "@/lib/types"
 
 /** Defaults for "Make 3D": a game-sized mesh (1만 면 holds its shape thanks
  *  to the normal map) with a texture that stays within the 2048 web limit. */
 const LIFT_3D = { target_faces: 10000, texture_size: 2048 } as const
 
+/** Where uploads land under `assets/`. */
+const UPLOAD_DIR = "uploads"
+
 interface StudioMaterialsProps {
   root: string
   /** `<origin>/api/content-preview/<id>/` — serves the project folder, so
-   *  image thumbnails load straight from `assets/`. */
+   *  thumbnails and the model preview load straight from `assets/`. */
   previewBase: string | null
+  /** Put an image material into the open scene (declare it + add a sprite).
+   *  Absent when no scene is open. */
+  onPlace?: (asset: StudioAsset) => void
 }
 
-function formatBytes(n?: number): string {
+export function formatBytes(n?: number): string {
   if (n == null) return ""
   if (n < 1024) return `${n} B`
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`
   return `${(n / 1024 / 1024).toFixed(1)} MB`
 }
 
+/** `hero idle (1).PNG` → `hero-idle-1`: the material id an upload gets. */
+export function idFromFileName(name: string): string {
+  const stem = name.replace(/\.[^.]+$/, "")
+  const folded = stem
+    .replace(/[^A-Za-z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60)
+  return folded || "material"
+}
+
+function readAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result))
+    reader.onerror = () => reject(reader.error)
+    reader.readAsDataURL(file)
+  })
+}
+
 /**
- * The project's materials (`assets/manifest.json`) and the round trip to the
- * generator: draw from a prompt, lift an image into 3D, and see each result
- * land here with where it came from. Every button runs the same operation
- * the companion's `studio_*` MCP tools run, and the list follows the disk,
- * so an agent's import shows up here too.
+ * The project's materials (`assets/manifest.json`): upload, register files
+ * put there by hand, preview (image or GLB), see what each is made of
+ * (size · faces · texture · bytes) and where it came from, draw new ones
+ * with the generator and lift images into 3D. Every button runs the same
+ * operation the companion's `studio_*` MCP tools run, and the list follows
+ * the disk, so an agent's import shows up here too.
  */
-export function StudioMaterials({ root, previewBase }: StudioMaterialsProps) {
+export function StudioMaterials({
+  root,
+  previewBase,
+  onPlace,
+}: StudioMaterialsProps) {
   const t = useTranslations("Studio.materials")
   const [list, setList] = useState<StudioAssetList | null>(null)
   const [error, setError] = useState("")
   const [pending, setPending] = useState<string | null>(null)
   const [prompt, setPrompt] = useState("")
   const [generatorDraft, setGeneratorDraft] = useState("")
+  const [previewing, setPreviewing] = useState<StudioAsset | null>(null)
+  const fileInput = useRef<HTMLInputElement>(null)
 
   const refresh = useCallback(async () => {
     try {
@@ -112,22 +159,79 @@ export function StudioMaterials({ root, previewBase }: StudioMaterialsProps) {
       setPrompt("")
   }
 
+  const upload = async (files: FileList | null) => {
+    if (!files) return
+    for (const file of Array.from(files)) {
+      let url: string
+      try {
+        url = await readAsDataUrl(file)
+      } catch (reason) {
+        setError(toErrorMessage(reason))
+        continue
+      }
+      // GLB has no registered mime in most browsers; name the type so the
+      // backend picks the right extension.
+      if (/\.glb$/i.test(file.name))
+        url = url.replace(/^data:[^;]*;/, "data:model/gltf-binary;")
+      await run(`upload:${file.name}`, {
+        op: "import_asset",
+        url,
+        id: idFromFileName(file.name),
+        dir: UPLOAD_DIR,
+      })
+    }
+  }
+
+  const fileUrl = (file: string) =>
+    previewBase ? `${previewBase}${assetsDir}/${file}` : null
+  const modelViewerUrl = (file: string) =>
+    previewBase
+      ? `${previewBase}__codeg/viewer/model.html?src=${encodeURIComponent(
+          `../../${assetsDir}/${file}`
+        )}`
+      : null
+
   const assets = list?.assets ?? []
+  const loose = list?.unregistered ?? []
   const generator = list?.generator ?? null
   const busy = pending !== null
 
   return (
     <div className="studio-materials">
       <div className="studio-section-title">
-        <h2>{t("title")}</h2>
-        <button
-          className="studio-icon-button"
-          onClick={() => void refresh()}
-          title={t("refresh")}
-          aria-label={t("refresh")}
-        >
-          <RefreshCw size={13} />
-        </button>
+        <h2>
+          {t("title")} <span>{assets.length}</span>
+        </h2>
+        <div className="studio-materials-tools">
+          <button
+            className="studio-icon-button"
+            onClick={() => fileInput.current?.click()}
+            disabled={busy}
+            title={t("upload")}
+            aria-label={t("upload")}
+          >
+            <Upload size={13} />
+          </button>
+          <button
+            className="studio-icon-button"
+            onClick={() => void refresh()}
+            title={t("refresh")}
+            aria-label={t("refresh")}
+          >
+            <RefreshCw size={13} />
+          </button>
+        </div>
+        <input
+          ref={fileInput}
+          type="file"
+          multiple
+          hidden
+          accept="image/png,image/jpeg,image/webp,image/gif,.glb,.gltf"
+          onChange={(e) => {
+            void upload(e.target.files)
+            e.target.value = ""
+          }}
+        />
       </div>
 
       {list && !generator ? (
@@ -170,9 +274,12 @@ export function StudioMaterials({ root, previewBase }: StudioMaterialsProps) {
         )
       )}
 
+      {pending?.startsWith("upload:") && (
+        <p>{t("uploading", { name: pending.slice(7) })}</p>
+      )}
       {error && <p className="studio-materials-error">{error}</p>}
 
-      {list && assets.length === 0 && (
+      {list && assets.length === 0 && loose.length === 0 && (
         <div className="studio-empty-assets">{t("empty")}</div>
       )}
       <div className="studio-material-list">
@@ -181,9 +288,23 @@ export function StudioMaterials({ root, previewBase }: StudioMaterialsProps) {
             key={asset.id}
             asset={asset}
             src={
-              previewBase && asset.kind === "image" && asset.exists
-                ? `${previewBase}${assetsDir}/${asset.file}`
+              asset.kind === "image" && asset.exists
+                ? fileUrl(asset.file)
                 : null
+            }
+            onPreview={
+              asset.exists && previewBase
+                ? () => setPreviewing(asset)
+                : undefined
+            }
+            onPlace={
+              onPlace &&
+              asset.kind === "image" &&
+              asset.exists &&
+              asset.width &&
+              asset.height
+                ? () => onPlace(asset)
+                : undefined
             }
             canLift={Boolean(generator) && asset.kind === "image"}
             lifting={pending === `3d:${asset.id}`}
@@ -199,13 +320,111 @@ export function StudioMaterials({ root, previewBase }: StudioMaterialsProps) {
           />
         ))}
       </div>
+
+      {loose.length > 0 && (
+        <div className="studio-materials-loose">
+          <p>{t("unregistered")}</p>
+          {loose.map((file) => (
+            <div key={file} className="studio-material-loose-row">
+              <span title={file}>{file}</span>
+              <button
+                disabled={busy}
+                onClick={() =>
+                  void run(`register:${file}`, { op: "import_asset", file })
+                }
+              >
+                <FilePlus2 size={12} />
+                {t("register")}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <Dialog
+        open={previewing !== null}
+        onOpenChange={(open) => {
+          if (!open) setPreviewing(null)
+        }}
+      >
+        <DialogContent className="studio-material-preview">
+          {previewing && (
+            <>
+              <DialogTitle>{previewing.id}</DialogTitle>
+              <DialogDescription>
+                {previewing.file} · {materialFacts(previewing, t).join(" · ")}
+              </DialogDescription>
+              <div className="studio-material-preview-stage">
+                {previewing.kind === "model" ? (
+                  <iframe
+                    title={previewing.id}
+                    src={modelViewerUrl(previewing.file) ?? undefined}
+                  />
+                ) : (
+                  // eslint-disable-next-line @next/next/no-img-element -- served by the preview server, not a static asset
+                  <img
+                    src={fileUrl(previewing.file) ?? undefined}
+                    alt={previewing.id}
+                  />
+                )}
+              </div>
+              {previewing.source && (
+                <dl className="studio-material-source">
+                  {(
+                    [
+                      ["workflow", previewing.source.workflow],
+                      ["prompt", previewing.source.prompt],
+                      ["seed", previewing.source.seed],
+                      ["from", previewing.source.from],
+                    ] as const
+                  )
+                    .filter(([, v]) => v != null && v !== "")
+                    .map(([k, v]) => (
+                      <div key={k}>
+                        <dt>{k}</dt>
+                        <dd>{String(v)}</dd>
+                      </div>
+                    ))}
+                </dl>
+              )}
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
+}
+
+type Translate = (
+  key: "tris" | "texture" | "missing",
+  values?: Record<string, number>
+) => string
+
+/** The numbers a material is judged by: kind, pixel size or faces and
+ *  texture, bytes. */
+function materialFacts(asset: StudioAsset, t: Translate): string[] {
+  const facts: (string | null)[] =
+    asset.kind === "model"
+      ? [
+          "GLB",
+          typeof asset.triangles === "number"
+            ? t("tris", { count: asset.triangles })
+            : null,
+          typeof asset.texture_max === "number"
+            ? t("texture", { size: asset.texture_max })
+            : null,
+        ]
+      : [asset.width && asset.height ? `${asset.width}×${asset.height}` : null]
+  facts.push(formatBytes(asset.bytes) || null)
+  if (!asset.exists) facts.push(t("missing"))
+  return facts.filter((f): f is string => Boolean(f))
 }
 
 function MaterialRow({
   asset,
   src,
+  onPreview,
+  onPlace,
   canLift,
   lifting,
   busy,
@@ -213,32 +432,31 @@ function MaterialRow({
 }: {
   asset: StudioAsset
   src: string | null
+  onPreview?: () => void
+  onPlace?: () => void
   canLift: boolean
   lifting: boolean
   busy: boolean
   onLift: () => void
 }) {
   const t = useTranslations("Studio.materials")
-  const facts = [
-    asset.kind === "model" ? "GLB" : null,
-    asset.width && asset.height ? `${asset.width}×${asset.height}` : null,
-    formatBytes(asset.bytes),
-    asset.exists ? null : t("missing"),
-  ].filter(Boolean)
   const source = asset.source
   const made = source
     ? [
         source.workflow,
         source.seed != null ? `seed ${source.seed}` : null,
         source.from ? t("from", { id: source.from }) : null,
-        source.params?.target_faces
-          ? t("faces", { count: source.params.target_faces })
-          : null,
       ].filter(Boolean)
     : []
   return (
     <div className="studio-material-row">
-      <div className="studio-material-thumb">
+      <button
+        className="studio-material-thumb"
+        onClick={onPreview}
+        disabled={!onPreview}
+        title={t("preview")}
+        aria-label={t("preview")}
+      >
         {src ? (
           // eslint-disable-next-line @next/next/no-img-element -- served by the preview server, not a static asset
           <img src={src} alt={asset.id} loading="lazy" />
@@ -247,18 +465,28 @@ function MaterialRow({
         ) : (
           <ImageIcon size={18} />
         )}
-      </div>
+      </button>
       <div className="studio-material-meta">
         <strong title={asset.file}>{asset.id}</strong>
-        <span>{facts.join(" · ")}</span>
+        <span>{materialFacts(asset, t).join(" · ")}</span>
         {made.length > 0 && (
           <span title={source?.prompt}>{made.join(" · ")}</span>
         )}
-        {canLift && (
-          <button disabled={busy} onClick={onLift}>
-            <Box size={12} />
-            {lifting ? t("lifting") : t("make3d")}
-          </button>
+        {(onPlace || canLift) && (
+          <div className="studio-material-actions">
+            {onPlace && (
+              <button disabled={busy} onClick={onPlace}>
+                <SquarePlus size={12} />
+                {t("place")}
+              </button>
+            )}
+            {canLift && (
+              <button disabled={busy} onClick={onLift}>
+                <Box size={12} />
+                {lifting ? t("lifting") : t("make3d")}
+              </button>
+            )}
+          </div>
         )}
       </div>
     </div>

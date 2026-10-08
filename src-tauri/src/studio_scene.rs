@@ -394,6 +394,35 @@ pub fn apply_commands(scene: &Value, commands: &Value) -> SceneResult<Value> {
                     }
                 }
             }
+            "asset.set" => {
+                // Declare (or redeclare, by id) a material the scene's sprites
+                // can name in `props.asset`.
+                let asset = parse_asset(command.get("asset").unwrap_or(&Value::Null), 0)?;
+                let document = next["document"].as_object_mut().ok_or("scene.document: expected an object")?;
+                let assets = document.entry("assets").or_insert_with(|| Value::Array(Vec::new()));
+                let list = assets.as_array_mut().ok_or("scene.document.assets: expected a list")?;
+                match list.iter().position(|a| a.get("id") == asset.get("id")) {
+                    Some(i) => list[i] = asset,
+                    None => list.push(asset),
+                }
+            }
+            "asset.remove" => {
+                let target = id(command.get("id").unwrap_or(&Value::Null), "command.id")?;
+                if let Some(user) = nodes
+                    .iter()
+                    .find(|n| n.get("props").and_then(|p| p.get("asset")).and_then(Value::as_str) == Some(target.as_str()))
+                {
+                    return Err(format!("Asset {target} is used by node {}", node_id(user)));
+                }
+                let list = next["document"]["assets"]
+                    .as_array_mut()
+                    .ok_or_else(|| format!("Asset not found: {target}"))?;
+                let before = list.len();
+                list.retain(|a| a.get("id").and_then(Value::as_str) != Some(target.as_str()));
+                if list.len() == before {
+                    return Err(format!("Asset not found: {target}"));
+                }
+            }
             "node.add" => {
                 let node = parse_node(command.get("node").unwrap_or(&Value::Null), nodes.len())?;
                 nodes.push(node);
@@ -468,6 +497,39 @@ pub fn apply_commands(scene: &Value, commands: &Value) -> SceneResult<Value> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn asset_commands_declare_and_guard_materials() {
+        let scene = parse_scene(&serde_json::json!({
+            "schema": 1, "id": "main", "name": "m",
+            "document": { "container": { "width": 100, "height": 100 }, "assets": [], "nodes": [] }
+        }))
+        .unwrap();
+        let cup = serde_json::json!({ "id": "cup", "file": "generated/images/cup.png", "width": 64, "height": 32 });
+        let next = apply_commands(
+            &scene,
+            &serde_json::json!([
+                { "type": "asset.set", "asset": cup },
+                { "type": "asset.set", "asset": { "id": "cup", "file": "cup2.png", "width": 8, "height": 8 } },
+                { "type": "node.add", "node": { "id": "c", "type": "sprite",
+                    "transform": { "x": 0, "y": 0, "w": 8, "h": 8 }, "props": { "asset": "cup" } } }
+            ]),
+        )
+        .unwrap();
+        let assets = next["document"]["assets"].as_array().unwrap();
+        assert_eq!(assets.len(), 1, "same id replaces");
+        assert_eq!(assets[0]["file"], "cup2.png");
+        let used = apply_commands(&next, &serde_json::json!([{ "type": "asset.remove", "id": "cup" }]));
+        assert!(used.unwrap_err().contains("used by node c"));
+        let freed = apply_commands(
+            &next,
+            &serde_json::json!([{ "type": "node.remove", "id": "c" }, { "type": "asset.remove", "id": "cup" }]),
+        )
+        .unwrap();
+        assert!(freed["document"]["assets"].as_array().unwrap().is_empty());
+        let escape = serde_json::json!([{ "type": "asset.set", "asset": { "id": "x", "file": "../x.png", "width": 1, "height": 1 } }]);
+        assert!(apply_commands(&scene, &escape).is_err());
+    }
+
     use super::*;
 
     fn sample() -> Value {
