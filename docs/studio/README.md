@@ -108,6 +108,23 @@ AI 생성물을 프로젝트의 재료로 받고, 재료를 다시 생성 입력
 - 생성기는 **부르기만** 한다 — 무엇에 쓸지는 넘기지 않는다(genai 에 사용처를 넣지 않는다). 보관 책임은 프로젝트이고, 생성기 쪽 사본은 받은 뒤 지운다.
 - 생성기가 꺼져 있으면(linux-2 on-demand) 명령이 `ok: false`와 읽을 수 있는 메모를 돌려준다. 3D 는 대기열에 따라 1~10분.
 - 등록부는 JSON 값으로 고쳐서 모르는 필드(game-asset-contract 의 `role`·`sheet` 등)를 보존하고, 키 순서(`id`·`file`·`kind`…)를 지켜 쓴다.
+### 기준 프리셋 · 검사 (asset-workbench ③)
+
+'어디에 쓸 것'(재료의 `use`)을 고르면 생성 값이 정해지고, 재료가 그 기준을 넘으면 서랍과 MCP 결과에 경고가 붙는다. 표의 정본은 `src-tauri/src/studio_presets.rs` 하나이고, 편집기는 `list_assets`의 `presets`로 받는다.
+
+| id | 면 수(권장) | 상한 | 텍스처 | 용량 | 생성 값(target_faces · texture_size) |
+| --- | --- | --- | --- | --- | --- |
+| `mobile-prop` 모바일 소품 | 300~1,500 | — | ≤2048 | ≤5MB | 1,000 · 1024 (genai 최소 1,000) |
+| `mobile-character` 모바일 캐릭터 | 3k~10k | — | ≤2048 | ≤5MB | 8,000 · 2048 |
+| `roblox-meshpart` Roblox MeshPart | 3k~10k | 21k | ≤2048 | — | 8,000 · 1024 |
+| `web-ar` 웹 · AR(Scene Viewer) | 30k~50k | — | ≤2048 | ≤5MB | 40,000 · 2048 |
+| `pc-hero` PC · 콘솔 주인공 | 20k~100k | — | ≤4096 | — | 80,000 · 4096 |
+| `print-3d` 3D 프린트 | 100k+ | — | — | — | 300,000 · 1024 (닫힌 메시 — 아직 검사 안 함) |
+
+- 검사 결과는 항목마다 `check: [{ level: over|warn|info, code, value, limit, message }]`. 기준과 무관하게, 투명 워크플로(`*-rgba`)로 만든 그림이 불투명하면 `not_transparent` 경고(그림의 `opaque`는 받을 때 픽셀을 읽어 둔다).
+- 명령: `generate_asset`·`import_asset`의 `use`(3D 는 비운 `target_faces`·`texture_size`를 프리셋 값으로 채우고 재료에 `use`를 남긴다), `update_asset { id, use }`(MCP `studio_update_asset`, 편집기는 미리보기 창의 '쓸 곳').
+- 편집기: 생성 상자의 '쓸 곳'이 다음 그리기 · 3D 로에 적용된다. 정하지 않으면 3D 는 1만 면 · 2048.
+
 ### 재료 서랍 (asset-workbench ②)
 
 - **올리기** — 패널 머리의 올리기 단추로 이미지(png · jpg · webp · gif)와 GLB 를 여러 개 고른다. `import_asset`에 base64 data: URL 로 실려 `assets/uploads/`에 들어간다(웹 서버 경로 `/api/studio_run` 은 300MB 까지).

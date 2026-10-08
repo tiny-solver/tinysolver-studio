@@ -6446,7 +6446,28 @@
       "preview": "Preview",
       "place": "Place in scene",
       "tris": "{count} tris",
-      "texture": "tex {size}"
+      "texture": "tex {size}",
+      "use": "Use",
+      "useNone": "Not set",
+      "useHint": "3D: {faces} faces · texture {texture}",
+      "useHintNone": "3D default: {faces} faces · texture {texture}",
+      "check": {
+        "tris_over_cap": "{value} tris — cap {limit}",
+        "tris_above": "{value} tris — keep under {limit}",
+        "tris_below": "{value} tris — usually {limit}+",
+        "texture_above": "texture {value}px — keep ≤ {limit}px",
+        "bytes_above": "{value} MB — keep under {limit} MB",
+        "not_transparent": "Not transparent — its background comes along",
+        "closed_mesh_unchecked": "Closed mesh not checked"
+      },
+      "presets": {
+        "mobile-prop": "Mobile prop",
+        "mobile-character": "Mobile character",
+        "roblox-meshpart": "Roblox MeshPart",
+        "web-ar": "Web / AR",
+        "pc-hero": "PC · console hero",
+        "print-3d": "3D print"
+      }
     }
   },
   "Browser": {

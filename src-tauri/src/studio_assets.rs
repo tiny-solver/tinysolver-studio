@@ -30,6 +30,7 @@ use serde::Deserialize;
 use serde_json::{json, Map, Value};
 
 use crate::commands::content_project as cp;
+use crate::studio_presets;
 use crate::studio_scene;
 
 /// Largest file `import` accepts. A GLB at texture 4096 is ~30MB.
@@ -62,6 +63,10 @@ pub struct ImportRequest {
     /// from, …). Free-form object.
     #[serde(default)]
     pub source: Option<Value>,
+    /// Where it will be used — a preset id (`studio_presets`), kept on the
+    /// entry as `use` and judged by `check`.
+    #[serde(default, rename = "use", skip_serializing_if = "Option::is_none")]
+    pub use_for: Option<String>,
 }
 
 /// What `generate` is asked to make.
@@ -85,6 +90,10 @@ pub struct GenerateRequest {
     /// Id for the new material (see [`ImportRequest::id`]).
     #[serde(default)]
     pub id: Option<String>,
+    /// Where it will be used — a preset id. For `3d` it fills
+    /// `target_faces` / `texture_size` when those are not given.
+    #[serde(default, rename = "use", skip_serializing_if = "Option::is_none")]
+    pub use_for: Option<String>,
 }
 
 fn assets_dir(root: &Path, manifest: Option<&cp::ContentProjectManifest>) -> PathBuf {
@@ -180,7 +189,7 @@ impl serde::Serialize for Ordered<'_> {
 
 const REGISTER_ORDER: &[&str] = &["schema", "container"];
 const ENTRY_ORDER: &[&str] = &[
-    "id", "file", "kind", "bytes", "width", "height", "added_at", "source",
+    "id", "file", "kind", "use", "bytes", "width", "height", "added_at", "source",
 ];
 
 async fn write_register(dir: &Path, value: &Value) -> Result<(), String> {
@@ -314,6 +323,9 @@ pub fn stats(file: &str, bytes: &[u8]) -> Map<String, Value> {
                 out.insert("width".into(), json!(w));
                 out.insert("height".into(), json!(h));
             }
+            if let Some(opaque) = is_opaque(bytes) {
+                out.insert("opaque".into(), json!(opaque));
+            }
         }
         "model" => {
             if let Some(m) = model_stats(bytes) {
@@ -323,6 +335,16 @@ pub fn stats(file: &str, bytes: &[u8]) -> Map<String, Value> {
         _ => {}
     }
     out
+}
+
+/// Whether no pixel is meaningfully transparent (alpha ≥ 250 everywhere).
+/// Formats without an alpha channel are opaque by definition.
+fn is_opaque(bytes: &[u8]) -> Option<bool> {
+    let img = image::load_from_memory(bytes).ok()?;
+    if !img.color().has_alpha() {
+        return Some(true);
+    }
+    Some(img.to_rgba8().pixels().all(|p| p.0[3] >= 250))
 }
 
 fn image_size(bytes: &[u8]) -> Option<(u32, u32)> {
@@ -465,7 +487,7 @@ pub async fn list(root: &Path) -> Value {
         // never changes the register).
         let lacks = match kind_of(&file) {
             "model" => entry.get("triangles").is_none(),
-            "image" => entry.get("width").is_none(),
+            "image" => entry.get("width").is_none() || entry.get("opaque").is_none(),
             _ => false,
         };
         if let Some(obj) = entry.as_object_mut() {
@@ -486,6 +508,10 @@ pub async fn list(root: &Path) -> Value {
             }
             obj.insert("exists".into(), json!(exists));
         }
+        let findings = studio_presets::check(&entry);
+        if let Some(obj) = entry.as_object_mut() {
+            obj.insert("check".into(), Value::Array(findings));
+        }
         items.push(entry);
     }
     let generator = generator_url(manifest.as_ref());
@@ -496,6 +522,7 @@ pub async fn list(root: &Path) -> Value {
         "generator": generator,
         "assets": items,
         "unregistered": loose,
+        "presets": studio_presets::PRESETS,
         "note": if generator.is_none() {
             "No generator connected. Set `generate.url` in codeg-project.json (ask the user for the address) to use studio_generate_asset; studio_import_asset works without one."
         } else { "" },
@@ -594,6 +621,9 @@ pub async fn import(root: &Path, req: ImportRequest) -> Value {
     if req.source.as_ref().is_some_and(|s| !s.is_object()) {
         return fail("source must be an object (workflow, prompt, seed, from, …)");
     }
+    if let Some(note) = bad_use(req.use_for.as_deref()) {
+        return fail(note);
+    }
     let mut register = match read_register(&dir).await {
         Ok(r) => r,
         Err(note) => return fail(note),
@@ -675,6 +705,9 @@ pub async fn import(root: &Path, req: ImportRequest) -> Value {
     entry.insert("id".into(), json!(id));
     entry.insert("file".into(), json!(file));
     entry.insert("kind".into(), json!(kind_of(&file)));
+    if let Some(u) = &req.use_for {
+        entry.insert("use".into(), json!(u));
+    }
     entry.insert("bytes".into(), json!(bytes_len));
     entry.extend(file_stats);
     entry.insert("added_at".into(), json!(chrono::Utc::now().to_rfc3339()));
@@ -710,6 +743,7 @@ pub async fn import(root: &Path, req: ImportRequest) -> Value {
         "asset": entry,
         "path": rel(root, &path),
         "remote_deleted": remote_deleted,
+        "check": studio_presets::check(&entry),
         "note": "Registered in assets/manifest.json. The Studio's material panel picks it up from disk.",
     })
 }
@@ -805,7 +839,16 @@ pub fn generator_call(
 }
 
 /// Generate with the project's generator and import the result.
-pub async fn generate(root: &Path, req: GenerateRequest) -> Value {
+pub async fn generate(root: &Path, mut req: GenerateRequest) -> Value {
+    if let Some(note) = bad_use(req.use_for.as_deref()) {
+        return fail(note);
+    }
+    if let Some(preset) = req.use_for.as_deref().and_then(studio_presets::find) {
+        if req.kind == "3d" {
+            req.target_faces = req.target_faces.or(Some(preset.target_faces));
+            req.texture_size = req.texture_size.or(Some(preset.texture_size));
+        }
+    }
     let manifest = match project(root).await {
         Ok(m) => m,
         Err(note) => return fail(note),
@@ -878,10 +921,54 @@ pub async fn generate(root: &Path, req: GenerateRequest) -> Value {
             url,
             id,
             source: Some(source),
+            use_for: req.use_for.clone(),
             ..Default::default()
         },
     )
     .await
+}
+
+fn bad_use(use_for: Option<&str>) -> Option<String> {
+    let u = use_for?;
+    studio_presets::find(u).is_none().then(|| {
+        format!("use `{u}`: one of {}", studio_presets::ids().join(", "))
+    })
+}
+
+/// Set (or clear, with `None`) where a material will be used.
+pub async fn update(root: &Path, id: &str, use_for: Option<String>) -> Value {
+    if let Some(note) = bad_use(use_for.as_deref()) {
+        return fail(note);
+    }
+    let manifest = match project(root).await {
+        Ok(m) => m,
+        Err(note) => return fail(note),
+    };
+    let dir = assets_dir(root, manifest.as_ref());
+    let mut register = match read_register(&dir).await {
+        Ok(r) => r,
+        Err(note) => return fail(note),
+    };
+    let Some(entry) = register["assets"]
+        .as_array_mut()
+        .and_then(|list| list.iter_mut().find(|e| e["id"] == id))
+        .and_then(Value::as_object_mut)
+    else {
+        return fail(format!("No material `{id}`. Call studio_list_assets for the ids."));
+    };
+    match &use_for {
+        Some(u) => {
+            entry.insert("use".into(), json!(u));
+        }
+        None => {
+            entry.remove("use");
+        }
+    }
+    let updated = Value::Object(entry.clone());
+    if let Err(note) = write_register(&dir, &register).await {
+        return fail(note);
+    }
+    json!({ "ok": true, "asset": updated, "check": studio_presets::check(&updated) })
 }
 
 /// Set (or clear, with `None`) `generate.url` in the manifest.
@@ -1080,6 +1167,33 @@ mod tests {
         )
         .await;
         assert_eq!(escape["ok"], false);
+    }
+
+    #[tokio::test]
+    async fn use_is_recorded_and_judged() {
+        let (_tmp, root) = project().await;
+        std::fs::create_dir_all(root.join("assets/props")).unwrap();
+        std::fs::write(root.join("assets/props/chest.glb"), tiny_glb()).unwrap();
+        let bad = import(
+            &root,
+            ImportRequest { file: Some("props/chest.glb".into()), use_for: Some("moon".into()), ..Default::default() },
+        )
+        .await;
+        assert!(bad["note"].as_str().unwrap().contains("web-ar"));
+        let out = import(
+            &root,
+            ImportRequest { file: Some("props/chest.glb".into()), use_for: Some("web-ar".into()), ..Default::default() },
+        )
+        .await;
+        assert_eq!(out["asset"]["use"], "web-ar");
+        assert_eq!(out["check"][0]["code"], "tris_below");
+        let listed = list(&root).await;
+        assert_eq!(listed["assets"][0]["check"][0]["code"], "tris_below");
+        assert!(listed["presets"].as_array().unwrap().len() >= 6);
+        let cleared = update(&root, "chest", None).await;
+        assert_eq!(cleared["ok"], true);
+        assert!(cleared["asset"].get("use").is_none());
+        assert_eq!(update(&root, "ghost", None).await["ok"], false);
     }
 
     #[test]

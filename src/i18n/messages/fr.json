@@ -6446,7 +6446,28 @@
       "preview": "Aperçu",
       "place": "Placer dans la scène",
       "tris": "{count} triangles",
-      "texture": "texture {size}"
+      "texture": "texture {size}",
+      "use": "Usage",
+      "useNone": "Non défini",
+      "useHint": "3D : {faces} faces · texture {texture}",
+      "useHintNone": "3D par défaut : {faces} faces · texture {texture}",
+      "check": {
+        "tris_over_cap": "{value} triangles — plafond {limit}",
+        "tris_above": "{value} triangles — viser ≤ {limit}",
+        "tris_below": "{value} triangles — souvent {limit}+",
+        "texture_above": "texture {value}px — ≤ {limit}px",
+        "bytes_above": "{value} Mo — sous {limit} Mo",
+        "not_transparent": "Pas transparent — le fond suit",
+        "closed_mesh_unchecked": "Maillage fermé non vérifié"
+      },
+      "presets": {
+        "mobile-prop": "Accessoire mobile",
+        "mobile-character": "Personnage mobile",
+        "roblox-meshpart": "Roblox MeshPart",
+        "web-ar": "Web / AR",
+        "pc-hero": "Héros PC · console",
+        "print-3d": "Impression 3D"
+      }
     }
   },
   "Browser": {

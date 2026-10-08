@@ -418,7 +418,7 @@
   },
   {
     "name": "studio_list_assets",
-    "description": "List the materials of the Tinysolver Studio content project: every entry of assets/manifest.json (id, file relative to assets/, kind image|model, bytes, width/height for images, and `source` — where it came from: workflow, prompt, seed, the `from` material it was made from, the original url) plus whether the file is on disk, model numbers (triangles, vertices, textures [w,h], texture_max — read from the GLB), `unregistered` image/model files under assets/ that no entry names (register them with studio_import_asset `file`), and the project's connected generator (codeg-project.json `generate.url`, or null). Call it before generating or placing a material so you use real ids. Read-only.",
+    "description": "List the materials of the Tinysolver Studio content project: every entry of assets/manifest.json (id, file relative to assets/, kind image|model, bytes, width/height for images, and `source` — where it came from: workflow, prompt, seed, the `from` material it was made from, the original url) plus whether the file is on disk, model numbers (triangles, vertices, textures [w,h], texture_max — read from the GLB), `unregistered` image/model files under assets/ that no entry names (register them with studio_import_asset `file`), and the project's connected generator (codeg-project.json `generate.url`, or null). Call it before generating or placing a material so you use real ids. Each entry also has `check`: findings against its `use` preset ({level: over|warn|info, code, value, limit, message} — e.g. too many triangles, texture or file too big, a transparent-workflow image that came back opaque); the result carries the preset table as `presets`. Read-only.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -459,6 +459,18 @@
         "file": {
           "type": "string",
           "description": "A file already under assets/ (e.g. props/chest.glb) to register in place instead of fetching — for files you or the user put there. studio_list_assets lists these as `unregistered`."
+        },
+        "use": {
+          "type": "string",
+          "enum": [
+            "mobile-prop",
+            "mobile-character",
+            "roblox-meshpart",
+            "web-ar",
+            "pc-hero",
+            "print-3d"
+          ],
+          "description": "Where it will be used — one of mobile-prop (300–1.5k tris), mobile-character (3k–10k), roblox-meshpart (≤10k recommended, 21k cap), web-ar (30k–50k, texture ≤2048, ≤5MB), pc-hero (20k–100k), print-3d (100k+, closed mesh). studio_list_assets returns the full table as `presets` and judges each material against its `use` in `check`."
         }
       }
     }
@@ -511,6 +523,54 @@
         "id": {
           "type": "string",
           "description": "Id for the new material."
+        },
+        "project": {
+          "type": "string",
+          "description": "Absolute path of the content project root. Omit it: the default is this session's working directory, which is the project when you were opened in one."
+        },
+        "use": {
+          "type": "string",
+          "enum": [
+            "mobile-prop",
+            "mobile-character",
+            "roblox-meshpart",
+            "web-ar",
+            "pc-hero",
+            "print-3d"
+          ],
+          "description": "Where it will be used — one of mobile-prop (300–1.5k tris), mobile-character (3k–10k), roblox-meshpart (≤10k recommended, 21k cap), web-ar (30k–50k, texture ≤2048, ≤5MB), pc-hero (20k–100k), print-3d (100k+, closed mesh). studio_list_assets returns the full table as `presets` and judges each material against its `use` in `check`. For 3d it sets target_faces and texture_size unless you give them, and is recorded on the material."
+        }
+      }
+    }
+  },
+  {
+    "name": "studio_update_asset",
+    "description": "Set where a material will be used (`use`, a preset id), or clear it with `use` omitted/null. The material is then judged against that preset's budget (triangles, texture size, file size) — studio_list_assets shows the findings in `check`, and the Studio's material drawer shows them as warnings. Use it when the user says what a model or image is for (a mobile game prop, a Roblox part, an AR viewer, a print).",
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "id"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Material id from studio_list_assets."
+        },
+        "use": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "mobile-prop",
+            "mobile-character",
+            "roblox-meshpart",
+            "web-ar",
+            "pc-hero",
+            "print-3d",
+            null
+          ],
+          "description": "Where it will be used — one of mobile-prop (300–1.5k tris), mobile-character (3k–10k), roblox-meshpart (≤10k recommended, 21k cap), web-ar (30k–50k, texture ≤2048, ≤5MB), pc-hero (20k–100k), print-3d (100k+, closed mesh). studio_list_assets returns the full table as `presets` and judges each material against its `use` in `check`."
         },
         "project": {
           "type": "string",

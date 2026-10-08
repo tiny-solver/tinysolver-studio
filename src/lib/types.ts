@@ -3990,6 +3990,35 @@ export interface StudioAssetSource {
   [key: string]: unknown
 }
 
+/** One finding of `studio_presets::check`. */
+export interface StudioFinding {
+  level: "over" | "warn" | "info"
+  code:
+    | "tris_over_cap"
+    | "tris_above"
+    | "tris_below"
+    | "texture_above"
+    | "bytes_above"
+    | "not_transparent"
+    | "closed_mesh_unchecked"
+  value: number
+  limit: number
+  /** English fallback. */
+  message: string
+}
+
+/** A "where will this be used" budget (`src-tauri/src/studio_presets.rs`). */
+export interface StudioPreset {
+  id: string
+  tris: [number, number]
+  tris_hard_max?: number
+  texture_max?: number
+  bytes_max?: number
+  target_faces: number
+  texture_size: 1024 | 2048 | 4096
+  closed_mesh?: boolean
+}
+
 /** One entry of `assets/manifest.json`, as `studio_list_assets` returns it. */
 export interface StudioAsset {
   id: string
@@ -4008,6 +4037,12 @@ export interface StudioAsset {
   textures?: [number, number][]
   /** Largest texture side. */
   texture_max?: number
+  /** Where it will be used — a preset id (`StudioPreset.id`). */
+  use?: string
+  /** Images: no transparent pixel. */
+  opaque?: boolean
+  /** Findings against `use` (and checks that hold for any use). */
+  check?: StudioFinding[]
   /** Whether the file is on disk. */
   exists: boolean
   [key: string]: unknown
@@ -4026,6 +4061,7 @@ export type StudioOp =
       id?: string
       dir?: string
       source?: StudioAssetSource
+      use?: string
     }
   | {
       op: "generate_asset"
@@ -4037,7 +4073,9 @@ export type StudioOp =
       target_faces?: number
       texture_size?: 1024 | 2048 | 4096
       id?: string
+      use?: string
     }
+  | { op: "update_asset"; id: string; use: string | null }
   | { op: "connect_generator"; url: string | null }
 
 /** `{ ok, note?, ... }` — a refusal is `ok: false` with a readable note. */
@@ -4053,6 +4091,7 @@ export interface StudioAssetList extends StudioOutcome {
   assets: StudioAsset[]
   /** Image/model files under assets/ that no entry names. */
   unregistered: string[]
+  presets: StudioPreset[]
 }
 
 export interface GitSettings {

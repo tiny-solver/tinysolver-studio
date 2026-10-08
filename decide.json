@@ -633,14 +633,19 @@
       "then": [],
       "id": "aw-presets",
       "p": 2,
-      "status": "todo",
+      "status": "decided",
       "q": "③ 기준 프리셋 · 검사 — '어디에 쓸 것'을 고르면 genai 값이 정해지고, 넘으면 서랍에 경고",
       "want": "프리셋(모바일 소품 300~1.5k · 모바일 캐릭터 3k~10k · Roblox <10k(상한 21k) · 웹/AR 30k~50k · PC 주인공 ~10만 · 3D 프린트 수십만 닫힌 메시 · 텍스처 ≤2048 · ≤5MB)이 생성 값(target_faces · texture_size)을 정하고, 재료가 넘으면 서랍 · MCP 결과에 경고",
       "now": "기준이 조사 메모(10-07)에만 있다",
       "action": "프리셋 표를 Rust 한 곳에(편집기 · MCP 공용) · 검사기 · 서랍 경고 배지",
       "refs": [
         "my-claude-plugins 610b088 plugins/game-assets(game-asset-contract)"
-      ]
+      ],
+      "decided": {
+        "date": "2026-10-08",
+        "pick": "done",
+        "note": "studio_presets.rs 표 하나(편집기 · MCP 공용) · use → 생성 값 · check 경고(면 수 · 텍스처 · 용량 · 투명 워크플로인데 불투명). MCP studio_update_asset. 닫힌 메시 검사는 아직 — print-3d 에 info 로만"
+      }
     },
     {
       "topic": "workbench",

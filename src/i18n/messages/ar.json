@@ -6446,7 +6446,28 @@
       "preview": "معاينة",
       "place": "ضع في المشهد",
       "tris": "{count} مثلث",
-      "texture": "نسيج {size}"
+      "texture": "نسيج {size}",
+      "use": "الاستخدام",
+      "useNone": "غير محدد",
+      "useHint": "ثلاثي الأبعاد: {faces} وجه · نسيج {texture}",
+      "useHintNone": "الافتراضي: {faces} وجه · نسيج {texture}",
+      "check": {
+        "tris_over_cap": "{value} مثلث — الحد {limit}",
+        "tris_above": "{value} مثلث — يُفضّل ≤ {limit}",
+        "tris_below": "{value} مثلث — عادةً {limit}+",
+        "texture_above": "نسيج {value}px — ≤ {limit}px",
+        "bytes_above": "{value} MB — أقل من {limit} MB",
+        "not_transparent": "غير شفاف — تأتي خلفيته معه",
+        "closed_mesh_unchecked": "لم يُفحص إن كانت الشبكة مغلقة"
+      },
+      "presets": {
+        "mobile-prop": "عنصر للجوال",
+        "mobile-character": "شخصية للجوال",
+        "roblox-meshpart": "Roblox MeshPart",
+        "web-ar": "الويب / AR",
+        "pc-hero": "بطل حاسوب · منصة",
+        "print-3d": "طباعة ثلاثية الأبعاد"
+      }
     }
   },
   "Browser": {

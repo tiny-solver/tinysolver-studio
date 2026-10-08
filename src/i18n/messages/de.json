@@ -6446,7 +6446,28 @@
       "preview": "Vorschau",
       "place": "In die Szene",
       "tris": "{count} Dreiecke",
-      "texture": "Textur {size}"
+      "texture": "Textur {size}",
+      "use": "Einsatz",
+      "useNone": "Nicht gesetzt",
+      "useHint": "3D: {faces} Flächen · Textur {texture}",
+      "useHintNone": "3D-Standard: {faces} Flächen · Textur {texture}",
+      "check": {
+        "tris_over_cap": "{value} Dreiecke — Obergrenze {limit}",
+        "tris_above": "{value} Dreiecke — besser ≤ {limit}",
+        "tris_below": "{value} Dreiecke — meist {limit}+",
+        "texture_above": "Textur {value}px — ≤ {limit}px",
+        "bytes_above": "{value} MB — unter {limit} MB",
+        "not_transparent": "Nicht transparent — der Hintergrund kommt mit",
+        "closed_mesh_unchecked": "Geschlossenes Netz nicht geprüft"
+      },
+      "presets": {
+        "mobile-prop": "Mobile-Requisite",
+        "mobile-character": "Mobile-Figur",
+        "roblox-meshpart": "Roblox MeshPart",
+        "web-ar": "Web / AR",
+        "pc-hero": "PC- · Konsolen-Held",
+        "print-3d": "3D-Druck"
+      }
     }
   },
   "Browser": {
