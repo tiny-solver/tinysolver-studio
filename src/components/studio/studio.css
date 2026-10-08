@@ -994,3 +994,85 @@
   padding: 3px 8px;
   font-size: 11px;
 }
+.studio-materials h2 > span {
+  font-family: monospace;
+  font-weight: 400;
+  color: var(--muted-foreground);
+}
+.studio-materials-tools {
+  display: flex;
+  gap: 2px;
+}
+.studio-root .studio-material-thumb {
+  padding: 0;
+  border: 1px solid var(--border);
+}
+.studio-root .studio-material-thumb:disabled {
+  opacity: 1;
+  cursor: default;
+}
+.studio-material-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.studio-materials-loose {
+  margin-top: 12px;
+}
+.studio-material-loose-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+  font-size: 10px;
+}
+.studio-material-loose-row span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted-foreground);
+}
+.studio-root .studio-material-loose-row button {
+  padding: 3px 8px;
+  font-size: 11px;
+}
+.studio-material-preview {
+  max-width: min(880px, 92vw);
+  width: 92vw;
+}
+.studio-material-preview-stage {
+  height: min(60vh, 560px);
+  border-radius: 8px;
+  overflow: hidden;
+  background: repeating-conic-gradient(var(--muted) 0 25%, transparent 0 50%)
+    50% / 16px 16px;
+}
+.studio-material-preview-stage iframe,
+.studio-material-preview-stage img {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  object-fit: contain;
+  display: block;
+}
+.studio-material-source {
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+  margin: 0;
+}
+.studio-material-source > div {
+  display: flex;
+  gap: 10px;
+}
+.studio-material-source dt {
+  width: 70px;
+  flex: none;
+  color: var(--muted-foreground);
+}
+.studio-material-source dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}

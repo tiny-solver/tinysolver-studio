@@ -6437,9 +6437,16 @@
       "empty": "No materials yet. Draw one, or have the agent import one.",
       "missing": "file missing",
       "from": "from {id}",
-      "faces": "{count} faces",
       "make3d": "Make 3D",
-      "lifting": "Making 3D… a few minutes"
+      "lifting": "Making 3D… a few minutes",
+      "upload": "Upload images or GLB",
+      "uploading": "Uploading {name}…",
+      "unregistered": "In assets/ but not registered:",
+      "register": "Register",
+      "preview": "Preview",
+      "place": "Place in scene",
+      "tris": "{count} tris",
+      "texture": "tex {size}"
     }
   },
   "Browser": {

@@ -30,6 +30,7 @@ import {
   createNode,
   isVisible,
   parseScene,
+  placeMaterialCommands,
   sceneActions,
   type SceneAnchor,
   type SceneFile,
@@ -61,7 +62,7 @@ import { revealItemInDir, isLocalDesktop } from "@/lib/platform"
 import { BrowserLink } from "@/components/ui/browser-link"
 import { getServerBaseUrl } from "@/lib/transport"
 import { getWorkspaceStateStore } from "@/hooks/use-workspace-state-store"
-import type { ContentBuild, ContentScene } from "@/lib/types"
+import type { ContentBuild, ContentScene, StudioAsset } from "@/lib/types"
 import {
   ActionsSection,
   BehaviorsSection,
@@ -392,6 +393,16 @@ export function StudioWorkspace({
     while (taken.has(`${type}_${n}`)) n += 1
     const node = createNode(type, `${type}_${n}`)
     if (dispatch([{ type: "node.add", node }])) setSelectedId(node.id)
+  }
+  function placeMaterial(asset: StudioAsset) {
+    if (!current.current || !asset.width || !asset.height) return
+    const { commands, nodeId } = placeMaterialCommands(current.current, {
+      id: asset.id,
+      file: asset.file,
+      width: asset.width,
+      height: asset.height,
+    })
+    if (dispatch(commands)) setSelectedId(nodeId)
   }
   function undo(redo = false) {
     const source = redo ? history.future : history.past
@@ -783,6 +794,7 @@ export function StudioWorkspace({
             <StudioMaterials
               root={target.root}
               previewBase={preview?.base ?? null}
+              onPlace={scene && !playing ? placeMaterial : undefined}
             />
           )}
           {hasEngine && (

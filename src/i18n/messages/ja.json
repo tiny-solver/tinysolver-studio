@@ -6437,9 +6437,16 @@
       "empty": "素材はまだありません。描くか、エージェントに取り込ませてください。",
       "missing": "ファイルなし",
       "from": "{id} から",
-      "faces": "{count} 面",
       "make3d": "3D にする",
-      "lifting": "3D 生成中… 数分"
+      "lifting": "3D 生成中… 数分",
+      "upload": "画像・GLB をアップロード",
+      "uploading": "{name} をアップロード中…",
+      "unregistered": "assets/ にあるが未登録：",
+      "register": "登録",
+      "preview": "プレビュー",
+      "place": "シーンに置く",
+      "tris": "{count} 面",
+      "texture": "テクスチャ {size}"
     }
   },
   "Browser": {

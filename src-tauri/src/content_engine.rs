@@ -38,6 +38,7 @@ pub struct EngineFile {
 
 const JS: &str = "text/javascript; charset=utf-8";
 const MARKDOWN: &str = "text/markdown; charset=utf-8";
+const HTML: &str = "text/html; charset=utf-8";
 
 /// Where `codeg-platform` is import-mapped to. The file behind it depends on
 /// the target (see [`adapter`]).
@@ -64,6 +65,29 @@ static FILES: &[EngineFile] = &[
         path: "__codeg/vendor/three.module.min.js",
         bytes: include_bytes!("../engines/vendor/three-0.170.0.module.min.js"),
         content_type: JS,
+    },
+    // Three.js addons (same version): the GLB loader the engine's model
+    // nodes and the material preview use, and orbit controls for the preview.
+    EngineFile {
+        path: "__codeg/vendor/addons/loaders/GLTFLoader.js",
+        bytes: include_bytes!("../engines/vendor/addons/loaders/GLTFLoader.js"),
+        content_type: JS,
+    },
+    EngineFile {
+        path: "__codeg/vendor/addons/utils/BufferGeometryUtils.js",
+        bytes: include_bytes!("../engines/vendor/addons/utils/BufferGeometryUtils.js"),
+        content_type: JS,
+    },
+    EngineFile {
+        path: "__codeg/vendor/addons/controls/OrbitControls.js",
+        bytes: include_bytes!("../engines/vendor/addons/controls/OrbitControls.js"),
+        content_type: JS,
+    },
+    // The editor's material preview (`?src=<glb url>`). Never in a build.
+    EngineFile {
+        path: "__codeg/viewer/model.html",
+        bytes: include_bytes!("../engines/viewer/model.html"),
+        content_type: HTML,
     },
     EngineFile {
         path: "__codeg/platform/core.js",
@@ -98,12 +122,15 @@ pub fn adapter(target: &str) -> Option<&'static EngineFile> {
 }
 
 /// What a build for `target` writes next to the game: the runtime, Three.js,
-/// the platform layer with that target's adapter. Docs stay out — a build
-/// carries only what runs.
+/// the platform layer with that target's adapter. Docs and the editor's
+/// preview pages stay out — a build carries only what the game runs.
 pub fn build_files(target: &str) -> Option<Vec<&'static EngineFile>> {
     let adapter = adapter(target)?;
     let mut files: Vec<&'static EngineFile> =
-        FILES.iter().filter(|f| f.content_type != MARKDOWN).collect();
+        FILES
+        .iter()
+        .filter(|f| f.content_type != MARKDOWN && f.content_type != HTML && !f.path.contains("/controls/"))
+        .collect();
     files.push(adapter);
     Some(files)
 }

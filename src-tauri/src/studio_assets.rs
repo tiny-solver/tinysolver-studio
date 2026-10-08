@@ -43,7 +43,13 @@ const DEFAULT_3D_WORKFLOW: &str = "trellis2";
 /// What `import` is asked to fetch.
 #[derive(Debug, Clone, Default, Deserialize, serde::Serialize, PartialEq)]
 pub struct ImportRequest {
+    /// http(s) or base64 `data:` URL to fetch. Empty when `file` is given.
+    #[serde(default)]
     pub url: String,
+    /// A file already under `<assets>/` to register in place (nothing is
+    /// copied) — for files an agent or a person put there by hand.
+    #[serde(default)]
+    pub file: Option<String>,
     /// Material id (letters, digits, - and _). Derived from the URL's file
     /// name when absent; a taken id gets a `-2`, `-3`… suffix.
     #[serde(default)]
@@ -296,6 +302,147 @@ fn unique_id(register: &Value, wanted: &str) -> String {
         .expect("an unused suffix exists")
 }
 
+/// What a material is made of, read from its bytes: `width`/`height` for an
+/// image; for a model `triangles`, `vertices`, `textures` ([w, h] of each
+/// embedded image) and `texture_max` (the largest side). Empty when the
+/// bytes cannot be read — a material with unknown stats is still a material.
+pub fn stats(file: &str, bytes: &[u8]) -> Map<String, Value> {
+    let mut out = Map::new();
+    match kind_of(file) {
+        "image" => {
+            if let Some((w, h)) = image_size(bytes) {
+                out.insert("width".into(), json!(w));
+                out.insert("height".into(), json!(h));
+            }
+        }
+        "model" => {
+            if let Some(m) = model_stats(bytes) {
+                out = m;
+            }
+        }
+        _ => {}
+    }
+    out
+}
+
+fn image_size(bytes: &[u8]) -> Option<(u32, u32)> {
+    image::ImageReader::new(std::io::Cursor::new(bytes))
+        .with_guessed_format()
+        .ok()?
+        .into_dimensions()
+        .ok()
+}
+
+/// glTF 2.0 counts from a `.glb` (JSON + BIN chunks) or a `.gltf` (JSON).
+fn model_stats(bytes: &[u8]) -> Option<Map<String, Value>> {
+    let u32_at = |at: usize| -> Option<usize> {
+        bytes
+            .get(at..at + 4)
+            .map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]) as usize)
+    };
+    let (json, bin): (Value, Option<&[u8]>) = if bytes.starts_with(b"glTF") {
+        let json_len = u32_at(12)?;
+        if bytes.get(16..20)? != b"JSON" {
+            return None;
+        }
+        let json = serde_json::from_slice(bytes.get(20..20 + json_len)?).ok()?;
+        let bin_at = 20 + json_len;
+        let bin = match (u32_at(bin_at), bytes.get(bin_at + 4..bin_at + 8)) {
+            (Some(len), Some(b"BIN\0")) => bytes.get(bin_at + 8..bin_at + 8 + len),
+            _ => None,
+        };
+        (json, bin)
+    } else {
+        (serde_json::from_slice(bytes).ok()?, None)
+    };
+    let accessors = json["accessors"].as_array().cloned().unwrap_or_default();
+    let count_of = |i: &Value| -> u64 {
+        i.as_u64()
+            .and_then(|i| accessors.get(i as usize))
+            .and_then(|a| a["count"].as_u64())
+            .unwrap_or(0)
+    };
+    let (mut triangles, mut vertices) = (0u64, 0u64);
+    for mesh in json["meshes"].as_array().into_iter().flatten() {
+        for prim in mesh["primitives"].as_array().into_iter().flatten() {
+            let verts = count_of(&prim["attributes"]["POSITION"]);
+            vertices += verts;
+            let n = if prim["indices"].is_null() { verts } else { count_of(&prim["indices"]) };
+            triangles += match prim["mode"].as_u64().unwrap_or(4) {
+                4 => n / 3,
+                5 | 6 => n.saturating_sub(2),
+                _ => 0,
+            };
+        }
+    }
+    let mut out = Map::new();
+    out.insert("triangles".into(), json!(triangles));
+    out.insert("vertices".into(), json!(vertices));
+    let views = json["bufferViews"].as_array().cloned().unwrap_or_default();
+    let mut textures = Vec::new();
+    for img in json["images"].as_array().into_iter().flatten() {
+        let size = img["bufferView"]
+            .as_u64()
+            .and_then(|v| views.get(v as usize))
+            .and_then(|v| {
+                let start = v["byteOffset"].as_u64().unwrap_or(0) as usize;
+                let len = v["byteLength"].as_u64()? as usize;
+                bin?.get(start..start + len)
+            })
+            .and_then(image_size);
+        if let Some((w, h)) = size {
+            textures.push(json!([w, h]));
+        }
+    }
+    let max = textures
+        .iter()
+        .filter_map(|t| Some(t[0].as_u64()?.max(t[1].as_u64()?)))
+        .max();
+    out.insert("textures".into(), Value::Array(textures));
+    if let Some(m) = max {
+        out.insert("texture_max".into(), json!(m));
+    }
+    Some(out)
+}
+
+/// Image and model files under `<assets>/` that no register entry names.
+async fn unregistered(dir: &Path, register: &Value) -> Vec<String> {
+    let known: std::collections::HashSet<String> = entries(register)
+        .iter()
+        .filter_map(|e| e["file"].as_str().map(str::to_string))
+        .collect();
+    let dir = dir.to_path_buf();
+    tokio::task::spawn_blocking(move || {
+        let mut found = Vec::new();
+        let mut stack = vec![dir.clone()];
+        while let Some(d) = stack.pop() {
+            let Ok(read) = std::fs::read_dir(&d) else { continue };
+            for item in read.flatten() {
+                let path = item.path();
+                let name = item.file_name().to_string_lossy().to_string();
+                if name.starts_with('.') {
+                    continue;
+                }
+                if path.is_dir() {
+                    stack.push(path);
+                } else if kind_of(&name) != "other" {
+                    let r = rel(&dir, &path);
+                    if !known.contains(&r) {
+                        found.push(r);
+                    }
+                }
+                if found.len() >= 200 {
+                    return found;
+                }
+            }
+        }
+        found.sort();
+        found
+    })
+    .await
+    .unwrap_or_default()
+}
+
 /// The register as a tool result: each entry plus `exists`.
 pub async fn list(root: &Path) -> Value {
     let manifest = match project(root).await {
@@ -307,26 +454,48 @@ pub async fn list(root: &Path) -> Value {
         Ok(r) => r,
         Err(note) => return fail(note),
     };
-    let items: Vec<Value> = entries(&register)
-        .iter()
-        .map(|entry| {
-            let mut entry = entry.clone();
-            let exists = entry["file"]
-                .as_str()
-                .map(|f| dir.join(f).is_file())
-                .unwrap_or(false);
-            if let Some(obj) = entry.as_object_mut() {
-                obj.insert("exists".into(), json!(exists));
+    let mut items = Vec::new();
+    for entry in entries(&register) {
+        let mut entry = entry.clone();
+        let file = entry["file"].as_str().unwrap_or("").to_string();
+        let path = dir.join(&file);
+        let exists = !file.is_empty() && path.is_file();
+        // Entries written by hand or by an older Studio lack the numbers the
+        // drawer shows; read them from the file (not written back — listing
+        // never changes the register).
+        let lacks = match kind_of(&file) {
+            "model" => entry.get("triangles").is_none(),
+            "image" => entry.get("width").is_none(),
+            _ => false,
+        };
+        if let Some(obj) = entry.as_object_mut() {
+            if exists && lacks {
+                if let Ok(bytes) = tokio::fs::read(&path).await {
+                    for (k, v) in stats(&file, &bytes) {
+                        obj.entry(k).or_insert(v);
+                    }
+                }
             }
-            entry
-        })
-        .collect();
+            if exists && obj.get("bytes").is_none() {
+                if let Ok(meta) = tokio::fs::metadata(&path).await {
+                    obj.insert("bytes".into(), json!(meta.len()));
+                }
+            }
+            if obj.get("kind").is_none() {
+                obj.insert("kind".into(), json!(kind_of(&file)));
+            }
+            obj.insert("exists".into(), json!(exists));
+        }
+        items.push(entry);
+    }
     let generator = generator_url(manifest.as_ref());
+    let loose = unregistered(&dir, &register).await;
     json!({
         "ok": true,
         "assets_dir": rel(root, &dir),
         "generator": generator,
         "assets": items,
+        "unregistered": loose,
         "note": if generator.is_none() {
             "No generator connected. Set `generate.url` in codeg-project.json (ask the user for the address) to use studio_generate_asset; studio_import_asset works without one."
         } else { "" },
@@ -425,74 +594,92 @@ pub async fn import(root: &Path, req: ImportRequest) -> Value {
     if req.source.as_ref().is_some_and(|s| !s.is_object()) {
         return fail("source must be an object (workflow, prompt, seed, from, …)");
     }
-    let (bytes, ext) = match fetch(&url).await {
-        Ok(v) => v,
-        Err(note) => return fail(note),
-    };
-    let ext = match ext.filter(|e| kind_of(&format!("x.{e}")) != "other") {
-        Some(e) => e,
-        None => return fail("Only images (png, jpg, webp, gif) and models (glb, gltf) are materials."),
-    };
-    let kind = kind_of(&format!("x.{ext}"));
-    let sub = match req.dir.as_deref() {
-        Some(d) => match safe_dir(d) {
-            Ok(d) => d,
-            Err(note) => return fail(note),
-        },
-        None => if kind == "model" { "generated/models" } else { "generated/images" }.to_string(),
-    };
-
     let mut register = match read_register(&dir).await {
         Ok(r) => r,
         Err(note) => return fail(note),
     };
-    let wanted = req.id.clone().unwrap_or_else(|| {
-        let name = url
-            .split(['?', '#'])
-            .next()
-            .unwrap_or("")
-            .rsplit('/')
-            .next()
-            .unwrap_or("");
-        id_from_name(if url.starts_with("data:") { "material" } else { name })
-    });
-    let id = unique_id(&register, &wanted);
-    let file = if sub.is_empty() {
-        format!("{id}.{ext}")
+    // Either register a file already under assets/, or fetch one there.
+    let (id, file, bytes_len, file_stats, written) = if let Some(existing) = req.file.as_deref() {
+        let existing = existing.trim().trim_start_matches("./").replace('\\', "/");
+        let (folder, name) = existing.rsplit_once('/').unwrap_or(("", existing.as_str()));
+        if let Err(note) = safe_dir(folder) {
+            return fail(note);
+        }
+        if name.is_empty() || name.starts_with('.') || name.contains("..") {
+            return fail("file: a file name under assets/");
+        }
+        if kind_of(name) == "other" {
+            return fail("Only images (png, jpg, webp, gif) and models (glb, gltf) are materials.");
+        }
+        if entries(&register).iter().any(|e| e["file"] == existing.as_str()) {
+            return fail(format!("{existing} is already registered"));
+        }
+        let bytes = match tokio::fs::read(dir.join(&existing)).await {
+            Ok(b) => b,
+            Err(e) => return fail(format!("Could not read assets/{existing}: {e}")),
+        };
+        let id = unique_id(&register, &req.id.clone().unwrap_or_else(|| id_from_name(name)));
+        let st = stats(&existing, &bytes);
+        (id, existing.clone(), bytes.len(), st, None)
     } else {
-        format!("{sub}/{id}.{ext}")
+        let (bytes, ext) = match fetch(&url).await {
+            Ok(v) => v,
+            Err(note) => return fail(note),
+        };
+        let ext = match ext.filter(|e| kind_of(&format!("x.{e}")) != "other") {
+            Some(e) => e,
+            None => return fail("Only images (png, jpg, webp, gif) and models (glb, gltf) are materials."),
+        };
+        let kind = kind_of(&format!("x.{ext}"));
+        let sub = match req.dir.as_deref() {
+            Some(d) => match safe_dir(d) {
+                Ok(d) => d,
+                Err(note) => return fail(note),
+            },
+            None => if kind == "model" { "generated/models" } else { "generated/images" }.to_string(),
+        };
+        let wanted = req.id.clone().unwrap_or_else(|| {
+            let name = url
+                .split(['?', '#'])
+                .next()
+                .unwrap_or("")
+                .rsplit('/')
+                .next()
+                .unwrap_or("");
+            id_from_name(if url.starts_with("data:") { "material" } else { name })
+        });
+        let id = unique_id(&register, &wanted);
+        let file = if sub.is_empty() {
+            format!("{id}.{ext}")
+        } else {
+            format!("{sub}/{id}.{ext}")
+        };
+        let path = dir.join(&file);
+        if path.exists() {
+            return fail(format!("{} already exists and is not in the register — pick another id, or register it with `file`", rel(root, &path)));
+        }
+        if let Some(parent) = path.parent() {
+            if let Err(e) = tokio::fs::create_dir_all(parent).await {
+                return fail(format!("Could not create {}: {e}", rel(root, parent)));
+            }
+        }
+        if let Err(e) = tokio::fs::write(&path, &bytes).await {
+            return fail(format!("Could not write {}: {e}", rel(root, &path)));
+        }
+        let st = stats(&file, &bytes);
+        (id, file, bytes.len(), st, Some(path))
     };
     let path = dir.join(&file);
-    if path.exists() {
-        return fail(format!("{} already exists and is not in the register — pick another id", rel(root, &path)));
-    }
-    if let Some(parent) = path.parent() {
-        if let Err(e) = tokio::fs::create_dir_all(parent).await {
-            return fail(format!("Could not create {}: {e}", rel(root, parent)));
-        }
-    }
-    if let Err(e) = tokio::fs::write(&path, &bytes).await {
-        return fail(format!("Could not write {}: {e}", rel(root, &path)));
-    }
 
     let mut entry = Map::new();
     entry.insert("id".into(), json!(id));
     entry.insert("file".into(), json!(file));
-    entry.insert("kind".into(), json!(kind));
-    entry.insert("bytes".into(), json!(bytes.len()));
-    if kind == "image" {
-        if let Ok((w, h)) = image::ImageReader::new(std::io::Cursor::new(&bytes))
-            .with_guessed_format()
-            .map_err(|e| e.to_string())
-            .and_then(|r| r.into_dimensions().map_err(|e| e.to_string()))
-        {
-            entry.insert("width".into(), json!(w));
-            entry.insert("height".into(), json!(h));
-        }
-    }
+    entry.insert("kind".into(), json!(kind_of(&file)));
+    entry.insert("bytes".into(), json!(bytes_len));
+    entry.extend(file_stats);
     entry.insert("added_at".into(), json!(chrono::Utc::now().to_rfc3339()));
     let mut source = req.source.clone().unwrap_or_else(|| json!({}));
-    if !url.starts_with("data:") {
+    if !url.is_empty() && !url.starts_with("data:") {
         source["url"] = json!(url);
     }
     if source.as_object().is_some_and(|s| !s.is_empty()) {
@@ -504,7 +691,9 @@ pub async fn import(root: &Path, req: ImportRequest) -> Value {
         .expect("read_register guarantees a list")
         .push(entry.clone());
     if let Err(note) = write_register(&dir, &register).await {
-        let _ = tokio::fs::remove_file(&path).await;
+        if let Some(written) = written {
+            let _ = tokio::fs::remove_file(&written).await;
+        }
         return fail(note);
     }
 
@@ -688,8 +877,8 @@ pub async fn generate(root: &Path, req: GenerateRequest) -> Value {
         ImportRequest {
             url,
             id,
-            dir: None,
             source: Some(source),
+            ..Default::default()
         },
     )
     .await
@@ -750,8 +939,8 @@ mod tests {
             ImportRequest {
                 url: png_data_url(),
                 id: Some("old".into()),
-                dir: None,
                 source: Some(json!({ "workflow": "qwen-image-21-rgba", "seed": 7, "prompt": "a cup" })),
+                ..Default::default()
             },
         )
         .await;
@@ -813,6 +1002,84 @@ mod tests {
         assert_eq!(list(&root).await["generator"], "http://gen.local");
         assert_eq!(connect(&root, None).await["ok"], true);
         assert!(list(&root).await["generator"].is_null());
+    }
+
+    fn tiny_glb() -> Vec<u8> {
+        let mut png = Vec::new();
+        image::RgbaImage::new(8, 4)
+            .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+            .unwrap();
+        while !png.len().is_multiple_of(4) {
+            png.push(0);
+        }
+        let gltf = json!({
+            "asset": { "version": "2.0" },
+            "accessors": [{ "count": 6 }, { "count": 4 }],
+            "meshes": [{ "primitives": [{ "attributes": { "POSITION": 1 }, "indices": 0 }] }],
+            "bufferViews": [{ "buffer": 0, "byteOffset": 0, "byteLength": png.len() }],
+            "images": [{ "bufferView": 0, "mimeType": "image/png" }],
+        });
+        let mut j = serde_json::to_vec(&gltf).unwrap();
+        while !j.len().is_multiple_of(4) {
+            j.push(b' ');
+        }
+        let total = 12 + 8 + j.len() + 8 + png.len();
+        let mut out = Vec::new();
+        out.extend(b"glTF");
+        out.extend(2u32.to_le_bytes());
+        out.extend((total as u32).to_le_bytes());
+        out.extend((j.len() as u32).to_le_bytes());
+        out.extend(b"JSON");
+        out.extend(&j);
+        out.extend((png.len() as u32).to_le_bytes());
+        out.extend(b"BIN\0");
+        out.extend(&png);
+        out
+    }
+
+    #[test]
+    fn model_stats_read_faces_and_textures() {
+        let st = stats("x.glb", &tiny_glb());
+        assert_eq!(st["triangles"], 2);
+        assert_eq!(st["vertices"], 4);
+        assert_eq!(st["textures"], json!([[8, 4]]));
+        assert_eq!(st["texture_max"], 8);
+        assert!(stats("x.glb", b"not a model").is_empty());
+    }
+
+    #[tokio::test]
+    async fn hand_placed_files_are_listed_then_registered_in_place() {
+        let (_tmp, root) = project().await;
+        std::fs::create_dir_all(root.join("assets/props")).unwrap();
+        std::fs::write(root.join("assets/props/chest.glb"), tiny_glb()).unwrap();
+        let listed = list(&root).await;
+        assert_eq!(listed["unregistered"], json!(["props/chest.glb"]));
+
+        let out = import(
+            &root,
+            ImportRequest { file: Some("props/chest.glb".into()), ..Default::default() },
+        )
+        .await;
+        assert_eq!(out["ok"], true, "{out}");
+        assert_eq!(out["asset"]["id"], "chest");
+        assert_eq!(out["asset"]["triangles"], 2);
+        assert_eq!(out["asset"]["kind"], "model");
+        let listed = list(&root).await;
+        assert_eq!(listed["unregistered"], json!([]));
+        assert_eq!(listed["assets"][0]["texture_max"], 8);
+
+        let again = import(
+            &root,
+            ImportRequest { file: Some("props/chest.glb".into()), ..Default::default() },
+        )
+        .await;
+        assert!(again["note"].as_str().unwrap().contains("already registered"));
+        let escape = import(
+            &root,
+            ImportRequest { file: Some("../codeg-project.json".into()), ..Default::default() },
+        )
+        .await;
+        assert_eq!(escape["ok"], false);
     }
 
     #[test]

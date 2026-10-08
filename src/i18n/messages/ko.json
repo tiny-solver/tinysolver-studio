@@ -6437,9 +6437,16 @@
       "empty": "재료가 아직 없습니다. 하나 그리거나 에이전트에게 가져오게 하세요.",
       "missing": "파일 없음",
       "from": "{id} 에서",
-      "faces": "{count}면",
       "make3d": "3D 로",
-      "lifting": "3D 만드는 중… 몇 분"
+      "lifting": "3D 만드는 중… 몇 분",
+      "upload": "이미지 · GLB 올리기",
+      "uploading": "{name} 올리는 중…",
+      "unregistered": "assets/ 에 있지만 등록 안 된 파일:",
+      "register": "등록",
+      "preview": "미리보기",
+      "place": "장면에 놓기",
+      "tris": "{count}면",
+      "texture": "텍스처 {size}"
     }
   },
   "Browser": {

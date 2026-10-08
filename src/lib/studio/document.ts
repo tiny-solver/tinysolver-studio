@@ -72,6 +72,8 @@ export type SceneCommand =
   /** `logic.actions[name] = steps` — what a click (`props.onClick`) runs. */
   | { type: "action.set"; name: string; steps: ActionStep[] }
   | { type: "action.remove"; name: string }
+  | { type: "asset.set"; asset: SceneAsset }
+  | { type: "asset.remove"; id: string }
 
 /** One step of a `logic.actions` entry: an engine op plus its arguments. */
 export interface ActionStep {
@@ -322,6 +324,24 @@ export function applyCommands(scene: SceneFile, commands: unknown): SceneFile {
       nodes.push(parseNode(command.node, nodes.length))
       continue
     }
+    if (command.type === "asset.set") {
+      const asset = parseAsset(command.asset, 0)
+      const assets = next.document.assets
+      const at = assets.findIndex((a) => a.id === asset.id)
+      if (at < 0) assets.push(asset)
+      else assets[at] = asset
+      continue
+    }
+    if (command.type === "asset.remove") {
+      const target = id(command.id, "command.id")
+      const user = next.document.nodes.find((n) => n.props.asset === target)
+      if (user) throw new Error(`Asset ${target} is used by node ${user.id}`)
+      const assets = next.document.assets
+      const at = assets.findIndex((a) => a.id === target)
+      if (at < 0) throw new Error(`Asset not found: ${target}`)
+      assets.splice(at, 1)
+      continue
+    }
     if (command.type === "action.set" || command.type === "action.remove") {
       const name = id(command.name, "action name")
       const logic = isRecord(next.logic) ? next.logic : {}
@@ -368,7 +388,9 @@ export function applyCommands(scene: SceneFile, commands: unknown): SceneFile {
           }
         }
       }
-      next.document.nodes = nodes.filter((n) => !doomed.has(n.id))
+      // In place: later commands in the batch hold the same array.
+      for (let i = nodes.length - 1; i >= 0; i--)
+        if (doomed.has(nodes[i].id)) nodes.splice(i, 1)
     } else if (command.type === "node.reorder") {
       const zs = nodes.map((n) => n.transform.z)
       if (command.direction === "forward")
@@ -409,6 +431,60 @@ export function createNode(
     ...base,
     transform: { x: 100, y: 100, w: 300, h: 200, anchor: "top-left", z: 1 },
     props: { color: "#8b9cf7" },
+  }
+}
+
+/**
+ * Put a material from `assets/manifest.json` into a scene: declare it
+ * (`asset.set`) and add a sprite showing it, scaled to fit about 40% of the
+ * container and standing at its centre. One batch, so one undo step.
+ */
+export function placeMaterialCommands(
+  scene: SceneFile,
+  material: { id: string; file: string; width: number; height: number }
+): { commands: SceneCommand[]; nodeId: string } {
+  const { width: cw, height: ch } = scene.document.container
+  const scale = Math.min(
+    1,
+    (cw * 0.4) / material.width,
+    (ch * 0.4) / material.height
+  )
+  const w = Math.max(1, Math.round(material.width * scale))
+  const h = Math.max(1, Math.round(material.height * scale))
+  const taken = new Set(scene.document.nodes.map((n) => n.id))
+  let nodeId = material.id
+  for (let n = 2; taken.has(nodeId); n++) nodeId = `${material.id}_${n}`
+  const z = Math.max(0, ...scene.document.nodes.map((n) => n.transform.z)) + 1
+  return {
+    nodeId,
+    commands: [
+      {
+        type: "asset.set",
+        asset: {
+          id: material.id,
+          file: material.file,
+          width: material.width,
+          height: material.height,
+        },
+      },
+      {
+        type: "node.add",
+        node: {
+          id: nodeId,
+          parent: "root",
+          type: "sprite",
+          transform: {
+            x: Math.round(cw / 2),
+            y: Math.round(ch / 2 + h / 2),
+            w,
+            h,
+            anchor: "bottom-center",
+            z,
+          },
+          props: { asset: material.id, interactive: false },
+        },
+      },
+    ],
   }
 }
 
