@@ -134,3 +134,4 @@ INSTA_UPDATE=auto cargo test --features test-utils     # 自动写新 .snap
 - 업스트림 파일은 되도록 고치지 않는다. 브랜드 불변식 · 릴리스는 my-devops `docs/plans/tinysolver/studio-release.md`.
 - **할 일 · 결정 · 니즈의 정본은 [decide.json](decide.json)** — 서버가 없는 설치 앱이라 이 파일이 백오피스다. 세션을 시작하면 `asks` 의 `new`(사업 자리가 넣은 니즈)부터 → 계획 항목으로 받고 `taken` · 반영한 PR 에서 `done` (my-devops `docs/architecture/roles.md` "니즈").
 - **이 제품이 정해 둔 것(기준 · 규칙 목록) · 바뀐 이력** — [rules.json](rules.json) · 화면 <https://direction.home.tinysolver.me/rules> '제품 · Tinysolver Studio'(규칙마다 이력) · 결정 요청의 `rule` 은 여기 id 먼저.
+- **백오피스** — <https://studio-admin.home.tinysolver.me> (LAN · Tailscale · 읽기 전용) — 이 repo main 의 decide.json(할 일 · 정할 것 · 요청) · rules.json · why.json 을 그대로 읽어 보여 준다(land 뒤 몇 분 안에). 화면 코드는 따로 repo [tiny-solver/studio-admin](https://github.com/tiny-solver/studio-admin)(stage.sh 의 CalVer 태그가 여기 release.yml `v*.*.*` 에 걸려서) · decide `bo-home` A.
