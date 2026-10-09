@@ -241,6 +241,8 @@
     "enableProxy": "Activer le proxy système",
     "proxyAddress": "Adresse du proxy",
     "proxyHint": "Prend en charge http(s)/socks5, exemple : {example}. Actif uniquement lorsque le proxy système est activé.",
+    "proxyBypass": "Ne pas utiliser le proxy pour",
+    "proxyBypassHint": "Séparez les entrées par des virgules, sans espaces, par exemple <code>{example}</code>. <code>example.com</code> correspond à ce domaine et <code>.example.com</code> à tous ses sous-domaines ; les adresses IP sont également acceptées. Les adresses locales <code>localhost,127.0.0.1,::1</code> sont toujours jointes directement et n’ont pas besoin d’être ajoutées. La liste s’applique comme variable d’environnement NO_PROXY.",
     "save": "Enregistrer",
     "saving": "Enregistrement...",
     "proxyRequired": "L’URL du proxy est requise lorsque le proxy est activé",
@@ -300,6 +302,8 @@
     "rollbackSuccess": "Retour à la version précédente. Rechargement...",
     "rollbackFailed": "Échec du retour en arrière. Consultez les journaux du serveur.",
     "updateErrors": {
+      "permissionDenied": "Impossible d’écrire dans {path} : les mises à jour ne peuvent pas être installées sur place. Effectuez la mise à jour manuellement avec les droits d’administrateur ou vérifiez les autorisations d’installation.",
+      "targetWriteFailed": "Impossible d’écrire dans {path} : les mises à jour ne peuvent pas être installées sur place ({reason}).",
       "sourceUnavailable": "Impossible d’atteindre la source de mise à jour. Vérifiez votre réseau ou proxy et réessayez.",
       "network": "La connexion réseau a échoué. Vérifiez votre réseau ou proxy et réessayez.",
       "downloadFailed": "Impossible de télécharger le paquet de mise à jour. Veuillez réessayer plus tard.",
@@ -718,13 +722,6 @@
     "emptyNoAgent": "Aucun agent disponible.",
     "configManagement": "Gestion de configuration",
     "envVars": "Variables d'environnement",
-    "adapterChannel": {
-      "label": "Version de l'adaptateur",
-      "description": "Installer et Mettre à niveau utilisent la version examinée et épinglée par codeg. Avec Dernière, c'est la version npm la plus récente du paquet qui est installée ; si cette installation échoue, codeg revient à la version épinglée et l'indique dans le journal d'installation.",
-      "pinned": "Épinglée (recommandée)",
-      "latest": "Dernière (non examinée)",
-      "latestWarning": "Les versions les plus récentes ne sont pas examinées et peuvent casser cet agent dans codeg ; il arrive même qu'une version soit connue pour être défectueuse. Le statut de version affiche ce qui est réellement installé."
-    },
     "hostTools": {
       "label": "Laisser l'agent gérer les fichiers et les commandes",
       "description": "codeg cesse d'assurer l'accès aux fichiers et les commandes de terminal : l'agent les exécute dans son propre processus, là où son bac à sable et ses règles d'autorisation s'appliquent réellement. La délégation à d'autres agents est également désactivée, car elle ferait repasser le même travail par codeg. codeg n'ajoute aucun bac à sable, n'activez donc ceci que si l'agent en a un configuré."
@@ -795,6 +792,7 @@
       "saveCodeBuddyConfig": "Enregistrer la configuration CodeBuddy",
       "saveKimiCodeConfig": "Enregistrer la configuration de Kimi Code",
       "customInstall": "Installation personnalisée",
+      "upgradeToLatest": "Mettre à niveau vers la dernière non examinée {version}",
       "saveKimiCodeRawConfig": "Enregistrer config.toml",
       "saveDeepSeekConfig": "Enregistrer la configuration DeepSeek",
       "diagnose": "Diagnostiquer"
@@ -1042,9 +1040,9 @@
       "sandboxMode_read-only": "Lecture seule",
       "sandboxMode_workspace-write": "Écriture dans l'espace de travail",
       "sandboxMode_danger-full-access": "Accès complet (sans bac à sable)",
-      "sandboxModeReadOnlyAcpWarning": "L'adaptateur ACP ne fournit plus de bac à sable en lecture seule : les sessions codeg s'exécutent donc avec écriture dans l'espace de travail quoi que dise ce réglage. codeg choisit le préréglage le plus strict possible — chaque élévation vous est soumise — mais les modifications dans l'espace de travail n'en demandent plus. Les sessions codex CLI et IDE respectent toujours la lecture seule.",
+      "sandboxModeReadOnlyAcpWarning": "codex-acp 1.7–1.13 ne fournissent pas de bac à sable en lecture seule : avec ces versions de l'adaptateur, une session codeg s'exécute avec écriture dans l'espace de travail quoi que dise ce réglage, chaque élévation vous étant toujours soumise. codex-acp 2.0 l'a rétabli : mettez à jour l'adaptateur si une version plus ancienne est installée. Les sessions codex CLI et IDE respectent toujours la lecture seule.",
       "sandboxModeHint": "Sous Windows, l'écriture dans l'espace de travail est rétrogradée en lecture seule sauf si le bac à sable Windows expérimental de codex est activé.",
-      "sandboxModeSeedsPresetHint": "codeg fait aussi correspondre ce réglage au préréglage d'approbation initial de la session : contrairement à la politique d'approbation, il touche donc les requêtes ordinaires. Notez que le préréglage par défaut de l'adaptateur fait désormais filtrer les élévations par un modèle, qui ne transmet que ce qu'il juge dangereux ; choisissez « Demander l'approbation » dans le champ de saisie pour toutes les examiner vous-même. Le préréglage du champ de saisie est toujours prioritaire.",
+      "sandboxModeSeedsPresetHint": "codeg fait aussi correspondre ce réglage au préréglage d'approbation initial de la session : contrairement à la politique d'approbation, il touche donc les requêtes ordinaires. La lecture seule démarre dans « Read-only ». Avec la politique d'approbation never, l'accès complet démarre dans « Full access » et l'écriture dans l'espace de travail dans « Auto review », où un modèle filtre les élévations et ne transmet que ce qu'il juge dangereux. Avec toute autre politique, l'écriture dans l'espace de travail et l'accès complet démarrent dans « Workspace access », qui vous soumet chaque élévation, avec codex-acp 2.0 ou ultérieur, et dans « Auto review » avec les adaptateurs plus anciens. Non défini, le réglage par défaut de l'adaptateur, « Auto review », s'applique. Le préréglage du champ de saisie est toujours prioritaire.",
       "writableRootsLabel": "Dossiers inscriptibles supplémentaires",
       "writableRootsHint": "Un chemin absolu par ligne, en plus du répertoire de travail.",
       "sandboxRootsRelativeError": "Doit être un chemin absolu — codex résout les chemins relatifs sous ~/.codex : {path}",
@@ -1381,6 +1379,7 @@
       "haikuDefaultModel": "Modèle Haiku par défaut",
       "sonnetDefaultModel": "Modèle Sonnet par défaut",
       "opusDefaultModel": "Modèle Opus par défaut",
+      "fableDefaultModel": "Modèle Fable par défaut",
       "customModelOption": "ID de modèle personnalisé",
       "customModelOptionName": "Nom du modèle personnalisé",
       "customModelOptionDescription": "Description du modèle personnalisé",
@@ -1399,7 +1398,9 @@
       "customInstallDescription": "Saisissez la version à installer. Cela réinstalle et remplace la version actuellement installée.",
       "customInstallVersionLabel": "Numéro de version",
       "customInstallInvalid": "Saisissez un numéro de version valide, par ex. 1.2.3.",
-      "customInstallSubmit": "Installer"
+      "customInstallSubmit": "Installer",
+      "confirmUpgradeToLatest": "Mettre à niveau {name} vers la version non examinée {version} ?",
+      "confirmUpgradeToLatestDescription": "Cette version n’a pas été examinée par codeg. Elle peut casser {name} dans codeg, et il arrive qu’une version soit connue pour être défectueuse. Pour revenir en arrière, utilisez Installation personnalisée pour réinstaller la version recommandée {recommendedVersion}."
     },
     "errors": {
       "windowsFileLocked": "Les fichiers de {name} sont utilisés par une session en cours, Windows ne peut donc pas les remplacer. Fermez toutes les sessions {name}, puis réessayez.",
@@ -1488,7 +1489,7 @@
     "version": {
       "statusLabel": "Statut de version",
       "notInstalled": "Non installé",
-      "remoteLocal": "Distant : {remoteVersion} · Local : {localVersion}",
+      "recommendedLocal": "Recommandée : {recommendedVersion} · Local : {localVersion}",
       "localOnly": "Local : {localVersion}",
       "localInstalled": "{versionText}. Installé.",
       "platformUnsupported": "{versionText}. La plateforme actuelle ne prend pas en charge cet agent.",
@@ -1496,9 +1497,9 @@
       "clickInstall": "{versionText}. Cliquez sur Installer à droite.",
       "localUnrecognized": "{versionText}. La version locale n’est pas comparable ; essayez une mise à niveau pour écraser l’installation.",
       "upgradeAvailable": "{versionText}. Mise à niveau disponible.",
-      "remoteUnavailable": "{versionText}. La version distante est actuellement indisponible.",
+      "recommendedUnavailable": "{versionText}. Aucune version recommandée n'est disponible.",
       "latest": "{versionText}. Déjà à jour.",
-      "latestChannel": "{versionText}. Le canal Dernière est actif ; Mettre à niveau installe la version la plus récente."
+      "unreviewedAvailable": "{versionText}. Une version plus récente, non examinée, est disponible."
     },
     "adapter": {
       "label": "Adaptateur ACP",
@@ -1548,7 +1549,8 @@
         "medium": "Moyen",
         "high": "Élevé",
         "minimal": "Minimal",
-        "xhigh": "Très élevé"
+        "xhigh": "Très élevé",
+        "max": "Maximum"
       },
       "apiKeyLabel": "Clé API",
       "apiKeyHint": "Enregistrée dans ~/.pi/agent/auth.json pour le fournisseur sélectionné.",
@@ -1562,7 +1564,9 @@
       "modeCustom": "pi personnalisé",
       "modeCustomHint": "Exécutez votre propre build, installation ou wrapper de pi.",
       "commandLabel": "Commande ou chemin pi",
-      "commandHint": "Un chemin absolu, un nom de commande dans le PATH, ou un script wrapper (par ex. ./pi-test.sh d'un monorepo).",
+      "commandHint": "Utilisez un chemin absolu ou un nom de commande dans PATH.",
+      "relativeCommandPath": "Utilisez un chemin absolu pour la commande Pi ou un nom de commande dans PATH.",
+      "relativeAgentDir": "Utilisez un répertoire agent Pi absolu ou ~/... ; un chemin relatif dépend du dossier de travail.",
       "commandNotFound": "Commande introuvable",
       "validate": "Valider",
       "advanced": "Avancé",
@@ -1603,7 +1607,14 @@
       "levelsEmptyError": "Choisissez au moins un niveau — sans aucun, pi retombe sur Off.",
       "wireValuesTitle": "Avancé : valeurs envoyées au fournisseur",
       "wireValuesHint": "Laissez vide pour envoyer le nom du niveau tel quel. Renseignez-le si votre endpoint attend autre chose — les backends façon Google veulent LOW / HIGH.",
-      "defaultLevelUnlisted": "Ce niveau n'est pas dans la liste ci-dessus — pi le ramènerait plus bas."
+      "defaultLevelUnlisted": "Ce niveau n'est pas dans la liste ci-dessus — pi le ramènerait plus bas.",
+      "modelLevels": "{model} propose : {levels}.",
+      "modelNoThinking": "{model} n'a aucun niveau de réflexion — Pi l'exécute toujours sans réflexion.",
+      "levelClamped": "{model} ne propose pas {level} : Pi l'exécute donc en {effective}. Les modèles qui proposent {level} continuent de l'utiliser.",
+      "modelNotListed": "Pi ne répertorie pas ce modèle pour ce fournisseur. Vérifiez l'ID du modèle — Pi ne répertorie que les fournisseurs pour lesquels il dispose d'une clé API ou d'une connexion.",
+      "catalogUnavailable": "Impossible de demander à Pi quels niveaux de réflexion ce modèle propose.",
+      "configLoadFailed": "Impossible de lire les paramètres de Pi : {message}",
+      "runtimeTooOld": "Ce Pi est trop ancien : Codeg nécessite Pi {min} ou une version ultérieure pour ouvrir une session. Mettez-le d'abord à jour."
     },
     "addCustomAgent": "Ajouter un agent personnalisé",
     "addCustomAgentHint": "Enregistrez n'importe quel agent compatible ACP. Choisissez-en un dans le registre ACP public ou collez ses informations de registre.",
@@ -1987,7 +1998,7 @@
       "tasks": "Tâches à faire",
       "loadingSubsessions": "Chargement des sous-conversations…",
       "forge": "Panneau du dépôt",
-      "canvas": "Conversations infinies",
+      "canvas": "Canevas infini",
       "folderGroup": {
         "newGroup": "Nouveau groupe",
         "newGroupTitle": "Nouveau groupe de dossiers",
@@ -2003,7 +2014,12 @@
         "removeFromGroup": "Aucun groupe",
         "newGroupAndMove": "Nouveau groupe…",
         "dropToUngroup": "Déposer ici pour retirer du groupe"
-      }
+      },
+      "recentFilterAll": "Tout",
+      "recentFilterTitle": "Afficher dans Récents : {filter}",
+      "noRecentChats": "Aucune discussion récente",
+      "noRecentFolders": "Aucune conversation de dossier récente",
+      "recentFilterMenuLabel": "Afficher dans Récents"
     },
     "conversation": {
       "reloadFailed": "Échec du rechargement de la conversation : {message}",
@@ -3006,8 +3022,6 @@
           "openAgentsSettings": "Ouvrir les paramètres des agents",
           "retry": "Réessayer"
         },
-        "agentsSetupHint": "Ouvrez Paramètres > Agents pour gérer l'installation.",
-        "withSetupHint": "{message}\n{hint}",
         "blocked": {
           "missingConfig": "Impossible de lire la configuration actuelle de l'agent.",
           "disabled": "{agent} est désactivé dans les paramètres des agents. Activez-le avant de vous connecter.",
@@ -3031,16 +3045,20 @@
           "turnFailedUnknown": "{agent} a terminé le tour avec une raison d'arrêt inconnue.",
           "turnFailedAuthRequired": "{agent} a besoin que vous vous reconnectiez avant de pouvoir exécuter ce tour. Connectez-vous depuis les Paramètres, puis renvoyez le message.",
           "agentAuthRequired": "{agent} n'a pas pu démarrer de session : aucun identifiant utilisable. Reconnecte-toi depuis Paramètres → Agents → {agent}, puis rouvre cette conversation.",
+          "agentRuntimeOutdated": "{agent} est trop ancien pour cette version de Codeg. Mets-le à jour, puis rouvre cette conversation.",
           "grokModelSwitchIncompatibleAgent": "{agent} ne peut pas basculer vers ce modèle dans une conversation existante. Démarrez une nouvelle session pour l'utiliser.",
+          "setModeFailed": "{agent} n'a pas pu changer de mode.",
+          "setConfigOptionFailed": "{agent} n'a pas pu appliquer ce réglage.",
+          "goalControlFailed": "{agent} n'a pas pu mettre à jour l'objectif.",
+          "imageDropped": "{agent} n'a pas reçu une image jointe.",
+          "sessionLoadFallback": "{agent} n'a pas pu restaurer la session précédente et en a démarré une nouvelle ; le contexte antérieur n'est plus disponible.",
           "turnFailedEmpty": "{agent} a terminé le tour sans produire de réponse.",
           "turnFailedEmptyProtocol": "{agent} a produit une sortie que codeg n'a pas pu analyser — la version de l'agent ne correspond peut-être pas au protocole.",
-          "turnFailedEmptyMetadata": "{agent} n'a envoyé que des mises à jour d'état ce tour-ci (plan / mode / utilisation) et aucune réponse.",
-          "detailsInAlerts": "Ouvrez les alertes de la barre d'état et développez les détails pour voir la sortie de l'agent."
+          "turnFailedEmptyMetadata": "{agent} n'a envoyé que des mises à jour d'état ce tour-ci (plan / mode / utilisation) et aucune réponse."
         },
         "unableReadAgentConfig": "Impossible de lire la configuration de l'agent : {message}",
         "connectFailedTitle": "Échec de la connexion de {agent}",
         "toolFallbackTitle": "Outil",
-        "eventErrorTitle": "Erreur de l'agent",
         "notificationTurnComplete": "{agent} a terminé de répondre",
         "notificationError": "{agent} erreur : {message}",
         "notificationQuestion": "{agent} attend votre réponse",
@@ -3057,7 +3075,9 @@
           "lineNoErrorWithDelay": "{retry}, {delay}",
           "httpStatus": " (HTTP {status})"
         },
-        "configOptionAdjusted": "{agent} a réglé {option} sur {actual} au lieu de {requested}"
+        "configOptionAdjusted": "{agent} a réglé {option} sur {actual} au lieu de {requested}",
+        "noticeTitle": "{agent} : {title}",
+        "pluginLoadFailedTitle": "{agent} n'a pas pu charger {count, plural, one {# plugin} other {# plugins}}"
       },
       "connectionLifecycle": {
         "tasks": {
@@ -3741,7 +3761,22 @@
           "outputMissing": "Codex a tronqué la sortie du script et supprimé le séparateur de cette commande ; aucune sortie n'a donc pu lui être attribuée.",
           "sharedWith": "Contient aussi la sortie de {commands} — codex en a tronqué les séparateurs.",
           "truncated": "tronqué"
-        }
+        },
+        "visualizeTitle": "Visualisation",
+        "visualizeWide": "Large",
+        "visualizeLoading": "Chargement de la visualisation…",
+        "visualizeError": "Impossible de charger la visualisation",
+        "visualizeReload": "Recharger",
+        "visualizeOpenFile": "Ouvrir le fichier",
+        "visualizeExpand": "Tout afficher",
+        "visualizeCollapse": "Réduire",
+        "visualizeScriptsOn": "Scripts activés",
+        "visualizeScriptsOff": "Activer les scripts",
+        "visualizeScriptsHint": "Exécute les scripts de la visualisation pour la rendre interactive. Elle s'exécute dans un bac à sable, sans accès au réseau ni à vos fichiers.",
+        "visualizeFrameTitle": "Visualisation Codex",
+        "htmlPreviewOpen": "Aperçu",
+        "htmlPreviewOpenAria": "Aperçu de {name}",
+        "htmlPreviewHide": "Masquer l’aperçu"
       },
       "messageNav": {
         "title": "Navigation des messages",
@@ -3829,7 +3864,6 @@
         "reconnecting": "Reconnexion…",
         "reconnectDisabledDuringTurn": "Disponible une fois le tour en cours terminé",
         "dismiss": "Ignorer",
-        "reconnectFailed": "Échec de la reconnexion de la session",
         "applied": "Nouvelle configuration appliquée"
       },
       "piProjectTrust": {
@@ -3883,6 +3917,7 @@
         "compacted": "Contexte compacté",
         "compactedTokens": "Contexte compacté · {before} → {after} tokens",
         "failed": "Échec de la compaction du contexte",
+        "summary": "Résumé",
         "triggerManual": "Déclenchée manuellement",
         "triggerAutomatic": "Déclenchée automatiquement"
       },
@@ -4292,13 +4327,14 @@
     "agentTypeRequired": "Le type d'agent est requis.",
     "agentTypeImmutableHint": "Le type d'agent ne peut pas être modifié après la création.",
     "model": "Modèle",
-    "modelPlaceholderCodex": "gpt-5.6-sol / gpt-5.5",
+    "modelPlaceholderCodex": "gpt-6.1-sol / gpt-6-luna",
     "modelPlaceholderGemini": "gemini-3-pro-preview",
     "claudeMainModel": "Modèle Principal",
     "claudeReasoningModel": "Modèle de Raisonnement (réflexion)",
     "claudeHaikuDefaultModel": "Modèle Haiku par Défaut",
     "claudeSonnetDefaultModel": "Modèle Sonnet par Défaut",
     "claudeOpusDefaultModel": "Modèle Opus par Défaut",
+    "claudeFableDefaultModel": "Modèle Fable par Défaut",
     "claudeCustomModelOption": "ID de modèle personnalisé",
     "claudeCustomModelOptionName": "Nom du modèle personnalisé",
     "claudeCustomModelOptionDescription": "Description du modèle personnalisé",
@@ -4742,7 +4778,8 @@
     "none": "Aucune branche",
     "local": "Locale",
     "remote": "Distante",
-    "useCustom": "Utiliser « {query} »"
+    "useCustom": "Utiliser « {query} »",
+    "head": "HEAD"
   },
   "BackupSettings": {
     "tabs": {
@@ -5115,6 +5152,7 @@
   "BrowserSettings": {
     "title": "Navigateur intégré",
     "description": "Les pages web ouvertes depuis les conversations, les résultats d’outils et le terminal peuvent s’afficher comme onglets à côté de vos fichiers, sans quitter l’application.",
+    "descriptionWeb": "Dans une session navigateur, les pages s’ouvrent dans le navigateur que vous utilisez déjà. L’exception : un serveur qui tourne sur l’hôte codeg, relayé ici dans un onglet. Voici les réglages qui décident encore quelque chose.",
     "defaultTargetTitle": "Où s’ouvrent les liens",
     "defaultTargetHint": "Réglable par source. ⌘/Ctrl+clic sur un lien utilise l’autre option pour cette fois seulement.",
     "sourceTranscript": "Messages de la conversation",
@@ -5154,6 +5192,7 @@
     "downloadsHint": "Les fichiers téléchargés par une page sont enregistrés dans {dir}. Rien n’est ouvert automatiquement et aucun fichier existant n’est remplacé.",
     "rulesTitle": "Règles de site",
     "rulesHint": "Par site : toujours le navigateur intégré, toujours le navigateur système, ou bloquer. Les motifs sont un nom d'hôte, *.example.com ou *, avec un :port facultatif ; la correspondance la plus précise l'emporte.",
+    "rulesHintWeb": "Par site : bloquer. Dans une session navigateur, l'endroit où s'ouvre un lien n'est pas un choix. Les motifs sont un nom d'hôte, *.example.com ou *, avec un :port facultatif ; la correspondance la plus précise l'emporte.",
     "serviceOpenTitle": "Serveurs locaux",
     "serviceOpenHint": "Quand un serveur lancé dans un terminal affiche son adresse, l’ouvrir dans un onglet du navigateur. Uniquement les adresses de cette machine, et seulement si quelque chose y écoute.",
     "serviceOpenOff": "Ne rien faire",
@@ -5514,7 +5553,6 @@
     "promptPlaceholder": "Décrivez la tâche pour l’agent — @ pour référencer des fichiers, / pour les commandes",
     "folderPlaceholder": "Choisir un dossier",
     "baseBranch": "Branche de base",
-    "baseBranchPlaceholder": "Branche actuelle",
     "baseBranchDefault": "Branche actuelle au démarrage de la tâche",
     "baseBranchHint": "La tâche part de cette branche, et la fusion l’y ramène.",
     "agentInheritedHint": "Hérité des réglages des tâches — modifiez-le pour personnaliser cette tâche",
@@ -5646,8 +5684,8 @@
     "eventContextCompact": "Compactage du contexte",
     "eventUserAction": "Action utilisateur",
     "eventDiffStat": "Instantané des changements",
-    "eventForgeWriteback": "Commentaire publié sur le ticket",
-    "eventForgeWritebackFailed": "Échec du commentaire sur le ticket",
+    "eventForgeWriteback": "Commentaire publié sur l'élément",
+    "eventForgeWritebackFailed": "Échec du commentaire sur l'élément",
     "actionDeliverPr": "Ouvrir une pull request",
     "actionDeliverPrMr": "Ouvrir une merge request",
     "actionDeliverPrBack": "Pousser vers la pull request",
@@ -6181,7 +6219,7 @@
     "scenarioPlanFirst": "Planifier d'abord",
     "scenarioPlanFirstHint": "L'agent confirme que le problème existe vraiment, livre un plan d'implémentation puis s'arrête — validez-le en renvoyant la tâche pour l'implémentation.",
     "scenarioReviewFix": "Revue et correction",
-    "scenarioReviewFixHint": "Relit les changements et corrige les problèmes ; à l'acceptation, les commits repartent sur la branche.",
+    "scenarioReviewFixHint": "L'agent juge d'abord si l'approche elle-même tient, et ne corrige les problèmes qu'ensuite ; sinon, il ne committe rien et vous rend la revue pour que vous décidiez. À l'acceptation, les correctifs repartent sur la branche.",
     "scenarioReviewOnly": "Revue seule",
     "scenarioReviewOnlyHint": "Un rapport de revue avec constats et suggestions, sans commit — renvoyez la tâche pour appliquer des correctifs.",
     "settingsTitle": "Réglages du panneau",
@@ -6209,7 +6247,7 @@
     "save": "Enregistrer"
   },
   "Canvas": {
-    "title": "Conversations infinies",
+    "title": "Canevas infini",
     "untitled": "Conversation sans titre",
     "unresolvedConversation": "Conversation supprimée",
     "removeCard": "Retirer la carte",
@@ -6297,7 +6335,36 @@
     "removeTerminalCard": "Retirer la carte terminal",
     "terminalNoDirectory": "Cette carte n'a pas de répertoire de travail",
     "confirmDeleteTerminals": "{count} terminal(aux) en cours seront fermés et leurs processus arrêtés.",
-    "confirmDeleteNotesAndTerminals": "{notes} note(s) que vous avez écrites seront définitivement supprimées, et {terminals} terminal(aux) en cours seront arrêtés."
+    "confirmDeleteNotesAndTerminals": "{notes} note(s) que vous avez écrites seront définitivement supprimées, et {terminals} terminal(aux) en cours seront arrêtés.",
+    "boardsTitle": "Canevas",
+    "boardsSubtitle": "Chaque canevas est un tableau infini à part entière, avec ses régions, cartes de conversation, notes, fichiers et terminaux.",
+    "boardCount": "{count, plural, one {# canevas} other {# canevas}}",
+    "newBoard": "Nouveau canevas",
+    "newBoardTitle": "Nouveau canevas",
+    "editBoard": "Modifier le canevas…",
+    "editBoardTitle": "Modifier le canevas",
+    "deleteBoard": "Supprimer le canevas…",
+    "openBoard": "Ouvrir",
+    "boardMenu": "Options du canevas",
+    "boardName": "Nom",
+    "boardDescription": "Description",
+    "boardDescriptionPlaceholder": "À quoi sert ce canevas ? (facultatif)",
+    "untitledBoard": "Canevas sans titre",
+    "boardItemCount": "{count, plural, =0 {Vide} one {# élément} other {# éléments}}",
+    "boardEditedAt": "Modifié {time}",
+    "boardsEmpty": "Aucun canevas pour l'instant",
+    "boardsEmptyHint": "Créez un canevas pour organiser votre travail dans l'espace. Chaque canevas a ses propres régions, cartes et notes.",
+    "searchBoards": "Rechercher des canevas…",
+    "noBoardsMatch": "Aucun canevas ne correspond à « {query} »",
+    "boardsLoadFailed": "Impossible de charger les canevas",
+    "retry": "Réessayer",
+    "backToBoards": "Retour à tous les canevas",
+    "boardDeleted": "Ce canevas a été supprimé",
+    "deleteBoardTitle": "Supprimer ce canevas ?",
+    "deleteBoardDescription": "« {name} » et tout son contenu seront définitivement supprimés. Les conversations, dossiers et fichiers qu'il affiche ne sont pas affectés.",
+    "deleteBoardItems": "Il contient {count, plural, one {# élément} other {# éléments}}.",
+    "deleteBoardTerminals": "{count, plural, one {# terminal sera fermé et son processus arrêté.} other {# terminaux seront fermés et leurs processus arrêtés.}}",
+    "deleteBoardConfirm": "Supprimer le canevas"
   },
   "Studio": {
     "back": "Back to workspace",
@@ -6507,6 +6574,7 @@
       "ownedWindow": "Cette page s'affiche dans sa propre fenêtre.",
       "ownedWindowShow": "Afficher la fenêtre",
       "remoteBanner": "Ouvert via {host}",
+      "remoteBannerDown": "Connexion à {host} perdue. Elle sera rétablie à la prochaine requête.",
       "navigationBlocked": "Navigation bloquée : {host}",
       "navigationBlockedRule": "bloquée par une règle de site",
       "navigationBlockedScheme": "ce type d'adresse ne peut pas s'ouvrir ici",
@@ -6520,7 +6588,17 @@
       "agentGrantLost": "Partage terminé : la page a quitté {origin}",
       "agentGrantLostShare": "Partager aussi {origin}",
       "agentGrantReplaced": "Partage terminé : un autre programme sert maintenant {origin}",
-      "agentGrantReplacedShare": "Partager quand même"
+      "agentGrantReplacedShare": "Partager quand même",
+      "errorRemoteRefused": "Rien n'écoute à cette adresse sur l'hôte distant",
+      "errorRemoteRefusedHint": "{host} a refusé la connexion. Vérifiez que le serveur derrière cette adresse y est lancé.",
+      "errorRemoteUnreachable": "L'hôte distant ne peut pas joindre cette adresse",
+      "errorRemoteUnreachableHint": "Vu depuis {host}, le nom ne se résout pas ou aucune route n'y mène.",
+      "errorRemoteNotAllowed": "Le serveur distant n'ouvre pas cette adresse au navigateur",
+      "errorRemoteNotAllowedHint": "Le codeg-server de {host} ne laisse son tunnel du navigateur joindre que des adresses privées (CODEG_BROWSER_TUNNEL=private).",
+      "errorRemoteTimeout": "L'hôte distant a mis trop de temps à se connecter",
+      "errorRemoteTimeoutHint": "{host} n'a pas obtenu de réponse de cette adresse à temps. Le serveur est peut-être occupé ou derrière un pare-feu.",
+      "errorTunnelDown": "La connexion à l'hôte distant est coupée",
+      "errorTunnelDownHint": "Le tunnel vers {host} ne transporte rien pour l'instant. Réessayez quand il sera de nouveau joignable."
     },
     "tab": {
       "untitled": "Nouvel onglet"
@@ -6540,7 +6618,22 @@
       "copied": "Adresse copiée",
       "unreachableTitle": "Le port passerelle est inaccessible",
       "unreachableHint": "Le serveur codeg expose cette page sur {origin}, mais votre navigateur ne l'atteint pas. Publiez ce port (voir CODEG_BRIDGE_PORTS) ou définissez CODEG_BRIDGE_PUBLIC_HOST ; si codeg est servi en HTTPS, les ports passerelle doivent l'être aussi.",
+      "unreachableHostHint": "Le serveur codeg a placé cette page sur {origin}, mais votre navigateur ne peut pas l'atteindre. Ce nom d'hôte doit pointer vers le serveur codeg et traverser le proxy placé devant : un enregistrement DNS générique et un vhost générique (voir CODEG_BRIDGE_HOST_PATTERN).",
       "errorTitle": "Cette page ne peut pas être affichée ici"
+    },
+    "remote": {
+      "title": "Cette adresse se trouve sur {host}",
+      "titleUnnamed": "Cette adresse se trouve sur l'hôte distant",
+      "description": "Elle désigne la machine sur laquelle tourne cet espace de travail, pas cet ordinateur.",
+      "copyAddress": "Copier l'adresse",
+      "copied": "Adresse copiée",
+      "tryHost": "Essayer {host}",
+      "tryHostHint": "Ouvre {address} dans un onglet de cet ordinateur. Cela fonctionne si la page écoute sur toutes les interfaces réseau et si cet ordinateur peut joindre son port.",
+      "openHere": "Ouvrir sur cet ordinateur",
+      "openHereHint": "Ouvre l'adresse dans un onglet de cet ordinateur. Cela fonctionne si cet ordinateur est sur le même réseau.",
+      "retry": "Réessayer",
+      "connecting": "Connexion via {host}…",
+      "connectingUnnamed": "Connexion via l'hôte distant…"
     },
     "download": {
       "started": "Téléchargement…",
@@ -6597,6 +6690,7 @@
       "shareControl": "Lecture et actions",
       "levelDefault": "Par défaut",
       "notShareable": "Cette page n'a pas d'adresse web à partager avec les agents",
+      "remoteWindow": "Les agents d'un espace de travail distant s'exécutent sur son hôte et ne peuvent pas utiliser le navigateur de cet ordinateur",
       "shared": "Partagée",
       "sharedControl": "Partagée · peut agir",
       "sharedWith": "Les agents peuvent lire {origin}",
@@ -6690,6 +6784,7 @@
       "noConversation": "Ouvre une conversation à laquelle envoyer cette page",
       "pickElement": "Choisir un élément…",
       "screenshot": "Envoyer une capture",
+      "markUp": "Annoter une capture…",
       "consoleErrors": "Envoyer les erreurs de la console",
       "consoleClean": "Rien n'a échoué sur cette page",
       "picking": "Sélection…",
@@ -6700,9 +6795,20 @@
       "noConsoleErrors": "Cette page n'a affiché aucune erreur",
       "chipElement": "Élément de la page",
       "chipScreenshot": "Capture de la page",
+      "chipMarkedScreenshot": "Capture annotée",
       "chipConsole": "{count, plural, one {# erreur de console} other {# erreurs de console}}",
       "gone": "Cette conversation n'est plus ouverte",
-      "consoleErrorsCount": "{count, plural, one {Envoyer la # erreur de console} other {Envoyer les # erreurs de console}}"
+      "consoleErrorsCount": "{count, plural, one {Envoyer la # erreur de console} other {Envoyer les # erreurs de console}}",
+      "markupTitle": "Annoter la capture",
+      "markupTools": "Outil de dessin",
+      "markupBox": "Cadre",
+      "markupArrow": "Flèche",
+      "markupUndo": "Défaire",
+      "markupClear": "Effacer",
+      "markupHint": "Faites glisser sur l'image pour dessiner. Chaque marque porte un numéro auquel votre message peut faire référence.",
+      "markupCount": "{count, plural, one {# marque} other {# marques}}",
+      "markupCancel": "Annuler",
+      "markupSend": "Ajouter à la conversation"
     }
   },
   "browser": {
@@ -6714,6 +6820,16 @@
     "inspector": {
       "error": {
         "switchedOff": "Cet onglet a été ouvert alors que l’inspecteur web était désactivé. Activez-le dans les réglages du navigateur, puis rouvrez la page."
+      }
+    },
+    "remote": {
+      "error": {
+        "unavailable": "Ouvrir les adresses de l'hôte distant dans le navigateur intégré nécessite macOS 14 ou une version ultérieure.",
+        "unsupported": "Le codeg-server distant est trop ancien pour relayer le trafic du navigateur. Mettez-le à jour pour ouvrir ses adresses ici.",
+        "disabled": "Le tunnel du navigateur est désactivé sur le codeg-server distant (CODEG_BROWSER_TUNNEL).",
+        "unreachable": "Impossible de joindre le tunnel du navigateur du codeg-server distant ({reason}).",
+        "bypassed": "Le moteur du navigateur de cet ordinateur envoie certaines adresses en dehors du tunnel ; les pages de l'hôte distant restent donc fermées plutôt que d'être chargées depuis cet ordinateur.",
+        "probeFailed": "Le navigateur intégré n'a pas pu confirmer qu'il atteint l'hôte distant par le tunnel. Réessayez dans un instant."
       }
     }
   }
