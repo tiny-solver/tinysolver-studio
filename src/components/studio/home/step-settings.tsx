@@ -181,7 +181,7 @@ export function StepSettings({
     const presets = options?.model.presets ?? []
     const preset = presets.find((p) => p.id === m.use)
     const faces = m.target_faces ?? preset?.target_faces ?? 10000
-    const texture = m.texture_size ?? preset?.texture_size ?? 2048
+    const texture = m.texture_size ?? preset?.texture_size ?? 1024
     const range = options?.model.target_faces ?? { min: 1000, max: 2000000 }
     const set = (patch: Partial<typeof m>) =>
       onChange(

@@ -36,8 +36,9 @@ import type {
 } from "@/lib/types"
 
 /** Defaults for "Make 3D": a game-sized mesh (1만 면 holds its shape thanks
- *  to the normal map) with a texture that stays within the 2048 web limit. */
-const LIFT_3D = { target_faces: 10000, texture_size: 2048 } as const
+ *  to the normal map) with a 1024 texture — a 2048 bake on the 24GB GPU
+ *  takes 6+ minutes or runs out of memory (genai 10-09). */
+const LIFT_3D = { target_faces: 10000, texture_size: 1024 } as const
 
 /** Where uploads land under `assets/`. */
 const UPLOAD_DIR = "uploads"

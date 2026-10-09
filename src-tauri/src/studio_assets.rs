@@ -17,7 +17,9 @@
 //! The generator is only *called* — nothing here tells it what the result is
 //! for. Its API is the genai shape (`/api/images/generate`,
 //! `/api/3d/generate`, `/api/outputs`); a different service can answer the
-//! same three routes.
+//! same three routes. A generation goes in as a job (`<route>/jobs`, then
+//! `/api/jobs/{id}` until it ends): a request held open while the GPU queue
+//! drains hits the proxy's 10-minute header timeout as a 504.
 //!
 //! The register is edited as JSON values so fields this module does not know
 //! (game-asset-contract's `role`, `sheet`, …) survive every write.
@@ -928,6 +930,83 @@ async fn squared_on_light(path: &Path) -> Result<String, String> {
     ))
 }
 
+/// The job route for a generate route: `/api/3d/generate` → `/api/3d/jobs`,
+/// `/api/3d/rig` → `/api/3d/rig/jobs`.
+pub fn job_route(route: &str) -> String {
+    match route.strip_suffix("/generate") {
+        Some(head) => format!("{head}/jobs"),
+        None => format!("{route}/jobs"),
+    }
+}
+
+/// How often a job is looked at, how long a job may take in all (queue
+/// included), and how many looks in a row may fail (a generator restart)
+/// before giving up.
+const JOB_POLL: Duration = Duration::from_secs(3);
+const JOB_LIMIT: Duration = Duration::from_secs(60 * 60);
+const JOB_MISSES: u32 = 40;
+
+/// Queue the call as a job on the generator and wait for its result — the
+/// same body the synchronous route would have answered.
+async fn run_job(
+    client: &reqwest::Client,
+    base: &str,
+    route: &str,
+    body: &Value,
+) -> Result<Value, String> {
+    let resp = client
+        .post(format!("{base}{}", job_route(route)))
+        .json(body)
+        .send()
+        .await
+        .map_err(|e| {
+            format!("The generator at {base} did not answer ({e}). It may be switched off — try again later.")
+        })?;
+    let status = resp.status();
+    let job: Value = resp.json().await.unwrap_or(Value::Null);
+    if !status.is_success() {
+        let detail = job.get("detail").map(Value::to_string).unwrap_or_default();
+        return Err(format!("The generator answered {status}. {detail}"));
+    }
+    let Some(id) = job["id"].as_str().map(str::to_owned) else {
+        return Err("The generator queued the job without an id.".into());
+    };
+    let started = std::time::Instant::now();
+    let mut misses = 0;
+    loop {
+        if started.elapsed() > JOB_LIMIT {
+            return Err(format!("The generator's job {id} did not finish within an hour."));
+        }
+        tokio::time::sleep(JOB_POLL).await;
+        let job: Value = match client.get(format!("{base}/api/jobs/{id}")).send().await {
+            Ok(r) if r.status().is_success() => r.json().await.unwrap_or(Value::Null),
+            Ok(r) if r.status() == reqwest::StatusCode::NOT_FOUND => {
+                return Err(format!(
+                    "The generator lost job {id} (it may have restarted) — try again."
+                ))
+            }
+            _ => {
+                misses += 1;
+                if misses >= JOB_MISSES {
+                    return Err(format!(
+                        "The generator at {base} stopped answering while job {id} ran — try again later."
+                    ));
+                }
+                continue;
+            }
+        };
+        misses = 0;
+        match job["status"].as_str() {
+            Some("done") => return Ok(job["result"].clone()),
+            Some("error") | Some("canceled") => {
+                let error = job["error"].as_str().unwrap_or("no reason given");
+                return Err(format!("The generator's job failed: {error}"));
+            }
+            _ => {}
+        }
+    }
+}
+
 /// The body sent to the generator and the provenance kept on the material.
 /// Pure, so the shape is testable without a generator.
 pub fn generator_call(
@@ -1155,20 +1234,10 @@ pub async fn generate(root: &Path, mut req: GenerateRequest) -> Value {
         Ok(c) => c,
         Err(note) => return fail(note),
     };
-    let resp = match client.post(format!("{base}{route}")).json(&body).send().await {
+    let result = match run_job(&client, &base, route, &body).await {
         Ok(r) => r,
-        Err(e) => {
-            return fail(format!(
-                "The generator at {base} did not answer ({e}). It may be switched off — try again later."
-            ))
-        }
+        Err(note) => return fail(note),
     };
-    let status = resp.status();
-    let result: Value = resp.json().await.unwrap_or(Value::Null);
-    if !status.is_success() {
-        let detail = result.get("detail").map(Value::to_string).unwrap_or_default();
-        return fail(format!("The generator answered {status}. {detail}"));
-    }
     let list_key = match req.kind.as_str() {
         "3d" | "rig" => "models",
         "video" => "videos",
@@ -1623,6 +1692,14 @@ mod tests {
         assert_eq!(cleared["ok"], true);
         assert!(cleared["asset"].get("use").is_none());
         assert_eq!(update(&root, "ghost", None).await["ok"], false);
+    }
+
+    #[test]
+    fn job_routes() {
+        assert_eq!(job_route("/api/images/generate"), "/api/images/jobs");
+        assert_eq!(job_route("/api/3d/generate"), "/api/3d/jobs");
+        assert_eq!(job_route("/api/videos/generate"), "/api/videos/jobs");
+        assert_eq!(job_route("/api/3d/rig"), "/api/3d/rig/jobs");
     }
 
     #[test]
