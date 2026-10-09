@@ -41,6 +41,21 @@ const MANIFEST: &str = "manifest.json";
 const DEFAULT_IMAGE_WORKFLOW: &str = "qwen-image-21-rgba";
 const DEFAULT_3D_WORKFLOW: &str = "trellis2";
 
+/// Qwen-Image RGBA draws an alpha channel only when the prompt says so — a
+/// bare subject comes back opaque (alpha 253–255, 2026-10-08). genai's own
+/// recipe wraps the subject in these two sentences.
+const RGBA_LEAD: &str = "This is an RGBA format image with transparency.";
+const RGBA_TAIL: &str = "The image has an alpha channel and a transparent background.";
+
+/// The prompt as an RGBA workflow wants it; other workflows get it as is.
+pub fn shaped_prompt(workflow: &str, prompt: &str) -> String {
+    if !workflow.contains("rgba") || prompt.contains("RGBA format") {
+        return prompt.to_string();
+    }
+    let subject = prompt.trim_end_matches('.');
+    format!("{RGBA_LEAD} {subject}. {RGBA_TAIL}")
+}
+
 /// What `import` is asked to fetch.
 #[derive(Debug, Clone, Default, Deserialize, serde::Serialize, PartialEq)]
 pub struct ImportRequest {
@@ -794,7 +809,7 @@ pub fn generator_call(
             let prompt = prompt.ok_or("kind `image` needs a `prompt`")?;
             let workflow = req.workflow.clone().unwrap_or_else(|| DEFAULT_IMAGE_WORKFLOW.into());
             let mut body = json!({
-                "prompt": prompt,
+                "prompt": shaped_prompt(&workflow, prompt),
                 "provider": "comfyui",
                 "workflow": workflow,
                 "seed": seed,
@@ -1220,8 +1235,23 @@ mod tests {
         let (route, body, source) = generator_call(&img, None, 9).unwrap();
         assert_eq!(route, "/api/images/generate");
         assert_eq!(body["workflow"], "qwen-image-21-rgba");
+        assert_eq!(
+            body["prompt"],
+            "This is an RGBA format image with transparency. a cup. The image has an alpha channel and a transparent background."
+        );
+        // Provenance keeps what the person typed.
         assert_eq!(source["prompt"], "a cup");
         assert!(body.get("source_image").is_none());
+        // Target faces ride at the top of the body, where genai reads them.
+        assert!(body.get("extra").is_none());
+    }
+
+    #[test]
+    fn rgba_prompts_are_wrapped_once() {
+        assert_eq!(shaped_prompt("qwen-image-21", "a cup"), "a cup");
+        let once = shaped_prompt("qwen-image-21-rgba", "a red cup.");
+        assert!(once.starts_with(RGBA_LEAD) && once.contains(" a red cup. ") && once.ends_with(RGBA_TAIL));
+        assert_eq!(shaped_prompt("qwen-image-21-rgba", &once), once);
     }
 
     #[test]
