@@ -112,7 +112,7 @@ walkdir = "2"
 ignore = "0.4"
 sacp = "11.0.0"
 sacp-tokio = "11.0.0"
-tokio = { version = "1", features = ["process", "io-util", "sync", "macros", "rt", "net", "rt-multi-thread"] }
+tokio = { version = "1", features = ["process", "io-util", "sync", "macros", "rt", "net", "rt-multi-thread", "time"] }
 uuid = { version = "1", features = ["v4"] }
 # Version-5 UUIDs (browser profile data-store identifiers) by hand: uuid's
 # own `v5` feature would pull a second SHA-1 crate next to this one.

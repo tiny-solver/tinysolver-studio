@@ -94,8 +94,9 @@ export interface StudioFlow {
 
 export const DEFAULT_CAMERA: FlowCamera = { yaw: 0, pitch: 8, cam_dist: 6.2 }
 
-/** Game-sized lift, the drawer's default too. */
-const LIFT_3D = { target_faces: 10000, texture_size: 2048 } as const
+/** Game-sized lift, the drawer's default too. Texture 1024: a 2048 bake on
+ *  the 24GB GPU takes 6+ minutes or runs out of memory (genai 10-09). */
+const LIFT_3D = { target_faces: 10000, texture_size: 1024 } as const
 
 /** The steps a goal takes, in order — the decided card order 그림 → 3D →
  *  장면 · 카메라 → 렌더 → 영상, with a T-pose before the lift and bones after

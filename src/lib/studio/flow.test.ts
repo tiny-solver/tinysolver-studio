@@ -204,7 +204,7 @@ describe("step options", () => {
   it("lifts with the chosen faces and texture, else the defaults", () => {
     expect(stepOp("model", base())).toMatchObject({
       target_faces: 10000,
-      texture_size: 2048,
+      texture_size: 1024,
     })
     expect(modelChoice({ ...base(), character: true })).toEqual({
       use: "mobile-character",
