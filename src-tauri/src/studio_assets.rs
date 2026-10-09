@@ -40,6 +40,13 @@ const MANIFEST: &str = "manifest.json";
 /// the shape a 3D lift wants as its input.
 const DEFAULT_IMAGE_WORKFLOW: &str = "qwen-image-21-rgba";
 const DEFAULT_3D_WORKFLOW: &str = "trellis2";
+const DEFAULT_EDIT_WORKFLOW: &str = "qwen-image-21-edit";
+/// Keyframe → clip, ~90 s for 768² · 4–5 s. (The turbo variant measured
+/// ~60 s on 2026-10-07 but answers 500 at once since 10-09 — issue 1009-8.)
+const DEFAULT_VIDEO_WORKFLOW: &str = "minimax-h3-i2v";
+/// The redraw that puts a character in a T-pose before the 3D lift — a
+/// T-pose rigs far more reliably (model-pick 2026-10-08: 5/6 vs 1/6 natural).
+pub const TPOSE_PROMPT: &str = "the same character in a T-pose, arms straight out horizontally, legs apart, front view, same outfit and colours, plain background";
 
 /// Qwen-Image RGBA draws an alpha channel only when the prompt says so — a
 /// bare subject comes back opaque (alpha 253–255, 2026-10-08). genai's own
@@ -87,9 +94,12 @@ pub struct ImportRequest {
 /// What `generate` is asked to make.
 #[derive(Debug, Clone, Default, Deserialize, serde::Serialize, PartialEq)]
 pub struct GenerateRequest {
-    /// `image` or `3d`.
+    /// `image` (draw) · `edit` (redraw an image by prompt) · `tpose` (redraw
+    /// a character in a T-pose) · `3d` (lift an image) · `rig` (put bones in
+    /// a model) · `video` (an image as the first frame of a clip).
     pub kind: String,
-    /// An existing material fed in as `source_image`. Required for `3d`.
+    /// An existing material fed in: an image for `edit` · `tpose` · `3d` ·
+    /// `video` (optional for `image`), a model for `rig`.
     #[serde(default)]
     pub from: Option<String>,
     #[serde(default)]
@@ -102,6 +112,18 @@ pub struct GenerateRequest {
     pub target_faces: Option<u32>,
     #[serde(default)]
     pub texture_size: Option<u32>,
+    /// `video`: clip length in seconds (default 5).
+    #[serde(default)]
+    pub duration: Option<f64>,
+    /// `video`: canvas (default 768 × 768, reshaped to the image's aspect).
+    #[serde(default)]
+    pub width: Option<u32>,
+    #[serde(default)]
+    pub height: Option<u32>,
+    /// `edit`: cut the background away (default true — the result usually
+    /// goes on to a 3D lift).
+    #[serde(default)]
+    pub transparent: Option<bool>,
     /// Id for the new material (see [`ImportRequest::id`]).
     #[serde(default)]
     pub id: Option<String>,
@@ -419,6 +441,19 @@ fn model_stats(bytes: &[u8]) -> Option<Map<String, Value>> {
     let mut out = Map::new();
     out.insert("triangles".into(), json!(triangles));
     out.insert("vertices".into(), json!(vertices));
+    // A rigged model: its largest skin's joints. Absent on a static mesh.
+    let bones = json["skins"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|s| s["joints"].as_array().map(Vec::len))
+        .max();
+    if let Some(b) = bones {
+        out.insert("bones".into(), json!(b));
+    }
+    if let Some(a) = json["animations"].as_array().filter(|a| !a.is_empty()) {
+        out.insert("animations".into(), json!(a.len()));
+    }
     let views = json["bufferViews"].as_array().cloned().unwrap_or_default();
     let mut textures = Vec::new();
     for img in json["images"].as_array().into_iter().flatten() {
@@ -790,11 +825,41 @@ async fn data_url(path: &Path) -> Result<String, String> {
         "jpg" | "jpeg" => "image/jpeg",
         "webp" => "image/webp",
         "gif" => "image/gif",
+        "glb" => "model/gltf-binary",
+        "gltf" => "model/gltf+json",
         _ => "image/png",
     };
     Ok(format!(
         "data:{mime};base64,{}",
         base64::engine::general_purpose::STANDARD.encode(bytes)
+    ))
+}
+
+/// The image centred on a light-grey square, as an opaque PNG data URL — the
+/// shape the T-pose redraw was measured with (model-pick bench/rig tpose.py):
+/// the edit model keeps the figure whole when it has room on every side.
+async fn squared_on_light(path: &Path) -> Result<String, String> {
+    let bytes = tokio::fs::read(path)
+        .await
+        .map_err(|e| format!("Could not read {}: {e}", path.display()))?;
+    let img = image::load_from_memory(&bytes)
+        .map_err(|e| format!("Could not read the image {}: {e}", path.display()))?
+        .to_rgba8();
+    let side = img.width().max(img.height());
+    let mut canvas = image::RgbaImage::from_pixel(side, side, image::Rgba([240, 240, 240, 255]));
+    image::imageops::overlay(
+        &mut canvas,
+        &img,
+        ((side - img.width()) / 2) as i64,
+        ((side - img.height()) / 2) as i64,
+    );
+    let rgb = image::DynamicImage::ImageRgba8(canvas).to_rgb8();
+    let mut out = std::io::Cursor::new(Vec::new());
+    rgb.write_to(&mut out, image::ImageFormat::Png)
+        .map_err(|e| format!("Could not encode the squared image: {e}"))?;
+    Ok(format!(
+        "data:image/png;base64,{}",
+        base64::engine::general_purpose::STANDARD.encode(out.into_inner())
     ))
 }
 
@@ -858,7 +923,65 @@ pub fn generator_call(
             }
             Ok(("/api/3d/generate", body, source))
         }
-        other => Err(format!("kind `{other}`: use `image` or `3d`")),
+        "edit" | "tpose" => {
+            let img = source_image.ok_or_else(|| format!("kind `{}` needs `from`: an image material", req.kind))?;
+            let prompt = if req.kind == "tpose" {
+                // A note the person adds ("keep the cape") rides after the recipe.
+                match prompt {
+                    Some(extra) => format!("{TPOSE_PROMPT}, {extra}"),
+                    None => TPOSE_PROMPT.to_string(),
+                }
+            } else {
+                prompt.ok_or("kind `edit` needs a `prompt`: what to change")?.to_string()
+            };
+            let workflow = req.workflow.clone().unwrap_or_else(|| DEFAULT_EDIT_WORKFLOW.into());
+            let transparent = req.transparent.unwrap_or(true);
+            let body = json!({
+                "prompt": prompt,
+                "provider": "comfyui",
+                "workflow": workflow,
+                "seed": seed,
+                "source_image": img,
+                "transparent": transparent,
+            });
+            source["workflow"] = json!(workflow);
+            source["prompt"] = json!(prompt);
+            Ok(("/api/images/generate", body, source))
+        }
+        "video" => {
+            let img = source_image.ok_or("kind `video` needs `from`: an image material (a render keyframe) as the first frame")?;
+            let prompt = prompt.ok_or("kind `video` needs a `prompt`: the motion, the camera, and an `Audio: …` line")?;
+            let workflow = req.workflow.clone().unwrap_or_else(|| DEFAULT_VIDEO_WORKFLOW.into());
+            let duration = req.duration.unwrap_or(5.0);
+            if !(0.2..=15.0).contains(&duration) {
+                return Err("duration: 0.2–15 seconds".into());
+            }
+            let width = req.width.unwrap_or(768);
+            let height = req.height.unwrap_or(768);
+            if !(256..=1920).contains(&width) || !(256..=1920).contains(&height) {
+                return Err("width / height: 256–1920".into());
+            }
+            let body = json!({
+                "prompt": prompt,
+                "provider": "comfyui",
+                "workflow": workflow,
+                "seed": seed,
+                "source_image": img,
+                "width": width,
+                "height": height,
+                "duration": duration,
+            });
+            source["workflow"] = json!(workflow);
+            source["params"] = json!({ "duration": duration, "width": width, "height": height });
+            Ok(("/api/videos/generate", body, source))
+        }
+        "rig" => {
+            let model = source_image.ok_or("kind `rig` needs `from`: a 3D model material (one standing character — a T-pose rigs best)")?;
+            let body = json!({ "source_model": model, "seed": seed });
+            source["workflow"] = json!("skintokens");
+            Ok(("/api/3d/rig", body, source))
+        }
+        other => Err(format!("kind `{other}`: one of image, edit, tpose, 3d, rig, video")),
     }
 }
 
@@ -892,10 +1015,20 @@ pub async fn generate(root: &Path, mut req: GenerateRequest) -> Value {
                 return fail(format!("No material `{from}`. Call studio_list_assets for the ids."));
             };
             let file = entry["file"].as_str().unwrap_or("");
-            if kind_of(file) != "image" {
-                return fail(format!("`{from}` is not an image; only images feed a generator."));
+            let wants = if req.kind == "rig" { "model" } else { "image" };
+            if kind_of(file) != wants {
+                return fail(if wants == "model" {
+                    format!("`{from}` is not a 3D model; `rig` takes a GLB material.")
+                } else {
+                    format!("`{from}` is not an image; kind `{}` takes an image material.", req.kind)
+                });
             }
-            match data_url(&dir.join(file)).await {
+            let fed = if req.kind == "tpose" {
+                squared_on_light(&dir.join(file)).await
+            } else {
+                data_url(&dir.join(file)).await
+            };
+            match fed {
                 Ok(d) => Some(d),
                 Err(note) => return fail(note),
             }
@@ -924,15 +1057,35 @@ pub async fn generate(root: &Path, mut req: GenerateRequest) -> Value {
         let detail = result.get("detail").map(Value::to_string).unwrap_or_default();
         return fail(format!("The generator answered {status}. {detail}"));
     }
-    let list_key = if req.kind == "3d" { "models" } else { "images" };
+    let list_key = match req.kind.as_str() {
+        "3d" | "rig" => "models",
+        "video" => "videos",
+        _ => "images",
+    };
     let Some(out) = result[list_key].get(0) else {
         return fail("The generator answered without a result.");
     };
     let id = req.id.clone().or_else(|| match (&req.from, req.kind.as_str()) {
         (Some(from), "3d") => Some(format!("{from}-3d")),
+        (Some(from), "tpose") => Some(format!("{from}-tpose")),
+        (Some(from), "rig") => Some(format!("{from}-rig")),
+        (Some(from), "video") => Some(format!("{from}-video")),
+        (Some(from), "edit") => Some(format!("{from}-edit")),
         (Some(from), _) => Some(format!("{from}-redraw")),
         (None, _) => req.prompt.as_deref().map(id_from_prompt),
     });
+    // A clip's real size and length (H3 snaps the frame count to its grid).
+    let mut source = source;
+    if req.kind == "video" {
+        for key in ["width", "height", "frames", "fps"] {
+            if let Some(v) = out.get(key).filter(|v| !v.is_null()) {
+                source["params"][key] = v.clone();
+            }
+        }
+        if out["has_audio"].as_bool() == Some(true) {
+            source["audio"] = json!(true);
+        }
+    }
     let url = match (out["url"].as_str(), out["path"].as_str()) {
         (Some(u), _) if u.starts_with("http") => u.to_string(),
         (Some(u), _) => format!("{base}{u}"),
@@ -1156,6 +1309,16 @@ mod tests {
         assert_eq!(st["textures"], json!([[8, 4]]));
         assert_eq!(st["texture_max"], 8);
         assert!(stats("x.glb", b"not a model").is_empty());
+        assert!(st.get("bones").is_none(), "a static mesh has no bones");
+        let rigged = serde_json::to_vec(&json!({
+            "asset": { "version": "2.0" },
+            "skins": [{ "joints": [0, 1, 2] }, { "joints": [0] }],
+            "animations": [{ "name": "walk" }],
+        }))
+        .unwrap();
+        let st = stats("x.gltf", &rigged);
+        assert_eq!(st["bones"], 3);
+        assert_eq!(st["animations"], 1);
     }
 
     #[tokio::test]
@@ -1253,6 +1416,61 @@ mod tests {
         assert!(body.get("source_image").is_none());
         // Target faces ride at the top of the body, where genai reads them.
         assert!(body.get("extra").is_none());
+    }
+
+    #[test]
+    fn step_kinds_call_the_right_routes() {
+        let tpose = GenerateRequest { kind: "tpose".into(), from: Some("hero".into()), ..Default::default() };
+        let (route, body, source) = generator_call(&tpose, Some("data:img".into()), 3).unwrap();
+        assert_eq!(route, "/api/images/generate");
+        assert_eq!(body["workflow"], "qwen-image-21-edit");
+        assert_eq!(body["prompt"], TPOSE_PROMPT);
+        assert_eq!(body["transparent"], true);
+        assert_eq!(source["from"], "hero");
+        let noted = GenerateRequest { prompt: Some("keep the cape".into()), ..tpose.clone() };
+        let (_, body, _) = generator_call(&noted, Some("d".into()), 3).unwrap();
+        assert!(body["prompt"].as_str().unwrap().ends_with(", keep the cape"));
+
+        let edit = GenerateRequest { kind: "edit".into(), from: Some("k".into()), ..Default::default() };
+        assert!(generator_call(&edit, Some("d".into()), 1).is_err(), "edit needs a prompt");
+
+        let video = GenerateRequest {
+            kind: "video".into(),
+            from: Some("cup-f001".into()),
+            prompt: Some("slow orbit. Audio: soft clink".into()),
+            ..Default::default()
+        };
+        let (route, body, source) = generator_call(&video, Some("data:key".into()), 4).unwrap();
+        assert_eq!(route, "/api/videos/generate");
+        assert_eq!(body["workflow"], "minimax-h3-i2v");
+        assert_eq!(body["source_image"], "data:key");
+        assert_eq!((body["width"].as_u64(), body["duration"].as_f64()), (Some(768), Some(5.0)));
+        assert_eq!(source["params"]["duration"], 5.0);
+        assert!(generator_call(&GenerateRequest { prompt: None, ..video.clone() }, Some("d".into()), 1).is_err());
+        assert!(generator_call(&GenerateRequest { duration: Some(30.0), ..video.clone() }, Some("d".into()), 1).is_err());
+        assert!(generator_call(&video, None, 1).is_err(), "video needs a first frame");
+
+        let rig = GenerateRequest { kind: "rig".into(), from: Some("hero-3d".into()), ..Default::default() };
+        let (route, body, source) = generator_call(&rig, Some("data:model/gltf-binary;base64,AA".into()), 2).unwrap();
+        assert_eq!(route, "/api/3d/rig");
+        assert_eq!(body["source_model"], "data:model/gltf-binary;base64,AA");
+        assert_eq!(source["workflow"], "skintokens");
+        assert!(generator_call(&GenerateRequest { kind: "film".into(), ..Default::default() }, None, 1).is_err());
+    }
+
+    #[tokio::test]
+    async fn tpose_input_is_squared_on_light_grey() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("tall.png");
+        image::RgbaImage::from_pixel(2, 4, image::Rgba([10, 20, 30, 0])).save(&path).unwrap();
+        let url = squared_on_light(&path).await.unwrap();
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(url.strip_prefix("data:image/png;base64,").unwrap())
+            .unwrap();
+        let img = image::load_from_memory(&bytes).unwrap();
+        assert_eq!((img.width(), img.height()), (4, 4));
+        assert!(!img.color().has_alpha());
+        assert_eq!(img.to_rgb8().get_pixel(0, 0).0, [240, 240, 240]);
     }
 
     #[test]

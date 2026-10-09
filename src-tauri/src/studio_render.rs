@@ -32,7 +32,8 @@ const RENDER_DIR: &str = "generated/renders";
 pub struct RenderRequest {
     /// The model material (GLB/glTF) to render.
     pub from: String,
-    /// `turntable` (camera circles once, video + stills) or `still`.
+    /// `turntable` (camera circles once, video + stills), `still`, or `walk`
+    /// (a rigged model takes a procedural stride in place, video + stills).
     #[serde(default)]
     pub mode: Option<String>,
     /// Turntable length in frames at 24 fps. Default 72 (3 s).
@@ -62,10 +63,14 @@ pub struct RenderRequest {
 /// The job handed to the script, after defaults and bounds.
 pub fn job(req: &RenderRequest, model: &Path, out: &Path) -> Result<Value, String> {
     let mode = req.mode.as_deref().unwrap_or("turntable");
-    if mode != "turntable" && mode != "still" {
-        return Err("mode: `turntable` or `still`".into());
+    if !["turntable", "still", "walk"].contains(&mode) {
+        return Err("mode: `turntable`, `still` or `walk`".into());
     }
-    let frames = if mode == "still" { 1 } else { req.frames.unwrap_or(72) };
+    let frames = match mode {
+        "still" => 1,
+        "walk" => req.frames.unwrap_or(48),
+        _ => req.frames.unwrap_or(72),
+    };
     if !(1..=720).contains(&frames) {
         return Err("frames: 1–720 (24 per second)".into());
     }
@@ -104,10 +109,11 @@ pub fn job(req: &RenderRequest, model: &Path, out: &Path) -> Result<Value, Strin
         "width": width,
         "height": height,
         "cam_dist": cam_dist,
-        "yaw": req.yaw.unwrap_or(0.0),
+        // A walk reads best three-quarter on.
+        "yaw": req.yaw.unwrap_or(if mode == "walk" { -30.0 } else { 0.0 }),
         "pitch": pitch,
         "keyframes": keyframes,
-        "video": mode == "turntable" && frames > 1,
+        "video": mode != "still" && frames > 1,
     }))
 }
 
@@ -236,6 +242,12 @@ pub async fn render(root: &Path, req: RenderRequest) -> Value {
     let file = entry["file"].as_str().unwrap_or("").to_string();
     if studio_assets::kind_of(&file) != "model" {
         return fail(format!("`{}` is not a 3D model; render takes a GLB material.", req.from));
+    }
+    if req.mode.as_deref() == Some("walk") && entry.get("bones").is_none() {
+        return fail(format!(
+            "`{}` has no skeleton. Rig it first (studio_generate_asset kind rig, from `{}`), then walk the rigged model.",
+            req.from, req.from
+        ));
     }
     let model = dir.join(&file);
     if !model.is_file() {
@@ -394,6 +406,10 @@ mod tests {
         assert_eq!(j["keyframes"], json!([1]));
         assert_eq!(j["video"], true);
 
+        let walk = RenderRequest { mode: Some("walk".into()), ..req.clone() };
+        let j = job(&walk, Path::new("/m.glb"), Path::new("/o")).unwrap();
+        assert_eq!((j["frames"].as_u64(), j["yaw"].as_f64(), j["video"].as_bool()), (Some(48), Some(-30.0), Some(true)));
+
         let still = RenderRequest { mode: Some("still".into()), frames: Some(99), ..req.clone() };
         let j = job(&still, Path::new("/m.glb"), Path::new("/o")).unwrap();
         assert_eq!(j["frames"], 1);
@@ -459,6 +475,8 @@ mod tests {
         assert!(r["note"].as_str().unwrap().contains("studio_list_assets"));
         let r = render(&root, RenderRequest { from: "hero".into(), ..Default::default() }).await;
         assert!(r["note"].as_str().unwrap().contains("not a 3D model"));
+        let r = render(&root, RenderRequest { from: "cup".into(), mode: Some("walk".into()), ..Default::default() }).await;
+        assert!(r["note"].as_str().unwrap().contains("Rig it first"));
     }
 
     /// A fake Blender (a shell script) that writes what the real one would:

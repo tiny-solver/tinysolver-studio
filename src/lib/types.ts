@@ -3979,7 +3979,7 @@ export interface ContentProjectManifest {
 
 /** Where a material came from — kept on its `assets/manifest.json` entry. */
 export interface StudioAssetSource {
-  kind?: "image" | "3d"
+  kind?: "image" | "edit" | "tpose" | "3d" | "rig" | "video" | "render"
   workflow?: string
   prompt?: string
   seed?: number
@@ -4037,6 +4037,9 @@ export interface StudioAsset {
   textures?: [number, number][]
   /** Largest texture side. */
   texture_max?: number
+  /** Rigged models: joints of the largest skin. */
+  bones?: number
+  animations?: number
   /** Where it will be used — a preset id (`StudioPreset.id`). */
   use?: string
   /** Images: no transparent pixel. */
@@ -4065,13 +4068,19 @@ export type StudioOp =
     }
   | {
       op: "generate_asset"
-      kind: "image" | "3d"
+      kind: "image" | "edit" | "tpose" | "3d" | "rig" | "video"
       from?: string
       prompt?: string
       workflow?: string
       seed?: number
       target_faces?: number
       texture_size?: 1024 | 2048 | 4096
+      /** video: seconds (default 5) and canvas (default 768²). */
+      duration?: number
+      width?: number
+      height?: number
+      /** edit: cut the background away (default true). */
+      transparent?: boolean
       id?: string
       use?: string
     }
@@ -4081,7 +4090,7 @@ export type StudioOp =
       /** Headless Blender on this computer (`studio_render.rs`). */
       op: "render_asset"
       from: string
-      mode?: "turntable" | "still"
+      mode?: "turntable" | "still" | "walk"
       frames?: number
       width?: number
       height?: number

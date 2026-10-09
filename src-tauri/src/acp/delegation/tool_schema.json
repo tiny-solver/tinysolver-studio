@@ -477,7 +477,7 @@
   },
   {
     "name": "studio_generate_asset",
-    "description": "Make a new material with the project's connected generator (codeg-project.json `generate.url`, the genai API) and import it with its provenance — the same operation as the Studio editor's Generate and Make 3D buttons. `kind: \"image\"` draws from `prompt` (default workflow qwen-image-21-rgba: a transparent PNG; with `from`, that image material is the img2img source). `kind: \"3d\"` lifts the image material `from` into a textured GLB (TRELLIS.2; `target_faces` 1000–2000000, e.g. 10000 for a game prop; `texture_size` 1024|2048|4096 — file size is mostly texture). For text → 3D, generate the image first, then 3d from it. Takes a minute or more (3D ~70s warm, longer when the generator's queue is busy); the generator machine can be switched off — the result then says so. If no generator is connected the result says how to connect one; ask the user for the address.",
+    "description": "Make a new material with the project's connected generator (codeg-project.json `generate.url`, the genai API) and import it with its provenance — the same operations as the Studio material drawer's buttons. Kinds: `image` draws from `prompt` (default workflow qwen-image-21-rgba: a transparent PNG; with `from`, that image is the img2img source). `edit` redraws the image material `from` by `prompt` (qwen-image-21-edit; background cut away unless `transparent: false`) — e.g. restyle a render keyframe. `tpose` redraws a character image `from` standing in a T-pose (same outfit) — do this BEFORE `3d` for any character that will be rigged: a T-pose rigs cleanly far more often (5/6 vs 1/6 measured). `3d` lifts the image material `from` into a textured GLB (TRELLIS.2; `target_faces` 1000–2000000; `texture_size` 1024|2048|4096). `rig` puts a skeleton and skin weights into the model material `from` (one standing character, SkinTokens) → a rigged GLB; then studio_render `mode: walk` makes it walk. `video` animates the image material `from` as the first frame (MiniMax H3 i2v, ~1.5 min): `prompt` = the motion, the camera move, and a final `Audio: …` line; `duration` seconds (default 5), `width`/`height` (default 768). The shape and colours stay; the motion is drawn by the video model. Usual video path: image → (tpose) → 3d → (rig) → studio_render (turntable or walk) → video from a keyframe still. Takes a minute or more (3D ~2–10 min with a busy queue); the generator machine can be switched off — the result then says so. If no generator is connected the result says how to connect one; ask the user for the address.",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -488,20 +488,24 @@
           "type": "string",
           "enum": [
             "image",
-            "3d"
+            "edit",
+            "tpose",
+            "3d",
+            "rig",
+            "video"
           ]
         },
         "from": {
           "type": "string",
-          "description": "Id of an image material fed in as source_image. Required for 3d."
+          "description": "Id of the material fed in: an image (edit · tpose · 3d · video, optional for image) or a 3D model (rig)."
         },
         "prompt": {
           "type": "string",
-          "description": "What to draw. Required for image."
+          "description": "image: what to draw · edit: what to change · tpose: an optional note (e.g. 'keep the cape') · video: motion + camera + 'Audio: …'."
         },
         "workflow": {
           "type": "string",
-          "description": "Generator workflow name. Default qwen-image-21-rgba (image) or trellis2 (3d)."
+          "description": "Generator workflow name. Defaults: qwen-image-21-rgba (image), qwen-image-21-edit (edit · tpose), trellis2 (3d), minimax-h3-i2v (video)."
         },
         "seed": {
           "type": "integer",
@@ -519,6 +523,24 @@
             2048,
             4096
           ]
+        },
+        "duration": {
+          "type": "number",
+          "minimum": 0.2,
+          "maximum": 15,
+          "description": "video: seconds. Default 5."
+        },
+        "width": {
+          "type": "integer",
+          "description": "video: canvas width. Default 768 (reshaped to the image's aspect)."
+        },
+        "height": {
+          "type": "integer",
+          "description": "video: canvas height. Default 768."
+        },
+        "transparent": {
+          "type": "boolean",
+          "description": "edit · tpose: cut the background away. Default true."
         },
         "id": {
           "type": "string",
@@ -581,7 +603,7 @@
   },
   {
     "name": "studio_render",
-    "description": "Render a 3D model material with Blender on the user's computer (headless, no window) — the same operation as the Render button on a model in the Studio's material drawer. `mode: \"turntable\"` (default) circles the camera once around the model and saves a video (H.264 mp4, 24 fps) plus stills at `keyframes`; `mode: \"still\"` saves one picture. The model is scaled to height 2 and stood on a light ground plate with soft studio lights. Results are registered as materials under assets/generated/renders/ (the video `kind: video`, each still `kind: image`) with their provenance. A still is the usual first frame for a generated video. Takes ~10 s–2 min. If Blender is not installed the result says how to install it or point codeg-project.json `render.blender` at it — tell the user; do not install it yourself.",
+    "description": "Render a 3D model material with Blender on the user's computer (headless, no window) — the same operation as the Render button on a model in the Studio's material drawer. `mode: \"turntable\"` (default) circles the camera once around the model and saves a video (H.264 mp4, 24 fps) plus stills at `keyframes`; `mode: \"still\"` saves one picture. `mode: \"walk\"` makes a rigged model (one with `bones` in studio_list_assets — rig it with studio_generate_asset kind rig) take a procedural in-place stride, three-quarter view, video + stills. The model is scaled to height 2 and stood on a light ground plate with soft studio lights. Results are registered as materials under assets/generated/renders/ (the video `kind: video`, each still `kind: image`) with their provenance. A still is the usual first frame for a generated video. Takes ~10 s–2 min. If Blender is not installed the result says how to install it or point codeg-project.json `render.blender` at it — tell the user; do not install it yourself.",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -596,14 +618,15 @@
           "type": "string",
           "enum": [
             "turntable",
-            "still"
+            "still",
+            "walk"
           ]
         },
         "frames": {
           "type": "integer",
           "minimum": 1,
           "maximum": 720,
-          "description": "Turntable length at 24 fps. Default 72 (3 s)."
+          "description": "Clip length at 24 fps. Default 72 (turntable) · 48 (walk)."
         },
         "width": {
           "type": "integer",

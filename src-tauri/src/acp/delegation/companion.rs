@@ -2666,7 +2666,7 @@ pub fn parse_studio_op(tool: &str, arguments: &Value) -> Result<StudioOp, String
             }
             serde_json::from_value(args)
                 .map(StudioOp::GenerateAsset)
-                .map_err(|e| format!("studio_generate_asset: {e} (needs `kind`: image or 3d)"))
+                .map_err(|e| format!("studio_generate_asset: {e} (needs `kind`: image, edit, tpose, 3d, rig or video)"))
         }
         "studio_render" => {
             let mut args = arguments.clone();
@@ -3920,6 +3920,8 @@ mod tests {
             ("studio_list_assets", json!({})),
             ("studio_import_asset", json!({ "url": "https://x/a.png", "source": { "seed": 1 } })),
             ("studio_generate_asset", json!({ "kind": "3d", "from": "cup", "target_faces": 10000 })),
+            ("studio_generate_asset", json!({ "kind": "video", "from": "cup-f001", "prompt": "orbit", "duration": 4.5 })),
+            ("studio_render", json!({ "from": "hero-rig", "mode": "walk" })),
             ("studio_update_asset", json!({ "id": "cup", "use": "web-ar" })),
             ("studio_render", json!({ "from": "cup-3d", "frames": 48, "keyframes": [1, 25] })),
         ] {
