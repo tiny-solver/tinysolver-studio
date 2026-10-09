@@ -109,6 +109,22 @@
         "so-pick"
       ],
       "note": "10-09 반영 — 첫 화면 그림 모델 빠른 고르기 · 그림/3D/영상 카드 '설정' · 실제 쓴 모델 · 값 · 시간을 카드에 · MCP studio_generator_options + studio_generate_asset provider/model (so-pick)."
+    },
+    {
+      "id": "film-set",
+      "date": "2026-10-09",
+      "from": "오너",
+      "text": "Studio 를 강화해 3D 공간을 만들고 여러 감독을 둬서 영화를 찍듯이 — 세트장 · 출연배우를 만들고 카메라 감독 · 연출감독 · 디렉터를 두어, 필요로 하는 뮤직비디오 · 영화 · 쇼츠 · 웹툰을 카메라로 찍어 콘티 · 스토리보드로 만들고 그걸 영화화",
+      "status": "taken",
+      "items": [
+        "fs3-truth",
+        "fs3-first",
+        "fs3-set",
+        "fs3-shots",
+        "fs3-crew",
+        "fs3-film"
+      ],
+      "note": "10-09 받음 — 정할 것 둘(3D 정본 자리 · 첫 결과물) + 할 일 넷. 기존 bv-camera-path · bv-vace 가 이 공정의 카메라 · 영상화 칸이 된다."
     }
   ],
   "topics": [
@@ -160,6 +176,13 @@
       "role": "제품",
       "ask": "채팅 작업공간 대신 '무엇을 만들까요' 에서 단계 카드로 가는 첫 화면",
       "doc": "docs/studio/README.md"
+    },
+    {
+      "id": "film",
+      "name": "촬영장 — 3D 세트 · 배우 · 카메라로 찍어 콘티 → 영상 · 웹툰",
+      "role": "제품",
+      "ask": "3D 공간에 세트 · 배우 · 카메라를 두고, 역할을 나눈 에이전트(연출 · 촬영 · 미술 · 배우)가 샷을 찍어 콘티 · 스토리보드를 만들고 그걸 쇼츠 · 뮤비 · 웹툰 · 영화로",
+      "doc": "decide.json ask:film-set"
     }
   ],
   "items": [
@@ -1255,6 +1278,216 @@
         "pick": "done",
         "note": "tiny-solver/studio-admin 첫 판 v2026.10.9.1 — https://studio-admin.home.tinysolver.me (dev · LAN · Tailscale). 할 일(정할 것 · 바로 · 기다림 · 정함, 주제별) · 요청 · 규칙 · 왜. 원천은 이 repo main 을 브라우저가 직접 읽는다. 결정하기(PR 열기)는 2판"
       }
+    },
+    {
+      "role": "제품",
+      "asked": "2026-10-09",
+      "goal": "안 적음",
+      "prep": [],
+      "who": [],
+      "learn": [],
+      "unblocks": [
+        "fs3-set"
+      ],
+      "then": [],
+      "id": "fs3-truth",
+      "rule": "none",
+      "topic": "film",
+      "p": 2,
+      "status": "open",
+      "q": "촬영장(3D 세트 · 배우 · 카메라)의 정본을 어디에 두나",
+      "now": "엔진 model 노드는 GLB 를 2D 평면에 붙인 것(yaw · pitch 만) · 3D 카메라 · 조명 · xyz 위치가 없다. Blender 는 GLB 를 받아 헤드리스 렌더만 한다(studio_render.py)",
+      "facets": [
+        "에이전트가 고치기",
+        "눈으로 잡기",
+        "렌더 품질",
+        "선행"
+      ],
+      "options": [
+        {
+          "key": "A",
+          "title": "JSON 촬영장 문서 + three.js 미리보기 · Blender 는 렌더만",
+          "facets": {
+            "에이전트가 고치기": "검증된 명령 · git diff (장면 문서와 같은 길)",
+            "눈으로 잡기": "Studio 안에서 카메라 · 배우 위치를 끌어 잡는다",
+            "렌더 품질": "Blender 가 문서를 읽어 렌더",
+            "선행": "set 문서 스키마 · 3D 편집 화면"
+          }
+        },
+        {
+          "key": "B",
+          "title": ".blend 파일이 정본 · Studio 는 Blender 를 조종",
+          "facets": {
+            "에이전트가 고치기": "bpy 스크립트로만 · diff 안 보임",
+            "눈으로 잡기": "사용자가 Blender 를 직접 연다",
+            "렌더 품질": "같음",
+            "선행": "Blender 설치 필수"
+          }
+        }
+      ],
+      "pick": "A",
+      "reason": "에이전트(감독들)가 고칠 수 있어야 공정이 돈다 — 장면 문서 · MCP 명령 · 감시 스트림을 그대로 3D 로 넓힌다. Blender 는 이미 렌더 자리라 문서 → bpy 변환만 더한다",
+      "needs": [],
+      "refs": [
+        "#bv-camera-path",
+        "#aw-3d-assemble"
+      ]
+    },
+    {
+      "role": "제품",
+      "asked": "2026-10-09",
+      "goal": "안 적음",
+      "prep": [],
+      "who": [],
+      "learn": [],
+      "unblocks": [
+        "fs3-film"
+      ],
+      "then": [],
+      "id": "fs3-first",
+      "rule": "none",
+      "topic": "film",
+      "p": 2,
+      "status": "open",
+      "q": "첫 결과물을 무엇으로 끝까지 — 한 곳에서 써 보고 나머지로 넓힌다",
+      "now": "공정은 같다(촬영장 → 샷 → 콘티 → 결과물). 결과물마다 마지막 단만 다르다: 웹툰 = 칸 그림 · 말풍선, 쇼츠 = 9:16 영상, 뮤비 = 음악 박자에 샷 길이, 영화 = 씬 여러 개",
+      "facets": [
+        "크기",
+        "새로 만들 것",
+        "검증되는 것"
+      ],
+      "options": [
+        {
+          "key": "A",
+          "title": "쇼츠 1편 — 15초 · 3샷 · 배우 1 · 세트 1",
+          "facets": {
+            "크기": "가장 작다",
+            "새로 만들 것": "촬영장 · 샷 · 이어 붙이기",
+            "검증되는 것": "찍기 → 콘티 → 영상 끝까지"
+          }
+        },
+        {
+          "key": "B",
+          "title": "웹툰 4컷 — 같은 촬영장에서 스틸 4장",
+          "facets": {
+            "크기": "작다",
+            "새로 만들 것": "촬영장 · 칸 · 말풍선",
+            "검증되는 것": "찍기 → 콘티 → 칸 그림 (영상 없음)"
+          }
+        },
+        {
+          "key": "C",
+          "title": "뮤비 30초 — 음악 먼저",
+          "facets": {
+            "크기": "중간",
+            "새로 만들 것": "A + 음악 · 박자 그리드",
+            "검증되는 것": "A + 음악 맞추기"
+          }
+        }
+      ],
+      "pick": "A",
+      "reason": "영상까지 가는 가장 작은 판이라 공정 전체가 한 번에 드러난다. 웹툰은 같은 촬영장 · 콘티에서 마지막 단만 바꾸면 되고, 뮤비 · 영화는 샷 수 · 음악이 늘어난 것",
+      "needs": [],
+      "refs": []
+    },
+    {
+      "role": "제품",
+      "asked": "2026-10-09",
+      "goal": "안 적음",
+      "prep": [],
+      "who": [],
+      "learn": [],
+      "unblocks": [],
+      "then": [],
+      "id": "fs3-set",
+      "topic": "film",
+      "p": 2,
+      "status": "todo",
+      "q": "촬영장 문서 — 세트 · 배우 · 조명 · 카메라 여러 대를 3D 로",
+      "want": "outputs/film/sets/<set>.set.json 하나에 세트(배경 GLB · 바닥 · 조명) · 배우(리깅된 GLB + 동작) · 카메라(위치 · 렌즈 · 경로 키프레임)를 xyz 로 두고, Studio 3D 화면에서 끌어 잡고, MCP 명령으로 에이전트가 고친다",
+      "now": "재료 서랍 · 그림 → 3D → T포즈 → 뼈 넣기 → 걷기 렌더는 있다. 3D 공간 · 카메라 개념이 없다",
+      "action": "fs3-truth 결정 뒤 — 스키마 · 검증기(studio_scene 과 같은 규칙) · three.js 3D 편집 화면 · set → bpy 변환(studio_render)",
+      "needs": [
+        "fs3-truth"
+      ],
+      "refs": [
+        "#bv-camera-path",
+        "#bv-blender-run"
+      ],
+      "from": "ask:film-set"
+    },
+    {
+      "role": "제품",
+      "asked": "2026-10-09",
+      "goal": "안 적음",
+      "prep": [],
+      "who": [],
+      "learn": [],
+      "unblocks": [],
+      "then": [],
+      "id": "fs3-shots",
+      "topic": "film",
+      "p": 2,
+      "status": "todo",
+      "q": "샷 · 콘티 · 스토리보드 — 촬영장에서 찍은 것이 콘티가 된다",
+      "want": "샷 = 카메라 하나 + 시간 구간 + 배우 동작 + 대사 · 메모. 샷마다 Blender 키프레임 한 장 → 콘티 판(샷 번호 · 길이 · 카메라 · 대사), 스토리보드 md 는 outputs/video/storyboards 와 같은 자리에 생성",
+      "now": "outputs/video/storyboards 는 손으로 쓰는 md 뿐 · 그림과 이어지지 않는다",
+      "action": "shot 목록 스키마 · 샷마다 still 렌더 · 콘티 화면(카드 줄) · 고친 샷만 다시 렌더",
+      "needs": [
+        "fs3-set"
+      ],
+      "refs": [],
+      "from": "ask:film-set"
+    },
+    {
+      "role": "제품",
+      "asked": "2026-10-09",
+      "goal": "안 적음",
+      "prep": [],
+      "who": [],
+      "learn": [],
+      "unblocks": [],
+      "then": [],
+      "id": "fs3-crew",
+      "topic": "film",
+      "p": 3,
+      "status": "todo",
+      "q": "촬영 팀 — 역할을 나눈 에이전트(작가 · 연출 · 미술 · 캐스팅 · 촬영 · 편집)와 오너 승인 칸",
+      "want": "콘텐츠 프로젝트에 역할 정의(무엇을 읽고 무엇만 고치나)를 두고, 연출 에이전트가 codeg 위임으로 나머지에게 일을 넘긴다. 작가: bible → 씬 · 연출: 씬 → 샷 목록 · 미술: 세트 · 조명 · 캐스팅: 배우 3D · 동작 · 촬영: 카메라 · 렌즈 · 경로 · 편집: 샷 이어 붙이기 · 음악. 단계 사이에 오너가 콘티를 보고 고르는 칸",
+      "now": "codeg 는 에이전트끼리 일 넘기기(codeg-mcp)가 이미 된다 · bible/ 이 세계관 · 캐릭터 정본",
+      "action": "역할은 처음엔 한 에이전트가 단계별 지침으로 돌고, 쇼츠 1편이 돌면 역할별 세션으로 나눈다",
+      "needs": [
+        "fs3-shots"
+      ],
+      "refs": [],
+      "from": "ask:film-set"
+    },
+    {
+      "role": "제품",
+      "asked": "2026-10-09",
+      "goal": "안 적음",
+      "prep": [],
+      "who": [],
+      "learn": [],
+      "unblocks": [],
+      "then": [],
+      "id": "fs3-film",
+      "topic": "film",
+      "p": 3,
+      "status": "todo",
+      "q": "영상화 — 콘티 샷 → 영상 샷 → 이어 붙인 한 편 (웹툰은 칸 그림)",
+      "want": "샷마다 길 A(키프레임 → i2v) 또는 길 B(깊이 · 노멀 패스 → VACE, 카메라 정확)로 영상, ffmpeg 로 이어 붙이고 음악 · 자막. 웹툰은 같은 콘티 키프레임 → 그림 모델로 칸 그림 · 말풍선",
+      "now": "길 A 는 한 샷짜리로 돈다(첫 화면 '영상'). 여러 샷 · 이어 붙이기 · 음악이 없다",
+      "action": "fs3-first 결과물부터 — 쇼츠면 샷 3개 영상 + 이어 붙이기",
+      "needs": [
+        "fs3-shots",
+        "fs3-first"
+      ],
+      "refs": [
+        "#bv-vace",
+        "#bv-video-gen"
+      ],
+      "from": "ask:film-set"
     }
   ]
 }
