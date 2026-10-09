@@ -6729,5 +6729,106 @@
         "switchedOff": "This tab was opened with the web inspector switched off. Turn it on in the browser settings, then open the page again."
       }
     }
+  },
+  "StudioHome": {
+    "drawer": {
+      "open": "Open chat",
+      "title": "Chat",
+      "close": "Close chat",
+      "wide": "Widen chat",
+      "narrow": "Narrow chat"
+    },
+    "start": {
+      "title": "What shall we make?",
+      "placeholder": "e.g. a short video of a cute knight in a red cape walking toward us",
+      "character": "It's a character (T-pose → bones)",
+      "make": "Make",
+      "making": "Creating the project…",
+      "generator": "Generator",
+      "back": "Back"
+    },
+    "goal": {
+      "video": "Video",
+      "model": "3D model",
+      "image": "Image",
+      "scene": "Game scene"
+    },
+    "hint": {
+      "video": "Image → 3D → scene · camera → render → video. Rendering uses Blender on this computer; images, 3D and video come from the generator.",
+      "model": "Image → 3D. A character is redrawn in a T-pose, lifted, then given bones.",
+      "image": "One image (transparent PNG).",
+      "scene": "Image → 3D, then place it in a scene in the editor."
+    },
+    "recent": {
+      "title": "Recent projects",
+      "loading": "Loading…",
+      "empty": "No projects yet. Write what to make above.",
+      "noFlow": "No step record"
+    },
+    "errors": {
+      "noFolder": "Could not create a new project folder."
+    },
+    "flow": {
+      "progress": "{done} / {total} steps",
+      "resume": "Continue",
+      "editor": "Open editor",
+      "chat": "Chat",
+      "new": "New"
+    },
+    "state": {
+      "running": "Working",
+      "done": "Done",
+      "failed": "Failed",
+      "ready": "Ready",
+      "waiting": "Waiting for the step before"
+    },
+    "step": {
+      "image": {
+        "title": "Image",
+        "running": "Drawing… 10–20 s",
+        "hint": "Draws the prompt (transparent PNG)."
+      },
+      "tpose": {
+        "title": "T-pose",
+        "running": "Redrawing in a T-pose… 10–20 s",
+        "hint": "Redraws the same character with arms out — bones go in far more cleanly."
+      },
+      "model": {
+        "title": "3D",
+        "running": "Making 3D… 1–10 min",
+        "hint": "Lifts the image into a textured 3D model (GLB)."
+      },
+      "rig": {
+        "title": "Bones",
+        "running": "Adding bones… about 30 s",
+        "hint": "Puts a skeleton and skin weights into the model so it can move."
+      },
+      "camera": {
+        "title": "Scene · camera",
+        "running": "Shooting in Blender…",
+        "hint": "Set the camera angle and take one shot (Blender on this computer)."
+      },
+      "render": {
+        "title": "Render",
+        "running": "Rendering in Blender… 10 s–2 min",
+        "hint": "Makes a turntable (a walk, when it has bones) and a first-frame still."
+      },
+      "video": {
+        "title": "Video",
+        "running": "Making the video… 1–2 min",
+        "hint": "Animates the render's first frame — write the motion, camera and sound.",
+        "motion": "Motion · camera · an 'Audio: …' line"
+      }
+    },
+    "camera": {
+      "yaw": "Around",
+      "pitch": "Height",
+      "cam_dist": "Distance"
+    },
+    "card": {
+      "again": "Again",
+      "run": "Run",
+      "edit": "Edit tools"
+    }
   }
 }

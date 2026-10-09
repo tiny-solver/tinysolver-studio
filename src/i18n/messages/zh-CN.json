@@ -6729,5 +6729,106 @@
         "switchedOff": "这个标签页是在网页检查器关闭时打开的。请在浏览器设置里打开它，然后重新打开该页面。"
       }
     }
+  },
+  "StudioHome": {
+    "drawer": {
+      "open": "打开对话",
+      "title": "对话",
+      "close": "关闭对话",
+      "wide": "放大对话",
+      "narrow": "缩小对话"
+    },
+    "start": {
+      "title": "要做什么?",
+      "placeholder": "例:一个穿红斗篷的可爱骑士朝我们走来的短视频",
+      "character": "这是角色 (T 姿势 → 骨骼)",
+      "make": "开始",
+      "making": "正在创建项目…",
+      "generator": "生成器",
+      "back": "返回"
+    },
+    "goal": {
+      "video": "视频",
+      "model": "3D 模型",
+      "image": "图片",
+      "scene": "游戏场景"
+    },
+    "hint": {
+      "video": "图片 → 3D → 场景 · 镜头 → 渲染 → 视频。渲染用本机的 Blender,图片 · 3D · 视频由生成器制作。",
+      "model": "图片 → 3D。角色会先改为 T 姿势再转 3D,然后绑定骨骼。",
+      "image": "一张图片 (透明 PNG)。",
+      "scene": "图片 → 3D,然后在编辑器中放入场景。"
+    },
+    "recent": {
+      "title": "最近的项目",
+      "loading": "加载中…",
+      "empty": "还没有项目。在上面写下要做的东西。",
+      "noFlow": "没有步骤记录"
+    },
+    "errors": {
+      "noFolder": "无法创建新的项目文件夹。"
+    },
+    "flow": {
+      "progress": "{done} / {total} 步",
+      "resume": "继续",
+      "editor": "打开编辑器",
+      "chat": "对话",
+      "new": "新建"
+    },
+    "state": {
+      "running": "进行中",
+      "done": "完成",
+      "failed": "失败",
+      "ready": "就绪",
+      "waiting": "等待上一步"
+    },
+    "step": {
+      "image": {
+        "title": "图片",
+        "running": "绘制中… 10~20 秒",
+        "hint": "按提示绘制图片 (透明 PNG)。"
+      },
+      "tpose": {
+        "title": "T 姿势",
+        "running": "正在重绘为 T 姿势… 10~20 秒",
+        "hint": "把同一角色重绘成张开双臂的 T 姿势 — 骨骼绑定更干净。"
+      },
+      "model": {
+        "title": "3D",
+        "running": "正在生成 3D… 1~10 分钟",
+        "hint": "把图片转成带贴图的 3D 模型 (GLB)。"
+      },
+      "rig": {
+        "title": "骨骼",
+        "running": "正在绑定骨骼… 约 30 秒",
+        "hint": "为模型加入骨架和蒙皮,使其可以动。"
+      },
+      "camera": {
+        "title": "场景 · 镜头",
+        "running": "正在用 Blender 拍摄…",
+        "hint": "确定镜头角度并拍一张 (本机的 Blender)。"
+      },
+      "render": {
+        "title": "渲染",
+        "running": "Blender 渲染中… 10 秒~2 分钟",
+        "hint": "生成转台(有骨骼则为行走)视频和首帧图片。"
+      },
+      "video": {
+        "title": "视频",
+        "running": "正在生成视频… 1~2 分钟",
+        "hint": "从渲染首帧生成视频 — 写下动作、镜头和声音。",
+        "motion": "动作 · 镜头 · 一行 'Audio: …'"
+      }
+    },
+    "camera": {
+      "yaw": "左右",
+      "pitch": "高度",
+      "cam_dist": "距离"
+    },
+    "card": {
+      "again": "重做",
+      "run": "运行",
+      "edit": "编辑工具"
+    }
   }
 }

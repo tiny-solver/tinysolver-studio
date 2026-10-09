@@ -57,7 +57,16 @@ pub enum StudioOp {
     },
     /// Render a model material with the user's Blender ([`crate::studio_render`]).
     RenderAsset(crate::studio_render::RenderRequest),
+    /// The first screen's step record, `<root>/studio-flow.json` (what was
+    /// asked, which steps ran, which material each made). `null` when absent.
+    ReadFlow,
+    /// Replace the step record. The editor owns its shape; this only checks
+    /// that it is an object and writes it atomically.
+    WriteFlow { flow: Value },
 }
+
+/// Where the first screen keeps its step record.
+pub const FLOW_FILE: &str = "studio-flow.json";
 
 /// Whether a folder is (or is shaped like) a content project, i.e. whether
 /// the `studio_*` tools are worth exposing to an agent launched in it.
@@ -161,6 +170,26 @@ pub async fn run(root: PathBuf, op: StudioOp) -> Value {
         StudioOp::UpdateAsset { id, use_for } => studio_assets::update(&root, &id, use_for).await,
         StudioOp::ConnectGenerator { url } => studio_assets::connect(&root, url).await,
         StudioOp::RenderAsset(req) => crate::studio_render::render(&root, req).await,
+        StudioOp::ReadFlow => {
+            let path = root.join(FLOW_FILE);
+            match tokio::fs::read(&path).await {
+                Ok(bytes) => match serde_json::from_slice::<Value>(&bytes) {
+                    Ok(flow) => json!({ "ok": true, "flow": flow }),
+                    Err(e) => fail(format!("{FLOW_FILE} is not valid JSON: {e}")),
+                },
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => json!({ "ok": true, "flow": null }),
+                Err(e) => fail(format!("Could not read {FLOW_FILE}: {e}")),
+            }
+        }
+        StudioOp::WriteFlow { flow } => {
+            if !flow.is_object() {
+                return fail("flow must be an object");
+            }
+            match write_atomic(&root.join(FLOW_FILE), &flow).await {
+                Ok(()) => json!({ "ok": true, "path": FLOW_FILE }),
+                Err(e) => fail(format!("Could not write {FLOW_FILE}: {e}")),
+            }
+        }
     }
 }
 
@@ -277,6 +306,18 @@ mod tests {
         assert_ne!(hero["transform"]["x"], hero_x);
         assert!(on_disk["logic"].is_object(), "engine-owned fields survive");
         assert!(!root.join("outputs/game/content/main.json.tmp").exists());
+    }
+
+    #[tokio::test]
+    async fn flow_round_trips_and_starts_empty() {
+        let tmp = project().await;
+        let root = tmp.path().join("tools-check");
+        let r = run(root.clone(), StudioOp::ReadFlow).await;
+        assert_eq!(r, json!({ "ok": true, "flow": null }));
+        let flow = json!({ "schema": 1, "prompt": "a teacup", "steps": { "image": { "material": "teacup" } } });
+        assert_eq!(run(root.clone(), StudioOp::WriteFlow { flow: flow.clone() }).await["ok"], true);
+        assert_eq!(run(root.clone(), StudioOp::ReadFlow).await["flow"], flow);
+        assert_eq!(run(root, StudioOp::WriteFlow { flow: json!([1]) }).await["ok"], false);
     }
 
     #[tokio::test]

@@ -6729,5 +6729,106 @@
         "switchedOff": "這個分頁是在網頁檢查器關閉時開啟的。請到瀏覽器設定中開啟它，然後重新開啟該頁面。"
       }
     }
+  },
+  "StudioHome": {
+    "drawer": {
+      "open": "開啟對話",
+      "title": "對話",
+      "close": "關閉對話",
+      "wide": "放大對話",
+      "narrow": "縮小對話"
+    },
+    "start": {
+      "title": "要做什麼?",
+      "placeholder": "例:一個穿紅斗篷的可愛騎士朝我們走來的短片",
+      "character": "這是角色 (T 姿勢 → 骨架)",
+      "make": "開始",
+      "making": "正在建立專案…",
+      "generator": "產生器",
+      "back": "返回"
+    },
+    "goal": {
+      "video": "影片",
+      "model": "3D 模型",
+      "image": "圖片",
+      "scene": "遊戲場景"
+    },
+    "hint": {
+      "video": "圖片 → 3D → 場景 · 鏡頭 → 算圖 → 影片。算圖用本機的 Blender,圖片 · 3D · 影片由產生器製作。",
+      "model": "圖片 → 3D。角色會先改為 T 姿勢再轉 3D,然後綁定骨架。",
+      "image": "一張圖片 (透明 PNG)。",
+      "scene": "圖片 → 3D,然後在編輯器中放入場景。"
+    },
+    "recent": {
+      "title": "最近的專案",
+      "loading": "載入中…",
+      "empty": "還沒有專案。在上面寫下要做的東西。",
+      "noFlow": "沒有步驟紀錄"
+    },
+    "errors": {
+      "noFolder": "無法建立新的專案資料夾。"
+    },
+    "flow": {
+      "progress": "{done} / {total} 步",
+      "resume": "繼續",
+      "editor": "開啟編輯器",
+      "chat": "對話",
+      "new": "新建"
+    },
+    "state": {
+      "running": "進行中",
+      "done": "完成",
+      "failed": "失敗",
+      "ready": "就緒",
+      "waiting": "等待上一步"
+    },
+    "step": {
+      "image": {
+        "title": "圖片",
+        "running": "繪製中… 10~20 秒",
+        "hint": "依提示繪製圖片 (透明 PNG)。"
+      },
+      "tpose": {
+        "title": "T 姿勢",
+        "running": "正在重繪為 T 姿勢… 10~20 秒",
+        "hint": "把同一角色重繪成張開雙臂的 T 姿勢 — 骨架綁定更乾淨。"
+      },
+      "model": {
+        "title": "3D",
+        "running": "正在產生 3D… 1~10 分鐘",
+        "hint": "把圖片轉成帶貼圖的 3D 模型 (GLB)。"
+      },
+      "rig": {
+        "title": "骨架",
+        "running": "正在綁定骨架… 約 30 秒",
+        "hint": "為模型加入骨架與蒙皮,讓它可以動。"
+      },
+      "camera": {
+        "title": "場景 · 鏡頭",
+        "running": "正在用 Blender 拍攝…",
+        "hint": "決定鏡頭角度並拍一張 (本機的 Blender)。"
+      },
+      "render": {
+        "title": "算圖",
+        "running": "Blender 算圖中… 10 秒~2 分鐘",
+        "hint": "產生轉台(有骨架則為行走)影片與首幀圖片。"
+      },
+      "video": {
+        "title": "影片",
+        "running": "正在產生影片… 1~2 分鐘",
+        "hint": "從算圖首幀產生影片 — 寫下動作、鏡頭和聲音。",
+        "motion": "動作 · 鏡頭 · 一行 'Audio: …'"
+      }
+    },
+    "camera": {
+      "yaw": "左右",
+      "pitch": "高度",
+      "cam_dist": "距離"
+    },
+    "card": {
+      "again": "重做",
+      "run": "執行",
+      "edit": "編輯工具"
+    }
   }
 }

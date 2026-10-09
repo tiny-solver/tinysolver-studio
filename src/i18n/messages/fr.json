@@ -6729,5 +6729,106 @@
         "switchedOff": "Cet onglet a été ouvert alors que l’inspecteur web était désactivé. Activez-le dans les réglages du navigateur, puis rouvrez la page."
       }
     }
+  },
+  "StudioHome": {
+    "drawer": {
+      "open": "Ouvrir le chat",
+      "title": "Chat",
+      "close": "Fermer le chat",
+      "wide": "Élargir le chat",
+      "narrow": "Réduire le chat"
+    },
+    "start": {
+      "title": "Que fait-on ?",
+      "placeholder": "ex. une courte vidéo d'un mignon chevalier à cape rouge qui marche vers nous",
+      "character": "C'est un personnage (pose en T → os)",
+      "make": "Créer",
+      "making": "Création du projet…",
+      "generator": "Générateur",
+      "back": "Retour"
+    },
+    "goal": {
+      "video": "Vidéo",
+      "model": "Modèle 3D",
+      "image": "Image",
+      "scene": "Scène de jeu"
+    },
+    "hint": {
+      "video": "Image → 3D → scène · caméra → rendu → vidéo. Le rendu utilise Blender sur cet ordinateur ; images, 3D et vidéo viennent du générateur.",
+      "model": "Image → 3D. Un personnage est redessiné en pose T, passé en 3D, puis reçoit des os.",
+      "image": "Une image (PNG transparent).",
+      "scene": "Image → 3D, puis placez-le dans une scène dans l'éditeur."
+    },
+    "recent": {
+      "title": "Projets récents",
+      "loading": "Chargement…",
+      "empty": "Aucun projet pour l'instant. Écrivez ci-dessus ce qu'il faut faire.",
+      "noFlow": "Aucun suivi d'étapes"
+    },
+    "errors": {
+      "noFolder": "Impossible de créer le dossier du projet."
+    },
+    "flow": {
+      "progress": "{done} / {total} étapes",
+      "resume": "Continuer",
+      "editor": "Ouvrir l'éditeur",
+      "chat": "Chat",
+      "new": "Nouveau"
+    },
+    "state": {
+      "running": "En cours",
+      "done": "Terminé",
+      "failed": "Échec",
+      "ready": "Prêt",
+      "waiting": "Attend l'étape précédente"
+    },
+    "step": {
+      "image": {
+        "title": "Image",
+        "running": "Dessin… 10–20 s",
+        "hint": "Dessine le prompt (PNG transparent)."
+      },
+      "tpose": {
+        "title": "Pose en T",
+        "running": "Redessin en pose T… 10–20 s",
+        "hint": "Redessine le même personnage bras écartés — les os se posent bien plus proprement."
+      },
+      "model": {
+        "title": "3D",
+        "running": "Création 3D… 1–10 min",
+        "hint": "Transforme l'image en modèle 3D texturé (GLB)."
+      },
+      "rig": {
+        "title": "Os",
+        "running": "Ajout des os… environ 30 s",
+        "hint": "Ajoute squelette et poids de peau pour que le modèle bouge."
+      },
+      "camera": {
+        "title": "Scène · caméra",
+        "running": "Prise de vue dans Blender…",
+        "hint": "Réglez l'angle de caméra et prenez une image (Blender sur cet ordinateur)."
+      },
+      "render": {
+        "title": "Rendu",
+        "running": "Rendu dans Blender… 10 s–2 min",
+        "hint": "Fait un tour complet (une marche s'il a des os) et une image de la première trame."
+      },
+      "video": {
+        "title": "Vidéo",
+        "running": "Création de la vidéo… 1–2 min",
+        "hint": "Anime la première trame du rendu — décrivez mouvement, caméra et son.",
+        "motion": "Mouvement · caméra · une ligne 'Audio: …'"
+      }
+    },
+    "camera": {
+      "yaw": "Rotation",
+      "pitch": "Hauteur",
+      "cam_dist": "Distance"
+    },
+    "card": {
+      "again": "Refaire",
+      "run": "Lancer",
+      "edit": "Outils"
+    }
   }
 }

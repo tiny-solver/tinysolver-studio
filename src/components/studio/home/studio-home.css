@@ -1,0 +1,487 @@
+/* The first screen: making flow in the middle, conversation in a drawer. */
+.studio-home {
+  --studio-drawer-w: min(440px, 42vw);
+  position: relative;
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  width: 100%;
+  overflow: hidden;
+}
+.studio-home-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: auto;
+}
+.studio-home[data-drawer="wide"] .studio-home-main {
+  display: none;
+}
+.studio-home-drawer {
+  flex: none;
+  width: var(--studio-drawer-w);
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--border);
+  background: var(--background);
+  min-height: 0;
+}
+.studio-home[data-drawer="wide"] .studio-home-drawer {
+  width: 100%;
+  border-left: 0;
+}
+/* Closed: off-screen but mounted, so a running turn keeps streaming. */
+.studio-home[data-drawer="closed"] .studio-home-drawer {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  transform: translateX(100%);
+  visibility: hidden;
+}
+.studio-home-drawer-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 36px;
+  padding: 0 8px 0 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+.studio-home-drawer-bar strong {
+  flex: 1;
+  font-weight: 600;
+}
+.studio-home-drawer-bar button,
+.studio-home-drawer-handle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: 6px;
+  color: var(--muted-foreground);
+}
+.studio-home-drawer-bar button {
+  width: 26px;
+  height: 26px;
+}
+.studio-home-drawer-bar button:hover,
+.studio-home-drawer-handle:hover {
+  background: var(--muted);
+  color: var(--foreground);
+}
+.studio-home-drawer-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.studio-home-drawer-handle {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  z-index: 5;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  background: var(--background);
+  font-size: 12px;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.08);
+}
+
+/* ── start ─────────────────────────────────────────────── */
+.studio-start {
+  position: relative;
+  max-width: 880px;
+  margin: 0 auto;
+  padding: clamp(32px, 9vh, 96px) 24px 48px;
+}
+.studio-start h1 {
+  font-size: clamp(26px, 3.2vw, 36px);
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  margin: 0 0 20px;
+}
+.studio-start-cancel {
+  position: absolute;
+  right: 24px;
+  top: 24px;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  color: var(--muted-foreground);
+}
+.studio-start-cancel:hover {
+  background: var(--muted);
+}
+.studio-start-box {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--card, var(--background));
+  padding: 14px;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.04);
+}
+.studio-start-box textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 72px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font-size: 16px;
+  line-height: 1.5;
+}
+.studio-start-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 8px;
+}
+.studio-start-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex: 1;
+}
+.studio-start-chips button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 13px;
+  color: var(--muted-foreground);
+}
+.studio-start-chips button.is-on {
+  border-color: var(--foreground);
+  color: var(--foreground);
+  background: var(--muted);
+  font-weight: 600;
+}
+.studio-start-character {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--muted-foreground);
+}
+.studio-start-go {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 16px;
+  border-radius: 999px;
+  background: var(--foreground);
+  color: var(--background);
+  font-size: 13px;
+  font-weight: 600;
+}
+.studio-start-go:disabled {
+  opacity: 0.4;
+}
+.studio-start-hint {
+  margin: 10px 2px 0;
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.studio-start-generator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border);
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.studio-start-generator input {
+  flex: 1;
+  min-width: 0;
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--foreground);
+}
+.studio-start-error,
+.studio-flow-error {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--destructive, #c2410c);
+  white-space: pre-wrap;
+}
+.studio-start-recent {
+  margin-top: 40px;
+}
+.studio-start-recent h2 {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted-foreground);
+  margin-bottom: 10px;
+}
+.studio-start-muted {
+  font-size: 13px;
+  color: var(--muted-foreground);
+}
+.studio-start-recent-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 10px;
+}
+.studio-start-project {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  text-align: left;
+}
+.studio-start-project:hover {
+  background: var(--muted);
+}
+.studio-start-project strong {
+  font-size: 13px;
+}
+.studio-start-project span {
+  font-size: 12px;
+  color: var(--muted-foreground);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+.studio-start-thumbs {
+  display: flex;
+  gap: 4px;
+  width: 100%;
+  height: 64px;
+  margin-bottom: 4px;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted-foreground);
+  background: repeating-conic-gradient(var(--muted) 0 25%, transparent 0 50%)
+    50% / 10px 10px;
+  border-radius: 6px;
+  overflow: hidden;
+}
+.studio-start-thumbs img {
+  height: 100%;
+  flex: 1;
+  min-width: 0;
+  object-fit: contain;
+}
+
+/* ── flow ─────────────────────────────────────────────── */
+.studio-flow {
+  padding: 24px 24px 32px;
+  min-width: 0;
+}
+.studio-flow-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+.studio-flow-head h1 {
+  font-size: 22px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  margin: 4px 0 2px;
+}
+.studio-flow-head small {
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.studio-flow-goal {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--muted);
+  color: var(--muted-foreground);
+}
+.studio-flow-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.studio-flow-actions button,
+.studio-flow-card-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  white-space: nowrap;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 12px;
+}
+.studio-flow-actions button:hover:not(:disabled),
+.studio-flow-card-actions button:hover:not(:disabled) {
+  background: var(--muted);
+}
+.studio-flow-actions button:disabled,
+.studio-flow-card-actions button:disabled {
+  opacity: 0.45;
+}
+.studio-flow-cards {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding-bottom: 12px;
+  scroll-snap-type: x proximity;
+  list-style: none;
+  margin: 0;
+}
+.studio-flow-card {
+  flex: 0 0 200px;
+  width: 200px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card, var(--background));
+  scroll-snap-align: start;
+}
+.studio-flow-card[data-state="running"] {
+  border-color: var(--foreground);
+}
+.studio-flow-card[data-state="waiting"] {
+  opacity: 0.6;
+}
+.studio-flow-card[data-state="failed"] {
+  border-color: var(--destructive, #c2410c);
+}
+.studio-flow-card-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+.studio-flow-card-head strong {
+  flex: 1;
+  font-weight: 600;
+}
+.studio-flow-num {
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+.studio-flow-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+.studio-flow-card[data-state="done"] .studio-flow-state {
+  color: var(--foreground);
+}
+.studio-flow-preview {
+  height: 176px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  overflow: hidden;
+  background: repeating-conic-gradient(var(--muted) 0 25%, transparent 0 50%)
+    50% / 12px 12px;
+}
+.studio-flow-preview img,
+.studio-flow-preview video,
+.studio-flow-preview iframe {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border: 0;
+  display: block;
+}
+.studio-flow-preview p {
+  padding: 12px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted-foreground);
+  text-align: center;
+  background: var(--background);
+  border-radius: 6px;
+  margin: 12px;
+}
+.studio-flow-note {
+  color: var(--destructive, #c2410c) !important;
+  white-space: pre-wrap;
+  text-align: left !important;
+  max-height: 170px;
+  overflow: auto;
+}
+.studio-flow-camera {
+  display: grid;
+  gap: 4px;
+}
+.studio-flow-camera label {
+  display: grid;
+  grid-template-columns: 40px 1fr 30px;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+.studio-flow-camera output {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.studio-flow-motion {
+  width: 100%;
+  resize: vertical;
+  font-size: 12px;
+  line-height: 1.45;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+}
+.studio-flow-card-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: auto;
+}
+.studio-flow-card-actions button {
+  flex: 1;
+  justify-content: center;
+  padding: 0 6px;
+}
+
+@media (max-width: 720px) {
+  .studio-home {
+    --studio-drawer-w: 100%;
+  }
+  .studio-home[data-drawer="open"] .studio-home-main {
+    display: none;
+  }
+  .studio-start {
+    padding: 28px 16px;
+  }
+  .studio-flow {
+    padding: 16px;
+  }
+}
+.studio-flow-camera input {
+  min-width: 0;
+}
