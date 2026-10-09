@@ -90,11 +90,12 @@
       "date": "2026-10-09",
       "from": "오너",
       "text": "tinysolver studio 도 다른 제품들처럼 백오피스 하나 만들고 할 일 · 결정을 거기 담아 두자 — dal · diary 백오피스 참고",
-      "status": "taken",
+      "status": "done",
       "items": [
         "bo-home",
         "bo-build"
-      ]
+      ],
+      "note": "10-09 — https://studio-admin.home.tinysolver.me 첫 판(읽기 전용). 결정하기 · 쓰기는 다음 판"
     }
   ],
   "topics": [
@@ -1165,7 +1166,7 @@
       "id": "bo-build",
       "topic": "release",
       "p": 1,
-      "status": "todo",
+      "status": "decided",
       "role": "제품",
       "asked": "2026-10-09",
       "goal": "안 적음",
@@ -1189,7 +1190,12 @@
       ],
       "refs": [
         "#bo-home"
-      ]
+      ],
+      "decided": {
+        "date": "2026-10-09",
+        "pick": "done",
+        "note": "tiny-solver/studio-admin 첫 판 v2026.10.9.1 — https://studio-admin.home.tinysolver.me (dev · LAN · Tailscale). 할 일(정할 것 · 바로 · 기다림 · 정함, 주제별) · 요청 · 규칙 · 왜. 원천은 이 repo main 을 브라우저가 직접 읽는다. 결정하기(PR 열기)는 2판"
+      }
     }
   ]
 }
