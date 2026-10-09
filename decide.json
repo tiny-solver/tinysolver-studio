@@ -1040,6 +1040,34 @@
       "refs": [
         "~/handoff/studio-notes.md §2"
       ]
+    },
+    {
+      "id": "aw-genai-followups",
+      "topic": "workbench",
+      "p": 2,
+      "status": "todo",
+      "role": "제품",
+      "asked": "2026-10-09",
+      "goal": "안 적음",
+      "from": "ask:asset-workbench",
+      "prep": [],
+      "who": [
+        "my-genai 담당 세션"
+      ],
+      "learn": [],
+      "q": "genai 쪽 문제 셋을 my-genai 에 넘기고 고쳐지면 Studio 에서 다시 재 본다",
+      "want": "① 3D target_faces 가 결과에 반영된다(1만 요청 → 1만 안팎) ② qwen-image-21-rgba 결과가 실제로 투명하다(알파 < 250 인 픽셀이 있다) ③ 3D 생성이 500 없이 끝난다 — 고쳐진 뒤 Studio 서랍에서 같은 재료로 다시 만들어 면 수 · 용량 · '투명하지 않음' 경고가 사라지는 것을 확인",
+      "now": "10-07~08 실측: target_faces 10000 이 DecimateMesh 까지 넘어갔는데 결과 282,974면 · 18.2MB(텍스처는 이미 JPEG 3.6MB — 용량은 면 수 탓). rgba 그림 알파 253~255. 10-08 3D 요청 1,000면 · 8,000면 둘 다 500 'Execution error occurred'",
+      "action": "my-genai 에 요청(asks)으로 셋을 넘긴다 — Studio 코드는 고치지 않는다(부르기만 · B13). 고쳐지면 Studio 에서 다시 생성해 roadmap checks 에 결과",
+      "needs": [],
+      "unblocks": [
+        "bv-blender-run"
+      ],
+      "then": [],
+      "refs": [
+        "docs/studio/roadmap.json checks 2026-10-08",
+        "~/handoff/studio-notes.md §3"
+      ]
     }
   ]
 }
