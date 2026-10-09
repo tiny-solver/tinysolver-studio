@@ -899,7 +899,7 @@
       "rule": "none",
       "topic": "video",
       "p": 2,
-      "status": "open",
+      "status": "decided",
       "role": "제품",
       "asked": "2026-10-08",
       "q": "영상 길을 어느 것부터 — A 키프레임 → i2v, B 깊이 · 노멀 → VACE 제어 영상",
@@ -948,14 +948,19 @@
       "then": [],
       "refs": [
         "~/handoff/studio-notes.md 두 길"
-      ]
+      ],
+      "decided": {
+        "date": "2026-10-09",
+        "pick": "A",
+        "note": "대표님 \"권장대로\""
+      }
     },
     {
       "id": "bv-where",
       "rule": "none",
       "topic": "video",
       "p": 2,
-      "status": "open",
+      "status": "decided",
       "role": "제품",
       "asked": "2026-10-08",
       "q": "Blender 를 어디서 돌리나",
@@ -1004,14 +1009,19 @@
       "refs": [
         "#studio-asset-gen",
         "~/handoff/studio-notes.md"
-      ]
+      ],
+      "decided": {
+        "date": "2026-10-09",
+        "pick": "A",
+        "note": "대표님 \"권장대로\""
+      }
     },
     {
       "id": "fs-layout",
       "rule": "upstream-receive-only",
       "topic": "entry",
       "p": 2,
-      "status": "open",
+      "status": "decided",
       "role": "제품",
       "asked": "2026-10-08",
       "q": "첫 화면 모양 — 무엇이 먼저 보이나",
@@ -1050,7 +1060,12 @@
       "then": [],
       "refs": [
         "~/handoff/studio-notes.md §2"
-      ]
+      ],
+      "decided": {
+        "date": "2026-10-09",
+        "pick": "A",
+        "note": "대표님 \"권장대로\""
+      }
     },
     {
       "id": "aw-genai-followups",
@@ -1085,7 +1100,7 @@
       "rule": "release-from-linux1",
       "topic": "release",
       "p": 1,
-      "status": "open",
+      "status": "decided",
       "role": "제품",
       "asked": "2026-10-09",
       "q": "Studio 백오피스를 어디에 두고 어떻게 배포하나",
@@ -1139,7 +1154,12 @@
         "diary /admin/decide(GitHub main 에서 읽어 팀별 표)",
         ".github/workflows/release.yml (tags v*.*.*)",
         "my-devops scripts/stage.sh(CalVer 태그)"
-      ]
+      ],
+      "decided": {
+        "date": "2026-10-09",
+        "pick": "A",
+        "note": "대표님 \"권장대로\""
+      }
     },
     {
       "id": "bo-build",
