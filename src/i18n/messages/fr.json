@@ -6829,6 +6829,46 @@
       "again": "Refaire",
       "run": "Lancer",
       "edit": "Outils"
+    },
+    "options": {
+      "open": "Réglages — modèle · valeurs",
+      "changed": "Réglages modifiés — relancez pour appliquer",
+      "image": "Modèle d’image",
+      "video": "Modèle vidéo",
+      "preset": "Usage",
+      "custom": "Personnalisé",
+      "faces": "Faces",
+      "texture": "Texture",
+      "compress": "Compresser les textures (fichier plus léger)",
+      "compressed": "compressé",
+      "duration": "Durée (s)",
+      "audio": "avec son",
+      "transparent": "transparent",
+      "loading": "Chargement…",
+      "facesTexture": "{faces} faces · texture {texture}",
+      "madeFaces": "{faces} faces obtenues",
+      "seconds": "≈{seconds} s",
+      "secondsLong": "{seconds} s",
+      "usd": "≈${usd}/image",
+      "billing": {
+        "local": "Gratuit · GPU du générateur",
+        "subscription": "Abonnement",
+        "metered": "À l’usage"
+      },
+      "group": {
+        "local": "GPU du générateur — gratuit",
+        "subscription": "Abonnement — pas de coût par image",
+        "metered": "À l’usage — facturé par image"
+      },
+      "took": "a pris {seconds} s",
+      "about": {
+        "subscription": "l’abonnement ChatGPT du propriétaire du générateur (Codex) — une à la fois",
+        "metered": "facturé par image — avec la clé API du générateur"
+      },
+      "note": {
+        "no_generator": "Aucun générateur connecté — seules les images cloud sont listées. Saisissez son adresse dans le champ Générateur du premier écran.",
+        "generator_off": "Le générateur n’a pas renvoyé sa liste — il est peut-être éteint ou occupé. Rouvrez les réglages pour redemander."
+      }
     }
   }
 }

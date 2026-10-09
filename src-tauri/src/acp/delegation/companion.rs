@@ -260,7 +260,8 @@ impl CompanionFeatures {
             "browser_eval" => self.browser && self.browser_eval,
             "studio_list_scenes" | "studio_read_scene" | "studio_apply_scene_commands"
             | "studio_build" | "studio_publish" | "studio_list_assets" | "studio_import_asset"
-            | "studio_generate_asset" | "studio_update_asset" | "studio_render" => self.studio,
+            | "studio_generate_asset" | "studio_update_asset" | "studio_render"
+            | "studio_generator_options" => self.studio,
             "delegate_to_agent" | "get_delegation_status" | "cancel_delegation"
             | "resume_delegation" => self.delegation,
             _ => false,
@@ -741,7 +742,8 @@ async fn build_tools_call_spawn(
         }
         "studio_list_scenes" | "studio_read_scene" | "studio_apply_scene_commands"
         | "studio_build" | "studio_publish" | "studio_list_assets" | "studio_import_asset"
-        | "studio_generate_asset" | "studio_update_asset" | "studio_render" => {
+        | "studio_generate_asset" | "studio_update_asset" | "studio_render"
+            | "studio_generator_options" => {
             let op = match parse_studio_op(&name, &arguments) {
                 Ok(op) => op,
                 Err(msg) => return LineAction::Respond(err(id, -32602, msg)),
@@ -2631,6 +2633,7 @@ pub fn parse_studio_op(tool: &str, arguments: &Value) -> Result<StudioOp, String
     match tool {
         "studio_list_scenes" => Ok(StudioOp::ListScenes),
         "studio_list_assets" => Ok(StudioOp::ListAssets),
+        "studio_generator_options" => Ok(StudioOp::GeneratorOptions { url: None }),
         "studio_import_asset" => {
             let mut args = arguments.clone();
             if let Some(obj) = args.as_object_mut() {
@@ -3874,7 +3877,7 @@ mod tests {
         browser_eval: false,
     };
 
-    const STUDIO_TOOLS: [&str; 10] = [
+    const STUDIO_TOOLS: [&str; 11] = [
         "studio_list_scenes",
         "studio_read_scene",
         "studio_apply_scene_commands",
@@ -3885,6 +3888,7 @@ mod tests {
         "studio_generate_asset",
         "studio_update_asset",
         "studio_render",
+        "studio_generator_options",
     ];
 
     #[tokio::test]

@@ -6829,6 +6829,46 @@
       "again": "Again",
       "run": "Run",
       "edit": "Edit tools"
+    },
+    "options": {
+      "open": "Settings — model · values",
+      "changed": "Settings changed — run again to apply",
+      "image": "Picture model",
+      "video": "Video model",
+      "preset": "Use",
+      "custom": "Custom",
+      "faces": "Faces",
+      "texture": "Texture",
+      "compress": "Compress textures (smaller file)",
+      "compressed": "compressed",
+      "duration": "Length (s)",
+      "audio": "with sound",
+      "transparent": "transparent",
+      "loading": "Loading…",
+      "facesTexture": "{faces} faces · texture {texture}",
+      "madeFaces": "{faces} faces made",
+      "seconds": "≈{seconds}s",
+      "secondsLong": "{seconds}s",
+      "usd": "≈${usd}/picture",
+      "billing": {
+        "local": "Free · generator GPU",
+        "subscription": "Subscription",
+        "metered": "Metered"
+      },
+      "group": {
+        "local": "Generator GPU — free",
+        "subscription": "Subscription — no per-picture charge",
+        "metered": "Metered — charged per picture"
+      },
+      "took": "took {seconds}s",
+      "about": {
+        "subscription": "the generator owner's ChatGPT subscription (Codex) — one at a time",
+        "metered": "charged per picture — on the generator's API key"
+      },
+      "note": {
+        "no_generator": "No generator connected — only cloud pictures are listed. Enter its address in the first screen's Generator field.",
+        "generator_off": "The generator did not answer with its list — it may be off or busy. Open settings again to ask once more."
+      }
     }
   }
 }

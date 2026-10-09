@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest"
 
 import {
+  choiceKey,
+  imageChoiceOf,
+  modelChoice,
   newFlow,
   nextStep,
   parseFlow,
@@ -8,6 +11,7 @@ import {
   projectNameFor,
   recordOf,
   stepOp,
+  withOption,
   withoutStepsFrom,
   type StudioFlow,
 } from "./flow"
@@ -154,5 +158,107 @@ describe("projectNameFor", () => {
   it("keeps ascii words, else dates the folder", () => {
     expect(projectNameFor("A Knight with a red cape!")).toBe("a-knight-with-a")
     expect(projectNameFor("빨간 망토 기사", at)).toMatch(/^studio-20261009-/)
+  })
+})
+
+describe("step options", () => {
+  const base = () => ({
+    ...newFlow("a small blue teacup", "video", false, at),
+    steps: {
+      image: done("cup"),
+      model: done("cup-3d"),
+      render: done("cup-turn", ["cup-f001"]),
+    },
+  })
+
+  it("draws with the generator default until a picture model is chosen", () => {
+    const op = stepOp("image", base())
+    expect(op).not.toHaveProperty("provider")
+    expect(op).not.toHaveProperty("workflow")
+  })
+
+  it("passes a cloud picture model as provider + model, a workflow as is", () => {
+    const banana = withOption(base(), "image", {
+      provider: "openrouter",
+      model: "google/gemini-nano-banana-2.1",
+    })
+    expect(stepOp("image", banana)).toMatchObject({
+      provider: "openrouter",
+      model: "google/gemini-nano-banana-2.1",
+    })
+    expect(stepOp("image", banana)).not.toHaveProperty("workflow")
+    const codex = newFlow("a cup", "image", false, at, {
+      provider: "codex",
+    })
+    expect(stepOp("image", codex)).toMatchObject({ provider: "codex" })
+    const flux = withOption(base(), "image", {
+      provider: "comfyui",
+      workflow: "flux2-klein-4b",
+    })
+    expect(stepOp("image", flux)).toMatchObject({
+      provider: "comfyui",
+      workflow: "flux2-klein-4b",
+    })
+  })
+
+  it("lifts with the chosen faces and texture, else the defaults", () => {
+    expect(stepOp("model", base())).toMatchObject({
+      target_faces: 10000,
+      texture_size: 2048,
+    })
+    expect(modelChoice({ ...base(), character: true })).toEqual({
+      use: "mobile-character",
+    })
+    const chosen = withOption(base(), "model", {
+      use: "pc-hero",
+      target_faces: 80000,
+      texture_size: 4096,
+      compress_textures: true,
+    })
+    expect(stepOp("model", chosen)).toMatchObject({
+      kind: "3d",
+      from: "cup",
+      use: "pc-hero",
+      target_faces: 80000,
+      texture_size: 4096,
+      compress_textures: true,
+    })
+  })
+
+  it("animates with the chosen workflow and length", () => {
+    const v = withOption(base(), "video", {
+      workflow: "minimax-h3-i2v-turbo",
+      duration: 8,
+    })
+    expect(stepOp("video", v)).toMatchObject({
+      kind: "video",
+      from: "cup-f001",
+      workflow: "minimax-h3-i2v-turbo",
+      duration: 8,
+    })
+    expect(withOption(v, "video", undefined).options).toEqual({})
+  })
+
+  it("keys and strips choices the same way for every provider", () => {
+    expect(
+      choiceKey({ provider: "comfyui", workflow: "qwen-image-21-rgba" })
+    ).toBe("comfyui:qwen-image-21-rgba")
+    expect(choiceKey({ provider: "codex" })).toBe("codex:")
+    expect(
+      imageChoiceOf({
+        provider: "openrouter",
+        model: "google/gemini-3-pro-image",
+        label: "Nano Banana Pro",
+        billing: "metered",
+        usd: null,
+      })
+    ).toEqual({ provider: "openrouter", model: "google/gemini-3-pro-image" })
+  })
+
+  it("survives a round trip through the file", () => {
+    const f = withOption(base(), "image", { provider: "codex" })
+    expect(parseFlow(JSON.parse(JSON.stringify(f)))?.options).toEqual({
+      image: { provider: "codex" },
+    })
   })
 })

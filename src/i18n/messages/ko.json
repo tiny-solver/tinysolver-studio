@@ -6829,6 +6829,46 @@
       "again": "다시 하기",
       "run": "하기",
       "edit": "편집 도구"
+    },
+    "options": {
+      "open": "설정 — 모델 · 값",
+      "changed": "설정이 바뀌었어요 — 다시 하기로 반영",
+      "image": "그림 모델",
+      "video": "영상 모델",
+      "preset": "용도",
+      "custom": "직접 정하기",
+      "faces": "면 수",
+      "texture": "텍스처",
+      "compress": "텍스처 압축 (파일 작게)",
+      "compressed": "압축",
+      "duration": "길이(초)",
+      "audio": "소리 있음",
+      "transparent": "투명",
+      "loading": "불러오는 중…",
+      "facesTexture": "{faces}면 · 텍스처 {texture}",
+      "madeFaces": "실제 {faces}면",
+      "seconds": "≈{seconds}초",
+      "secondsLong": "{seconds}초",
+      "usd": "≈${usd}/장",
+      "billing": {
+        "local": "무료 · 생성기 GPU",
+        "subscription": "구독",
+        "metered": "종량"
+      },
+      "group": {
+        "local": "생성기 GPU — 무료",
+        "subscription": "구독 — 장당 요금 없음",
+        "metered": "종량 — 장마다 요금"
+      },
+      "took": "이번 {seconds}초",
+      "about": {
+        "subscription": "생성기 주인의 ChatGPT 구독(Codex) — 한 장씩 차례로",
+        "metered": "쓴 만큼 요금 — 생성기의 API 키로"
+      },
+      "note": {
+        "no_generator": "생성기가 연결되지 않아 클라우드 그림만 보입니다 — 첫 화면의 '생성기' 칸에 주소를 넣으세요.",
+        "generator_off": "생성기가 목록에 답하지 않았습니다 — 꺼져 있거나 바쁠 수 있어요. 설정을 다시 열면 또 물어봅니다."
+      }
     }
   }
 }

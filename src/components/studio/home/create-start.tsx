@@ -25,12 +25,14 @@ import { joinFsPath } from "@/lib/path-utils"
 import { previewBase } from "@/lib/studio/game-url"
 import {
   newFlow,
+  type FlowImageChoice,
   parseFlow,
   projectNameFor,
   type FlowGoal,
   type StudioFlow,
 } from "@/lib/studio/flow"
 import type { StudioAssetList } from "@/lib/types"
+import { ImageChoiceSelect, useGeneratorOptions } from "./step-settings"
 
 /** Where new projects go, under the home folder. */
 const PROJECTS_DIR = "TinysolverStudio"
@@ -120,6 +122,18 @@ export function CreateStart({
   const [recent, setRecent] = useState<Recent[] | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState("")
+  /** Absent → the generator's default (집 GPU qwen-image-21-rgba). */
+  const [image, setImage] = useState<FlowImageChoice | undefined>()
+  const [home, setHome] = useState<string | null>(null)
+  /** The generator the picker lists, settled on blur, not every keystroke. */
+  const [listedFrom, setListedFrom] = useState(rememberedGenerator)
+  const [options] = useGeneratorOptions(home, listedFrom)
+
+  useEffect(() => {
+    getHomeDirectory()
+      .then(setHome)
+      .catch(() => undefined)
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -127,13 +141,12 @@ export function CreateStart({
       .then((list) => {
         if (cancelled) return
         setRecent(list)
-        setGenerator(
-          (g) =>
-            g ||
-            rememberedGenerator() ||
-            list.find((r) => r.generator)?.generator ||
-            ""
-        )
+        const g =
+          rememberedGenerator() ||
+          list.find((r) => r.generator)?.generator ||
+          ""
+        setGenerator((cur) => cur || g)
+        setListedFrom((cur) => cur || g)
       })
       .catch(() => !cancelled && setRecent([]))
     return () => {
@@ -175,7 +188,7 @@ export function CreateStart({
           }
         }
       }
-      const flow = newFlow(text, goal, character)
+      const flow = newFlow(text, goal, character, new Date(), image)
       await studioRun(root, { op: "write_flow", flow })
       onCreated(root, flow)
       // Upserts the folder and opens a draft conversation in it, so the
@@ -250,6 +263,12 @@ export function CreateStart({
             />
             {t("start.character")}
           </label>
+          <ImageChoiceSelect
+            className="studio-start-model"
+            options={options}
+            value={image}
+            onChange={setImage}
+          />
           <button
             className="studio-start-go"
             disabled={busy || !prompt.trim()}
@@ -265,6 +284,7 @@ export function CreateStart({
           <input
             value={generator}
             onChange={(e) => setGenerator(e.target.value)}
+            onBlur={() => setListedFrom(generator.trim())}
             placeholder="https://…"
           />
         </label>

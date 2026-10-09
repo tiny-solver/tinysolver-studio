@@ -16,6 +16,7 @@ import {
   Play,
   Plus,
   RotateCcw,
+  SlidersHorizontal,
   SquarePen,
   TriangleAlert,
 } from "lucide-react"
@@ -25,6 +26,7 @@ import { getContentPreview, studioRun } from "@/lib/api"
 import { toErrorMessage } from "@/lib/app-error"
 import { previewBase } from "@/lib/studio/game-url"
 import {
+  choiceKey,
   DEFAULT_CAMERA,
   nextStep,
   planSteps,
@@ -35,6 +37,15 @@ import {
   type StudioFlow,
 } from "@/lib/studio/flow"
 import type { StudioAsset, StudioAssetList } from "@/lib/types"
+import {
+  MadeWith,
+  shownImageChoice,
+  StepSettings,
+  useGeneratorOptions,
+} from "./step-settings"
+
+/** Steps whose model and values can be picked on the card. */
+const SETTABLE: FlowStepId[] = ["image", "model", "video"]
 
 const STEP_ICONS = {
   image: ImageIcon,
@@ -78,6 +89,8 @@ export function FlowBoard({
     assetsDir: string
   } | null>(null)
   const [error, setError] = useState("")
+  const [settingsOf, setSettingsOf] = useState<FlowStepId | null>(null)
+  const [options, reloadOptions] = useGeneratorOptions(root)
   const flowRef = useRef(flow)
   flowRef.current = flow
 
@@ -120,11 +133,16 @@ export function FlowBoard({
       if (!op) return
       setRunning(step)
       setError("")
+      const started = Date.now()
       try {
         const outcome = await studioRun(root, op)
+        const record = {
+          ...recordOf(outcome),
+          seconds: Math.round((Date.now() - started) / 1000),
+        }
         const next = {
           ...current,
-          steps: { ...current.steps, [step]: recordOf(outcome) },
+          steps: { ...current.steps, [step]: record },
         }
         await save(next)
         if (!outcome.ok) setAuto(false)
@@ -224,6 +242,21 @@ export function FlowBoard({
             step === "camera"
               ? (rec?.stills?.[0] ?? rec?.material)
               : rec?.material
+          const madeAsset = rec?.material ? assets[rec.material] : undefined
+          // The picture was drawn with something other than what is set now.
+          const made = madeAsset?.source
+          const want = shownImageChoice(options, flow.options?.image)
+          const changed =
+            step === "image" &&
+            rec?.status === "done" &&
+            !!made &&
+            !!want &&
+            choiceKey(want) !==
+              choiceKey({
+                provider: made.provider ?? "comfyui",
+                workflow: made.workflow,
+                model: made.model,
+              })
           return (
             <li key={step} className="studio-flow-card" data-state={state}>
               <div className="studio-flow-card-head">
@@ -240,6 +273,22 @@ export function FlowBoard({
                   ) : null}
                   {t(`state.${state}`)}
                 </span>
+                {SETTABLE.includes(step) && (
+                  <button
+                    className="studio-flow-gear"
+                    aria-expanded={settingsOf === step}
+                    aria-label={t("options.open")}
+                    title={t("options.open")}
+                    onClick={() => {
+                      // The generator may have been busy or off at first.
+                      if (settingsOf !== step && options?.note_code)
+                        reloadOptions()
+                      setSettingsOf((s) => (s === step ? null : step))
+                    }}
+                  >
+                    <SlidersHorizontal size={13} />
+                  </button>
+                )}
               </div>
               <div className="studio-flow-preview">
                 {rec?.status === "done" ? (
@@ -252,6 +301,25 @@ export function FlowBoard({
                   <p>{t(`step.${step}.hint`)}</p>
                 )}
               </div>
+              {rec?.status === "done" && step !== "camera" && (
+                <MadeWith
+                  asset={madeAsset}
+                  options={options}
+                  seconds={rec.seconds}
+                />
+              )}
+              {changed && (
+                <p className="studio-flow-changed">{t("options.changed")}</p>
+              )}
+              {settingsOf === step && (
+                <StepSettings
+                  step={step}
+                  flow={flow}
+                  options={options}
+                  disabled={!!running}
+                  onChange={(next) => void save(next)}
+                />
+              )}
               {(step === "camera" || step === "render") && (
                 <div className="studio-flow-camera">
                   {(

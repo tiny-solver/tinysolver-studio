@@ -6829,6 +6829,46 @@
       "again": "De novo",
       "run": "Executar",
       "edit": "Ferramentas"
+    },
+    "options": {
+      "open": "Ajustes — modelo · valores",
+      "changed": "Ajustes alterados — refaça para aplicar",
+      "image": "Modelo de imagem",
+      "video": "Modelo de vídeo",
+      "preset": "Uso",
+      "custom": "Personalizado",
+      "faces": "Faces",
+      "texture": "Textura",
+      "compress": "Comprimir texturas (arquivo menor)",
+      "compressed": "comprimido",
+      "duration": "Duração (s)",
+      "audio": "com som",
+      "transparent": "transparente",
+      "loading": "Carregando…",
+      "facesTexture": "{faces} faces · textura {texture}",
+      "madeFaces": "{faces} faces feitas",
+      "seconds": "≈{seconds} s",
+      "secondsLong": "{seconds} s",
+      "usd": "≈${usd}/imagem",
+      "billing": {
+        "local": "Grátis · GPU do gerador",
+        "subscription": "Assinatura",
+        "metered": "Por uso"
+      },
+      "group": {
+        "local": "GPU do gerador — grátis",
+        "subscription": "Assinatura — sem cobrança por imagem",
+        "metered": "Por uso — cobrado por imagem"
+      },
+      "took": "levou {seconds} s",
+      "about": {
+        "subscription": "a assinatura do ChatGPT do dono do gerador (Codex) — uma por vez",
+        "metered": "cobrado por imagem — na chave de API do gerador"
+      },
+      "note": {
+        "no_generator": "Nenhum gerador conectado — só imagens na nuvem são listadas. Informe o endereço no campo Gerador da primeira tela.",
+        "generator_off": "O gerador não respondeu com a lista — pode estar desligado ou ocupado. Abra os ajustes de novo para perguntar outra vez."
+      }
     }
   }
 }

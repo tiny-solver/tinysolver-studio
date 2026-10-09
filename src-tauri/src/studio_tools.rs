@@ -55,6 +55,13 @@ pub enum StudioOp {
         #[serde(default)]
         url: Option<String>,
     },
+    /// What each step can be asked for — picture models (the generator's
+    /// workflows and cloud ones), video workflows, 3D presets
+    /// ([`studio_assets::options`]). `url` overrides the project's generator.
+    GeneratorOptions {
+        #[serde(default)]
+        url: Option<String>,
+    },
     /// Render a model material with the user's Blender ([`crate::studio_render`]).
     RenderAsset(crate::studio_render::RenderRequest),
     /// The first screen's step record, `<root>/studio-flow.json` (what was
@@ -169,6 +176,7 @@ pub async fn run(root: PathBuf, op: StudioOp) -> Value {
         StudioOp::GenerateAsset(req) => studio_assets::generate(&root, req).await,
         StudioOp::UpdateAsset { id, use_for } => studio_assets::update(&root, &id, use_for).await,
         StudioOp::ConnectGenerator { url } => studio_assets::connect(&root, url).await,
+        StudioOp::GeneratorOptions { url } => studio_assets::options(&root, url).await,
         StudioOp::RenderAsset(req) => crate::studio_render::render(&root, req).await,
         StudioOp::ReadFlow => {
             let path = root.join(FLOW_FILE);
