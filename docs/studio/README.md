@@ -102,6 +102,9 @@ pnpm dev
 - 카드마다 결과 미리보기(그림 · GLB 뷰어 · 영상) · **다시 하기**(그 뒤 카드는 비운다) · **편집 도구**(대화 옆 Studio 편집기 — 재료 서랍). 장면 · 카메라 · 렌더 카드에 좌우 · 높이 · 거리, 영상 카드에 동작 프롬프트.
 - 카드 = 서랍 단추 = MCP 도구: 각 단계는 `studio_run`의 `generate_asset` · `render_asset` 하나다(`stepOp`). 흐름 기록은 프로젝트의 `studio-flow.json`(`read_flow` · `write_flow`) — 다시 열면 카드가 돌아오고 에이전트도 읽는다.
 - 실측(10-09): 'a small blue ceramic teacup with a gold rim' · 영상 → 다섯 칸이 6분 40초에 다 찼다(3D 대기열 ≈2분 · 영상 ≈3분 20초 · 렌더는 linux-2 Blender).
+- **단계마다 고르기**(step-options) — 첫 화면 입력 옆에 그림 모델 빠른 고르기(기본은 생성기 GPU `qwen-image-21-rgba`), 그림 · 3D · 영상 카드의 '설정'(⚙)에서 그림 공급자 · 모델(무료 · 구독 · 종량과 예상 시간 · 값) · 3D 용도 프리셋 · 면 수 · 텍스처 · 텍스처 압축 · 영상 워크플로 · 길이를 고른다. 고른 값은 `studio-flow.json`의 `options`에 남고 '다시 하기'가 그 값으로 돈다. 카드 아래 한 줄은 재료의 출처(`source`)에서 읽은 **실제로 쓴** 모델 · 값과 이번에 걸린 시간.
+  - 목록은 `studio_run` `generator_options`(MCP `studio_generator_options`) 하나 — 생성기의 `GET /api/images/workflows` · `/api/videos/workflows`(t2i · LoRA 없음 · 파이프라인 단계 제외 / i2v 한 장 입력)에 클라우드 그림(`studio_assets::CLOUD_IMAGES`: codex gpt-image-2 = 생성기 주인의 ChatGPT 구독 · openrouter 나노바나나 2.1 · Pro = 종량)과 3D 프리셋을 붙인다. 검증은 `generator_call` 하나 — 카드와 `studio_generate_asset`(`provider` · `model` · `compress_textures`)이 같은 길이다.
+  - 클라우드 그림은 불투명(3D 단계가 배경을 스스로 자른다). Studio 는 `X-Mygenai-Caller` 를 보내지 않는다(구독 경로는 제품 이름이면 403).
 
 ## 재료 — 생성 ↔ 재료 (asset-workbench ①)
 

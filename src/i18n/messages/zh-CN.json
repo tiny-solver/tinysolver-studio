@@ -6829,6 +6829,46 @@
       "again": "重做",
       "run": "运行",
       "edit": "编辑工具"
+    },
+    "options": {
+      "open": "设置 — 模型 · 参数",
+      "changed": "设置已更改 — 重新运行以应用",
+      "image": "图像模型",
+      "video": "视频模型",
+      "preset": "用途",
+      "custom": "自定义",
+      "faces": "面数",
+      "texture": "纹理",
+      "compress": "压缩纹理(文件更小)",
+      "compressed": "已压缩",
+      "duration": "时长(秒)",
+      "audio": "有声音",
+      "transparent": "透明",
+      "loading": "加载中…",
+      "facesTexture": "{faces} 面 · 纹理 {texture}",
+      "madeFaces": "实际 {faces} 面",
+      "seconds": "≈{seconds} 秒",
+      "secondsLong": "{seconds} 秒",
+      "usd": "≈${usd}/张",
+      "billing": {
+        "local": "免费 · 生成器 GPU",
+        "subscription": "订阅",
+        "metered": "按量"
+      },
+      "group": {
+        "local": "生成器 GPU — 免费",
+        "subscription": "订阅 — 不按张收费",
+        "metered": "按量 — 每张收费"
+      },
+      "took": "本次 {seconds} 秒",
+      "about": {
+        "subscription": "生成器主人的 ChatGPT 订阅(Codex)— 逐张生成",
+        "metered": "按量计费 — 使用生成器的 API 密钥"
+      },
+      "note": {
+        "no_generator": "未连接生成器,只显示云端图像 — 请在首页的“生成器”栏填写地址。",
+        "generator_off": "生成器没有返回列表 — 可能已关闭或繁忙。重新打开设置会再询问一次。"
+      }
     }
   }
 }

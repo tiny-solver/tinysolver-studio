@@ -1,4 +1,9 @@
-import type { StudioOp, StudioOutcome } from "@/lib/types"
+import type {
+  StudioImageChoice,
+  StudioImageProvider,
+  StudioOp,
+  StudioOutcome,
+} from "@/lib/types"
 
 /**
  * The first screen's making flow: what the person asked for, which steps it
@@ -36,7 +41,41 @@ export interface FlowStepRecord {
   /** A render's stills, first frame first. */
   stills?: string[]
   note?: string
+  /** Wall time the step took. */
+  seconds?: number
   at: string
+}
+
+/** Who draws the picture: a generator workflow, or a cloud model. */
+export interface FlowImageChoice {
+  provider: StudioImageProvider
+  workflow?: string
+  model?: string
+}
+
+export interface FlowModelChoice {
+  /** A 3D preset id; recorded on the material as `use`. */
+  use?: string
+  target_faces?: number
+  texture_size?: 1024 | 2048 | 4096
+  compress_textures?: boolean
+}
+
+export interface FlowVideoChoice {
+  workflow?: string
+  /** Seconds. */
+  duration?: number
+}
+
+/** What the steps are asked for, picked on the first screen and the cards'
+ *  settings. Kept in the flow so a rerun — and the reopened project — uses
+ *  the same choice. Absent → the generator's defaults. Validation is the
+ *  generator call's (`studio_assets::generator_call`), the same one the MCP
+ *  tool goes through. */
+export interface FlowOptions {
+  image?: FlowImageChoice
+  model?: FlowModelChoice
+  video?: FlowVideoChoice
 }
 
 export interface StudioFlow {
@@ -48,6 +87,7 @@ export interface StudioFlow {
   /** The video step's prompt: motion, camera, an `Audio: …` line. */
   motion?: string
   camera?: FlowCamera
+  options?: FlowOptions
   steps: Partial<Record<FlowStepId, FlowStepRecord>>
   created_at: string
 }
@@ -86,7 +126,8 @@ export function newFlow(
   prompt: string,
   goal: FlowGoal,
   character: boolean,
-  now = new Date()
+  now = new Date(),
+  image?: FlowImageChoice
 ): StudioFlow {
   return {
     schema: 1,
@@ -95,9 +136,45 @@ export function newFlow(
     character,
     motion: defaultMotion(prompt, character),
     camera: { ...DEFAULT_CAMERA },
+    ...(image ? { options: { image } } : {}),
     steps: {},
     created_at: now.toISOString(),
   }
+}
+
+/** One key per picture choice, for selects and comparisons. */
+export function choiceKey(c: FlowImageChoice | StudioImageChoice): string {
+  return `${c.provider}:${c.provider === "comfyui" ? (c.workflow ?? "") : (c.model ?? "")}`
+}
+
+/** The part of a choice the generator call takes. */
+export function imageChoiceOf(
+  c: FlowImageChoice | StudioImageChoice
+): FlowImageChoice {
+  return c.provider === "comfyui"
+    ? { provider: "comfyui", ...(c.workflow ? { workflow: c.workflow } : {}) }
+    : { provider: c.provider, ...(c.model ? { model: c.model } : {}) }
+}
+
+/** The 3D values a lift uses: the card's choice, else a character preset
+ *  or the game-sized default. */
+export function modelChoice(flow: StudioFlow): FlowModelChoice {
+  return (
+    flow.options?.model ??
+    (flow.character ? { use: "mobile-character" } : { ...LIFT_3D })
+  )
+}
+
+/** Replace one step's choice. */
+export function withOption<K extends keyof FlowOptions>(
+  flow: StudioFlow,
+  key: K,
+  value: FlowOptions[K] | undefined
+): StudioFlow {
+  const options = { ...flow.options }
+  if (value === undefined) delete options[key]
+  else options[key] = value
+  return { ...flow, options }
 }
 
 /** A first motion prompt, editable on the video card. H3 wants the motion,
@@ -140,13 +217,16 @@ function latest(flow: StudioFlow, ...ids: FlowStepId[]): string | undefined {
 export function stepOp(step: FlowStepId, flow: StudioFlow): StudioOp | null {
   const cam = flow.camera ?? DEFAULT_CAMERA
   switch (step) {
-    case "image":
+    case "image": {
+      const choice = flow.options?.image
       return {
         op: "generate_asset",
         kind: "image",
         prompt: flow.prompt,
         id: projectNameFor(flow.prompt),
+        ...(choice ? imageChoiceOf(choice) : {}),
       }
+    }
     case "tpose": {
       const from = latest(flow, "image")
       return from ? { op: "generate_asset", kind: "tpose", from } : null
@@ -154,9 +234,7 @@ export function stepOp(step: FlowStepId, flow: StudioFlow): StudioOp | null {
     case "model": {
       const from = latest(flow, "tpose", "image")
       if (!from) return null
-      return flow.character
-        ? { op: "generate_asset", kind: "3d", from, use: "mobile-character" }
-        : { op: "generate_asset", kind: "3d", from, ...LIFT_3D }
+      return { op: "generate_asset", kind: "3d", from, ...modelChoice(flow) }
     }
     case "rig": {
       const from = latest(flow, "model")
@@ -191,8 +269,16 @@ export function stepOp(step: FlowStepId, flow: StudioFlow): StudioOp | null {
     case "video": {
       const from = flow.steps.render?.stills?.[0]
       const prompt = flow.motion?.trim()
+      const v = flow.options?.video
       return from && prompt
-        ? { op: "generate_asset", kind: "video", from, prompt }
+        ? {
+            op: "generate_asset",
+            kind: "video",
+            from,
+            prompt,
+            ...(v?.workflow ? { workflow: v.workflow } : {}),
+            ...(v?.duration ? { duration: v.duration } : {}),
+          }
         : null
     }
   }

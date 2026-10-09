@@ -6829,6 +6829,46 @@
       "again": "やり直す",
       "run": "実行",
       "edit": "編集ツール"
+    },
+    "options": {
+      "open": "設定 — モデル · 値",
+      "changed": "設定が変わりました — やり直しで反映",
+      "image": "画像モデル",
+      "video": "動画モデル",
+      "preset": "用途",
+      "custom": "自分で決める",
+      "faces": "面数",
+      "texture": "テクスチャ",
+      "compress": "テクスチャ圧縮(ファイルを小さく)",
+      "compressed": "圧縮",
+      "duration": "長さ(秒)",
+      "audio": "音あり",
+      "transparent": "透過",
+      "loading": "読み込み中…",
+      "facesTexture": "{faces}面 · テクスチャ {texture}",
+      "madeFaces": "実際 {faces}面",
+      "seconds": "≈{seconds}秒",
+      "secondsLong": "{seconds}秒",
+      "usd": "≈${usd}/枚",
+      "billing": {
+        "local": "無料 · 生成機GPU",
+        "subscription": "サブスク",
+        "metered": "従量"
+      },
+      "group": {
+        "local": "生成機GPU — 無料",
+        "subscription": "サブスク — 1枚ごとの料金なし",
+        "metered": "従量 — 1枚ごとに課金"
+      },
+      "took": "今回 {seconds}秒",
+      "about": {
+        "subscription": "生成機の持ち主の ChatGPT サブスク(Codex) — 1枚ずつ",
+        "metered": "使った分だけ課金 — 生成機の API キーで"
+      },
+      "note": {
+        "no_generator": "生成機が未接続のためクラウド画像のみ表示 — 最初の画面の「生成機」欄にアドレスを入れてください。",
+        "generator_off": "生成機が一覧に応答しません — 停止中か混雑中かもしれません。設定を開き直すと再度問い合わせます。"
+      }
     }
   }
 }

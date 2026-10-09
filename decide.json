@@ -104,8 +104,11 @@
       "date": "2026-10-09",
       "from": "오너",
       "text": "첫 화면 · 단계 카드에서 선택지를 고를 수 있게 — 그림 모델(지금은 qwen-image-21-rgba 고정)을 바꾸고, codex gpt-image(내 ChatGPT 구독)와 나노바나나 2.1(Google · 10-06 출시)도 쓰고 싶다. 3D 면 수 · 텍스처, 영상 모델 같은 다른 단계 값도 같이",
-      "status": "new",
-      "items": []
+      "status": "done",
+      "items": [
+        "so-pick"
+      ],
+      "note": "10-09 반영 — 첫 화면 그림 모델 빠른 고르기 · 그림/3D/영상 카드 '설정' · 실제 쓴 모델 · 값 · 시간을 카드에 · MCP studio_generator_options + studio_generate_asset provider/model (so-pick)."
     }
   ],
   "topics": [
@@ -915,6 +918,36 @@
       "done": {
         "date": "2026-10-09",
         "note": "작업공간 가운데 = 만드는 흐름(시작 · 단계 카드) · 채팅은 오른쪽 서랍(대화 패널 그대로). 업스트림은 workspace/page.tsx 진입점 한 줄. 카드 = studio_run generate_asset · render_asset, 기록 studio-flow.json. 실측 찻잔 영상 다섯 칸 6분 40초 — feat/first-screen"
+      }
+    },
+    {
+      "role": "제품",
+      "asked": "2026-10-09",
+      "goal": "안 적음",
+      "prep": [],
+      "who": [],
+      "learn": [],
+      "unblocks": [],
+      "then": [],
+      "status": "done",
+      "id": "so-pick",
+      "topic": "entry",
+      "p": 2,
+      "from": "ask:step-options",
+      "q": "단계마다 모델 · 값 고르기 — 그림(qwen · codex · 나노바나나) · 3D 면 수 · 텍스처 · 영상 모델 · 길이",
+      "want": "첫 화면 입력 옆 그림 모델 빠른 고르기(기본 집 GPU qwen) · 카드마다 설정(그림 공급자 · 모델 + 무료/구독/종량 · 예상 시간 · 값, 3D 프리셋 · 면 수 · 텍스처, 영상 모델 · 길이) · 고른 값 기억 · 카드에 어떤 모델 · 값으로 했나 · 바꿔 다시 하기 · 에이전트 MCP 도 같은 검증기",
+      "now": "그림은 qwen-image-21-rgba · comfyui 고정. 요청의 workflow 칸만 받았고 화면에 고르는 칸이 없었다",
+      "action": "선택지 목록은 생성기 workflows API + 클라우드 표(CLOUD_IMAGES) 한 op(generator_options) · 검증은 generator_call 하나 · 고른 값은 studio-flow.json options",
+      "needs": [
+        "fs-flow"
+      ],
+      "refs": [
+        "#fs-flow",
+        "my-genai#45"
+      ],
+      "done": {
+        "date": "2026-10-09",
+        "note": "같은 문장 세 모델 실측 — qwen-image-21-rgba 20초 · Nano Banana 2.1 15초($0.034) · gpt-image-2 Codex 287초(대기 포함). 3D 카드 1,000면 · 1024 → 실제 855면 · 461초 — feat/step-options"
       }
     },
     {

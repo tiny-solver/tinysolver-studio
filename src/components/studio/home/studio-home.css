@@ -457,6 +457,75 @@
   border-radius: 6px;
   background: transparent;
 }
+.studio-flow-gear {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  color: var(--muted-foreground);
+}
+.studio-flow-gear:hover,
+.studio-flow-gear[aria-expanded="true"] {
+  background: var(--muted);
+  color: var(--foreground);
+}
+.studio-flow-made,
+.studio-flow-changed {
+  margin: -4px 0 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--muted-foreground);
+  overflow-wrap: anywhere;
+}
+.studio-flow-changed {
+  color: var(--foreground);
+}
+.studio-flow-settings {
+  display: grid;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 8px;
+  background: var(--muted);
+  font-size: 11px;
+}
+.studio-flow-settings label {
+  display: grid;
+  gap: 2px;
+  color: var(--muted-foreground);
+}
+.studio-flow-settings select,
+.studio-flow-settings input[type="number"] {
+  width: 100%;
+  min-width: 0;
+  height: 26px;
+  padding: 0 4px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--background);
+  color: var(--foreground);
+  font-size: 11px;
+}
+.studio-flow-settings-check {
+  display: flex !important;
+  align-items: center;
+  gap: 6px !important;
+}
+.studio-flow-settings-note {
+  margin: 0;
+  line-height: 1.4;
+  color: var(--muted-foreground);
+}
+.studio-start-model {
+  max-width: 260px;
+  height: 30px;
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--foreground);
+  font-size: 12px;
+}
 .studio-flow-card-actions {
   display: flex;
   gap: 6px;

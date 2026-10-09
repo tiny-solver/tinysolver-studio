@@ -3985,7 +3985,15 @@ export interface StudioAssetSource {
   seed?: number
   /** The material it was made from. */
   from?: string
-  params?: { target_faces?: number; texture_size?: number }
+  params?: {
+    target_faces?: number
+    texture_size?: number
+    compress_textures?: boolean
+    duration?: number
+  }
+  /** image: a cloud provider (absent → comfyui `workflow`). */
+  provider?: StudioImageProvider
+  model?: string
   url?: string
   [key: string]: unknown
 }
@@ -4072,9 +4080,15 @@ export type StudioOp =
       from?: string
       prompt?: string
       workflow?: string
+      /** image: who draws it (default comfyui — the generator's GPU). */
+      provider?: StudioImageProvider
+      /** image: cloud model id for openrouter / openai. */
+      model?: string
       seed?: number
       target_faces?: number
       texture_size?: 1024 | 2048 | 4096
+      /** 3d: compress the GLB's textures. */
+      compress_textures?: boolean
       /** video: seconds (default 5) and canvas (default 768²). */
       duration?: number
       width?: number
@@ -4085,6 +4099,12 @@ export type StudioOp =
       use?: string
     }
   | { op: "update_asset"; id: string; use: string | null }
+  | {
+      /** What each step can be asked for (`studio_assets::options`). */
+      op: "generator_options"
+      /** Overrides the project's generator. */
+      url?: string
+    }
   | { op: "connect_generator"; url: string | null }
   | {
       /** Headless Blender on this computer (`studio_render.rs`). */
@@ -4108,6 +4128,58 @@ export interface StudioOutcome {
   ok: boolean
   note?: string
   [key: string]: unknown
+}
+
+export type StudioImageProvider = "comfyui" | "codex" | "openrouter" | "openai"
+
+/** One picture model a step can draw with. */
+export interface StudioImageChoice {
+  provider: StudioImageProvider
+  /** comfyui: the generator's workflow. */
+  workflow?: string
+  /** Cloud: the model id (codex has none). */
+  model?: string
+  label: string
+  /** local = the generator's own GPU (free) · subscription · metered. */
+  billing: "local" | "subscription" | "metered"
+  /** Measured seconds per picture. */
+  seconds?: number | null
+  /** Measured USD per 1024² picture. */
+  usd?: number | null
+  transparent?: boolean
+  note?: string
+  default?: boolean
+}
+
+export interface StudioVideoChoice {
+  provider: "comfyui"
+  workflow: string
+  label: string
+  billing: "local"
+  audio?: boolean
+  min_duration?: number | null
+  default?: boolean
+}
+
+/** `generator_options` — the cards' settings and `studio_generator_options`. */
+export interface StudioGeneratorOptions extends StudioOutcome {
+  generator: string | null
+  /** Why only cloud pictures are listed. */
+  note_code?: "no_generator" | "generator_off"
+  image: StudioImageChoice[]
+  video: StudioVideoChoice[]
+  model: {
+    workflow: string
+    texture_sizes: (1024 | 2048 | 4096)[]
+    target_faces: { min: number; max: number }
+    presets: StudioPreset[]
+  }
+  duration: { min: number; max: number; default: number }
+  /** What a step runs with when nothing is chosen. */
+  defaults: {
+    image: { provider: "comfyui"; workflow: string }
+    video: { provider: "comfyui"; workflow: string }
+  }
 }
 
 export interface StudioAssetList extends StudioOutcome {

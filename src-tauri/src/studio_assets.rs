@@ -54,6 +54,58 @@ pub const TPOSE_PROMPT: &str = "the same character in a T-pose, arms straight ou
 const RGBA_LEAD: &str = "This is an RGBA format image with transparency.";
 const RGBA_TAIL: &str = "The image has an alpha channel and a transparent background.";
 
+/// Who can draw an `image` — the generator's (genai's) `ImageProvider`.
+pub const IMAGE_PROVIDERS: &[&str] = &["comfyui", "codex", "openrouter", "openai"];
+
+/// A picture model offered next to the generator's own workflows. genai's
+/// catalog carries no per-picture price or time for these, so the measured
+/// figures live here (and in the tool description).
+#[derive(Debug, Clone, Copy, serde::Serialize)]
+pub struct CloudImage {
+    pub provider: &'static str,
+    /// Sent as `model`; `None` → the provider's only model.
+    pub model: Option<&'static str>,
+    pub label: &'static str,
+    /// `subscription` (counts against a plan, no per-picture charge) ·
+    /// `metered` (charged per picture).
+    pub billing: &'static str,
+    /// Measured wall time per picture.
+    pub seconds: Option<u32>,
+    /// Measured price per 1024² picture, USD.
+    pub usd: Option<f64>,
+    pub note: &'static str,
+}
+
+pub const CLOUD_IMAGES: &[CloudImage] = &[
+    CloudImage {
+        provider: "codex",
+        model: None,
+        label: "gpt-image-2 (Codex)",
+        billing: "subscription",
+        seconds: Some(120),
+        usd: None,
+        note: "The generator owner's ChatGPT subscription through Codex CLI — one picture at a time, ~1.7% of the 5-hour window each (2026-09-27).",
+    },
+    CloudImage {
+        provider: "openrouter",
+        model: Some("google/gemini-nano-banana-2.1"),
+        label: "Nano Banana 2.1",
+        billing: "metered",
+        seconds: Some(11),
+        usd: Some(0.034),
+        note: "Google, via OpenRouter — 1024² in ~11 s (2026-10-09).",
+    },
+    CloudImage {
+        provider: "openrouter",
+        model: Some("google/gemini-3-pro-image"),
+        label: "Nano Banana Pro",
+        billing: "metered",
+        seconds: None,
+        usd: None,
+        note: "Google, via OpenRouter — the larger sibling; not measured yet.",
+    },
+];
+
 /// The prompt as an RGBA workflow wants it; other workflows get it as is.
 pub fn shaped_prompt(workflow: &str, prompt: &str) -> String {
     if !workflow.contains("rgba") || prompt.contains("RGBA format") {
@@ -106,12 +158,25 @@ pub struct GenerateRequest {
     pub prompt: Option<String>,
     #[serde(default)]
     pub workflow: Option<String>,
+    /// `image`: who draws it — `comfyui` (the generator's own GPU, picks a
+    /// `workflow`; the default) · `codex` (gpt-image-2 on the generator
+    /// owner's ChatGPT subscription) · `openrouter` · `openai` (metered,
+    /// pick a `model`). See [`CLOUD_IMAGES`] and `studio_generator_options`.
+    #[serde(default)]
+    pub provider: Option<String>,
+    /// Cloud model id for a non-`comfyui` provider, e.g.
+    /// `google/gemini-nano-banana-2.1`.
+    #[serde(default)]
+    pub model: Option<String>,
     #[serde(default)]
     pub seed: Option<i64>,
     #[serde(default)]
     pub target_faces: Option<u32>,
     #[serde(default)]
     pub texture_size: Option<u32>,
+    /// `3d`: ask the generator to compress the GLB's textures (smaller file).
+    #[serde(default)]
+    pub compress_textures: Option<bool>,
     /// `video`: clip length in seconds (default 5).
     #[serde(default)]
     pub duration: Option<f64>,
@@ -878,20 +943,63 @@ pub fn generator_call(
     if let Some(from) = &req.from {
         source["from"] = json!(from);
     }
+    let cloud = req.provider.as_deref().is_some_and(|p| p.trim() != "comfyui");
+    if req.kind != "image" && (cloud || req.model.is_some()) {
+        return Err(format!(
+            "`provider` / `model` pick who draws an `image`; kind `{}` runs on the generator's own GPU (pick a `workflow`)",
+            req.kind
+        ));
+    }
     match req.kind.as_str() {
         "image" => {
             let prompt = prompt.ok_or("kind `image` needs a `prompt`")?;
-            let workflow = req.workflow.clone().unwrap_or_else(|| DEFAULT_IMAGE_WORKFLOW.into());
-            let mut body = json!({
-                "prompt": shaped_prompt(&workflow, prompt),
-                "provider": "comfyui",
-                "workflow": workflow,
-                "seed": seed,
-            });
-            if let Some(img) = source_image {
-                body["source_image"] = json!(img);
+            let provider = req.provider.as_deref().map(str::trim).filter(|p| !p.is_empty()).unwrap_or("comfyui");
+            if !IMAGE_PROVIDERS.contains(&provider) {
+                return Err(format!("provider `{provider}`: one of {}", IMAGE_PROVIDERS.join(", ")));
             }
-            source["workflow"] = json!(workflow);
+            let model = req.model.as_deref().map(str::trim).filter(|m| !m.is_empty());
+            if provider == "comfyui" {
+                if model.is_some() {
+                    return Err("`model` is for a cloud provider; on comfyui pick a `workflow`".into());
+                }
+                let workflow = req.workflow.clone().unwrap_or_else(|| DEFAULT_IMAGE_WORKFLOW.into());
+                let mut body = json!({
+                    "prompt": shaped_prompt(&workflow, prompt),
+                    "provider": "comfyui",
+                    "workflow": workflow,
+                    "seed": seed,
+                });
+                if let Some(img) = source_image {
+                    body["source_image"] = json!(img);
+                }
+                source["workflow"] = json!(workflow);
+                return Ok(("/api/images/generate", body, source));
+            }
+            if req.workflow.is_some() {
+                return Err(format!("`workflow` is for comfyui; provider `{provider}` takes a `model`"));
+            }
+            if model.is_none() && provider != "codex" {
+                return Err(format!(
+                    "provider `{provider}` needs a `model`, e.g. {}",
+                    CLOUD_IMAGES.iter().filter(|c| c.provider == provider).filter_map(|c| c.model).collect::<Vec<_>>().join(", ")
+                ));
+            }
+            // A cloud picture is opaque; the 3D step cuts its own background.
+            let mut body = json!({
+                "prompt": prompt,
+                "provider": provider,
+                "seed": seed,
+                "width": 1024,
+                "height": 1024,
+            });
+            if let Some(m) = model {
+                body["model"] = json!(m);
+                source["model"] = json!(m);
+            }
+            if let Some(img) = source_image {
+                body["reference_images"] = json!([img]);
+            }
+            source["provider"] = json!(provider);
             Ok(("/api/images/generate", body, source))
         }
         "3d" => {
@@ -909,6 +1017,10 @@ pub fn generator_call(
             }
             let mut body = json!({ "source_image": img, "workflow": workflow, "seed": seed });
             let mut params = Map::new();
+            if let Some(c) = req.compress_textures {
+                body["compress_textures"] = json!(c);
+                params.insert("compress_textures".into(), json!(c));
+            }
             if let Some(f) = req.target_faces {
                 body["target_faces"] = json!(f);
                 params.insert("target_faces".into(), json!(f));
@@ -1103,6 +1215,136 @@ pub async fn generate(root: &Path, mut req: GenerateRequest) -> Value {
         },
     )
     .await
+}
+
+/// Image workflows worth offering for a fresh drawing: text-to-image, no
+/// LoRA slot, not a pipeline's internal step.
+fn offered_image_workflow(w: &Value) -> bool {
+    let name = w["name"].as_str().unwrap_or("");
+    w["kind"] == "t2i"
+        && w["supports_lora"] != true
+        && !name.contains("lora")
+        && !name.starts_with("cp-")
+}
+
+/// Video workflows that animate one image (the render keyframe).
+fn offered_video_workflow(w: &Value) -> bool {
+    let name = w["name"].as_str().unwrap_or("");
+    w["kind"] == "i2v" && w["image_inputs"] == 1 && !name.starts_with("cp-")
+}
+
+/// What each step can be asked for, shaped from the generator's workflow
+/// lists (`GET /api/images/workflows` · `/api/videos/workflows`) plus
+/// [`CLOUD_IMAGES`] and the 3D presets. The cards' settings and
+/// `studio_generator_options` read this; `generate` validates the choice.
+pub fn shape_options(images: Option<&Value>, videos: Option<&Value>) -> Value {
+    let details = |v: Option<&Value>| v.and_then(|v| v["details"].as_array()).cloned().unwrap_or_default();
+    let mut image: Vec<Value> = details(images)
+        .iter()
+        .filter(|w| offered_image_workflow(w))
+        .map(|w| {
+            let name = w["name"].as_str().unwrap_or("");
+            json!({
+                "provider": "comfyui",
+                "workflow": name,
+                "label": name,
+                "billing": "local",
+                "transparent": name.contains("rgba"),
+                "default": name == DEFAULT_IMAGE_WORKFLOW,
+            })
+        })
+        .collect();
+    // The default first, then the generator's order.
+    image.sort_by_key(|o| o["default"] != true);
+    image.extend(CLOUD_IMAGES.iter().map(|c| {
+        let mut o = serde_json::to_value(c).unwrap_or_default();
+        if c.model.is_none() {
+            o.as_object_mut().map(|m| m.remove("model"));
+        }
+        o
+    }));
+    let video: Vec<Value> = details(videos)
+        .iter()
+        .filter(|w| offered_video_workflow(w))
+        .map(|w| {
+            let name = w["name"].as_str().unwrap_or("");
+            json!({
+                "provider": "comfyui",
+                "workflow": name,
+                "label": name,
+                "billing": "local",
+                "audio": w["has_audio"] == true,
+                "min_duration": w["preset"]["min_duration"],
+                "default": name == DEFAULT_VIDEO_WORKFLOW,
+            })
+        })
+        .collect();
+    json!({
+        "image": image,
+        "video": video,
+        "model": {
+            "workflow": DEFAULT_3D_WORKFLOW,
+            "texture_sizes": [1024, 2048, 4096],
+            "target_faces": { "min": 1000, "max": 2_000_000 },
+            "presets": studio_presets::PRESETS,
+        },
+        "duration": { "min": 0.2, "max": 15.0, "default": 5.0 },
+        "defaults": {
+            "image": { "provider": "comfyui", "workflow": DEFAULT_IMAGE_WORKFLOW },
+            "video": { "provider": "comfyui", "workflow": DEFAULT_VIDEO_WORKFLOW },
+        },
+    })
+}
+
+/// [`shape_options`] for the project's generator. `url` overrides it (the
+/// first screen has no project yet).
+pub async fn options(root: &Path, url: Option<String>) -> Value {
+    let base = match url.map(|u| u.trim().trim_end_matches('/').to_string()).filter(|u| !u.is_empty()) {
+        Some(u) => Some(u),
+        None => match project(root).await {
+            Ok(m) => generator_url(m.as_ref()),
+            Err(note) => return fail(note),
+        },
+    };
+    // `note_code` lets the cards say it in the person's language.
+    let mut note = None;
+    let (images, videos) = match &base {
+        None => {
+            note = Some(("no_generator", "No generator connected — only cloud pictures are listed. Set `generate.url` in codeg-project.json.".to_string()));
+            (None, None)
+        }
+        Some(base) => {
+            let client = reqwest::Client::builder()
+                .connect_timeout(Duration::from_secs(5))
+                .timeout(Duration::from_secs(15))
+                .build()
+                .ok();
+            let get = |path: &'static str| {
+                let client = client.clone();
+                let url = format!("{base}{path}");
+                async move {
+                    let resp = client?.get(url).send().await.ok()?;
+                    if !resp.status().is_success() {
+                        return None;
+                    }
+                    resp.json::<Value>().await.ok()
+                }
+            };
+            let (i, v) = tokio::join!(get("/api/images/workflows"), get("/api/videos/workflows"));
+            if i.is_none() {
+                note = Some(("generator_off", format!("The generator at {base} did not list its workflows — it may be switched off or busy.")));
+            }
+            (i, v)
+        }
+    };
+    let mut out = shape_options(images.as_ref(), videos.as_ref());
+    out["ok"] = json!(true);
+    out["generator"] = json!(base);
+    if let Some((code, n)) = note {
+        out["note"] = json!(n);
+        out["note_code"] = json!(code);
+    }
+    out
 }
 
 fn bad_use(use_for: Option<&str>) -> Option<String> {
@@ -1416,6 +1658,100 @@ mod tests {
         assert!(body.get("source_image").is_none());
         // Target faces ride at the top of the body, where genai reads them.
         assert!(body.get("extra").is_none());
+    }
+
+    #[test]
+    fn picture_providers_are_validated_once_for_both_doors() {
+        let ask = |provider: Option<&str>, model: Option<&str>, workflow: Option<&str>| GenerateRequest {
+            kind: "image".into(),
+            prompt: Some("a teacup".into()),
+            provider: provider.map(String::from),
+            model: model.map(String::from),
+            workflow: workflow.map(String::from),
+            ..Default::default()
+        };
+        let (_, body, source) =
+            generator_call(&ask(Some("openrouter"), Some("google/gemini-nano-banana-2.1"), None), None, 3).unwrap();
+        assert_eq!(body["provider"], "openrouter");
+        assert_eq!(body["model"], "google/gemini-nano-banana-2.1");
+        assert_eq!(body["prompt"], "a teacup", "no RGBA wrapping off comfyui");
+        assert!(body.get("workflow").is_none());
+        assert_eq!(source["provider"], "openrouter");
+        assert_eq!(source["model"], "google/gemini-nano-banana-2.1");
+
+        let (_, body, source) = generator_call(&ask(Some("codex"), None, None), Some("data:y".into()), 3).unwrap();
+        assert_eq!(body["provider"], "codex");
+        assert!(body.get("model").is_none());
+        assert_eq!(body["reference_images"][0], "data:y");
+        assert_eq!(source["provider"], "codex");
+
+        let (_, body, _) = generator_call(&ask(Some("comfyui"), None, Some("z-image-turbo")), None, 3).unwrap();
+        assert_eq!(body["workflow"], "z-image-turbo");
+        assert_eq!(body["prompt"], "a teacup");
+
+        for (p, m, w) in [
+            (Some("midjourney"), None, None),
+            (Some("openrouter"), None, None),
+            (Some("openrouter"), Some("x"), Some("qwen-image-21")),
+            (None, Some("google/gemini-nano-banana-2.1"), None),
+        ] {
+            assert!(generator_call(&ask(p, m, w), None, 1).is_err(), "{p:?} {m:?} {w:?}");
+        }
+        let cloud_3d = GenerateRequest { kind: "3d".into(), provider: Some("codex".into()), ..Default::default() };
+        assert!(generator_call(&cloud_3d, Some("d".into()), 1).is_err());
+        let lift = GenerateRequest {
+            kind: "3d".into(),
+            provider: Some("comfyui".into()),
+            compress_textures: Some(true),
+            ..Default::default()
+        };
+        let (_, body, source) = generator_call(&lift, Some("d".into()), 1).unwrap();
+        assert_eq!(body["compress_textures"], true);
+        assert_eq!(source["params"]["compress_textures"], true);
+    }
+
+    #[test]
+    fn options_offer_drawing_workflows_and_cloud_pictures() {
+        let images = json!({ "details": [
+            { "name": "flux2-klein-4b", "kind": "t2i", "supports_lora": false },
+            { "name": "qwen-image-21-rgba", "kind": "t2i", "supports_lora": false },
+            { "name": "qwen-image-lora", "kind": "t2i", "supports_lora": true },
+            { "name": "z-image-turbo-lora", "kind": "t2i", "supports_lora": false },
+            { "name": "qwen-image-21-edit", "kind": "edit" },
+            { "name": "cp-w3-spritesheet-16f", "kind": "t2i" },
+        ]});
+        let videos = json!({ "details": [
+            { "name": "minimax-h3-i2v", "kind": "i2v", "image_inputs": 1, "has_audio": true, "preset": { "min_duration": 5.0 } },
+            { "name": "minimax-h3-i2v-2ref", "kind": "i2v", "image_inputs": 2 },
+            { "name": "minimax-h3-t2v", "kind": "t2v", "image_inputs": 0 },
+            { "name": "cp-w2-video-gen", "kind": "i2v", "image_inputs": 1 },
+        ]});
+        let o = shape_options(Some(&images), Some(&videos));
+        let workflows: Vec<_> = o["image"].as_array().unwrap().iter().filter_map(|i| i["workflow"].as_str()).collect();
+        assert_eq!(workflows, ["qwen-image-21-rgba", "flux2-klein-4b"], "default first, no LoRA / edit / pipeline steps");
+        assert_eq!(o["image"][0]["transparent"], true);
+        let cloud: Vec<_> = o["image"].as_array().unwrap().iter().filter(|i| i["provider"] != "comfyui").collect();
+        assert_eq!(cloud.len(), CLOUD_IMAGES.len());
+        assert!(cloud.iter().any(|c| c["provider"] == "codex" && c["billing"] == "subscription" && c.get("model").is_none()));
+        assert!(cloud.iter().any(|c| c["model"] == "google/gemini-nano-banana-2.1" && c["usd"] == 0.034));
+        assert_eq!(o["video"].as_array().unwrap().len(), 1);
+        assert_eq!(o["video"][0]["audio"], true);
+        assert_eq!(o["model"]["presets"].as_array().unwrap().len(), studio_presets::PRESETS.len());
+        // Every offered choice passes the validator.
+        for i in o["image"].as_array().unwrap() {
+            let req = GenerateRequest {
+                kind: "image".into(),
+                prompt: Some("x".into()),
+                provider: i["provider"].as_str().map(String::from),
+                workflow: i["workflow"].as_str().map(String::from),
+                model: i["model"].as_str().map(String::from),
+                ..Default::default()
+            };
+            assert!(generator_call(&req, None, 1).is_ok(), "{i}");
+        }
+        // Generator off: cloud pictures only.
+        let off = shape_options(None, None);
+        assert_eq!(off["image"].as_array().unwrap().len(), CLOUD_IMAGES.len());
     }
 
     #[test]

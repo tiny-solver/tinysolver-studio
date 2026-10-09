@@ -6829,6 +6829,46 @@
       "again": "Nochmal",
       "run": "Ausführen",
       "edit": "Werkzeuge"
+    },
+    "options": {
+      "open": "Einstellungen — Modell · Werte",
+      "changed": "Einstellungen geändert — erneut ausführen",
+      "image": "Bildmodell",
+      "video": "Videomodell",
+      "preset": "Einsatz",
+      "custom": "Eigene",
+      "faces": "Flächen",
+      "texture": "Textur",
+      "compress": "Texturen komprimieren (kleinere Datei)",
+      "compressed": "komprimiert",
+      "duration": "Länge (s)",
+      "audio": "mit Ton",
+      "transparent": "transparent",
+      "loading": "Lädt…",
+      "facesTexture": "{faces} Flächen · Textur {texture}",
+      "madeFaces": "{faces} Flächen erzeugt",
+      "seconds": "≈{seconds} s",
+      "secondsLong": "{seconds} s",
+      "usd": "≈${usd}/Bild",
+      "billing": {
+        "local": "Kostenlos · Generator-GPU",
+        "subscription": "Abo",
+        "metered": "Nach Verbrauch"
+      },
+      "group": {
+        "local": "Generator-GPU — kostenlos",
+        "subscription": "Abo — keine Kosten pro Bild",
+        "metered": "Nach Verbrauch — pro Bild berechnet"
+      },
+      "took": "dauerte {seconds} s",
+      "about": {
+        "subscription": "das ChatGPT-Abo des Generator-Besitzers (Codex) — eins nach dem anderen",
+        "metered": "pro Bild berechnet — über den API-Schlüssel des Generators"
+      },
+      "note": {
+        "no_generator": "Kein Generator verbunden — nur Cloud-Bilder werden angezeigt. Trage seine Adresse im Feld „Generator“ des Startbildschirms ein.",
+        "generator_off": "Der Generator hat seine Liste nicht geliefert — er ist vielleicht aus oder beschäftigt. Öffne die Einstellungen erneut, um noch einmal zu fragen."
+      }
     }
   }
 }
