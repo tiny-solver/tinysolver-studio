@@ -84,6 +84,17 @@
         "fs-layout",
         "fs-flow"
       ]
+    },
+    {
+      "id": "backoffice",
+      "date": "2026-10-09",
+      "from": "오너",
+      "text": "tinysolver studio 도 다른 제품들처럼 백오피스 하나 만들고 할 일 · 결정을 거기 담아 두자 — dal · diary 백오피스 참고",
+      "status": "taken",
+      "items": [
+        "bo-home",
+        "bo-build"
+      ]
     }
   ],
   "topics": [
@@ -1067,6 +1078,97 @@
       "refs": [
         "docs/studio/roadmap.json checks 2026-10-08",
         "~/handoff/studio-notes.md §3"
+      ]
+    },
+    {
+      "id": "bo-home",
+      "rule": "release-from-linux1",
+      "topic": "release",
+      "p": 1,
+      "status": "open",
+      "role": "제품",
+      "asked": "2026-10-09",
+      "q": "Studio 백오피스를 어디에 두고 어떻게 배포하나",
+      "now": "Studio 는 서버 없는 설치 앱이라 백오피스가 없다(decide.json 파일이 그 몫). 다른 제품은 stage.sh 로 배포하는데 stage.sh 는 배포마다 vYYYY.M.D.N 태그를 이 repo 에 붙인다 — 이 repo 의 업스트림 release.yml 이 v*.*.* 태그에 걸려 있어 백오피스 배포가 앱 릴리스 빌드를 같이 돌린다",
+      "facets": [
+        "태그 충돌",
+        "데이터 신선도",
+        "새로 만들 것"
+      ],
+      "options": [
+        {
+          "key": "A",
+          "title": "따로 작은 repo(tiny-solver/studio-admin) — opennow 백오피스 모양, 화면이 이 repo main 의 decide · rules · why 를 읽는다",
+          "facets": {
+            "태그 충돌": "없음",
+            "데이터 신선도": "GitHub main 을 읽으면 land 즉시",
+            "새로 만들 것": "repo 하나 · registry 등록 · Vault 읽기 토큰(비공개 repo 면)"
+          }
+        },
+        {
+          "key": "B",
+          "title": "이 repo 안 backoffice/ — stage.sh 를 쓰되 태그 접두사를 바꾸는 옵션을 my-devops 에 더한다",
+          "facets": {
+            "태그 충돌": "stage.sh 수정 필요",
+            "데이터 신선도": "배포 때 굽거나 main 을 읽음",
+            "새로 만들 것": "stage.sh 옵션(공용 도구 변경)"
+          }
+        },
+        {
+          "key": "C",
+          "title": "제품 백오피스 대신 작업 현황판 /decide · 방향판을 그대로 쓴다",
+          "facets": {
+            "태그 충돌": "없음",
+            "데이터 신선도": "지금도 됨",
+            "새로 만들 것": "없음 — 대신 제품만의 화면(규칙 · 릴리스 · 설치 현황)이 없다"
+          }
+        }
+      ],
+      "pick": "A",
+      "reason": "업스트림 파일(release.yml)을 고치지 않고(upstream-receive-only) 공용 stage.sh 도 그대로 쓴다. 읽기 전용 · 로그인 없음 · LAN 만인 opennow 백오피스가 Studio(사용자 데이터 없음)에 맞는 크기다",
+      "needs": [],
+      "unblocks": [
+        "bo-build"
+      ],
+      "then": [
+        "AGENTS.md · CLAUDE.md Fork 운영 절에 백오피스 주소 한 줄(끝에만)"
+      ],
+      "refs": [
+        "opennow web/admin(읽기 전용 백오피스 · 약 500줄) · docker-compose.yml admin 서비스",
+        "dal server/decide.mjs · decide-schema.mjs(결정하기 → PR)",
+        "diary /admin/decide(GitHub main 에서 읽어 팀별 표)",
+        ".github/workflows/release.yml (tags v*.*.*)",
+        "my-devops scripts/stage.sh(CalVer 태그)"
+      ]
+    },
+    {
+      "id": "bo-build",
+      "topic": "release",
+      "p": 1,
+      "status": "todo",
+      "role": "제품",
+      "asked": "2026-10-09",
+      "goal": "안 적음",
+      "from": "ask:backoffice",
+      "prep": [],
+      "who": [],
+      "learn": [
+        "opennow web/admin · docker-compose admin 서비스",
+        "diary readiness.js(덜 정해진 일 · 바로 할 수 있는 일 · 기다리는 일)"
+      ],
+      "q": "Studio 백오피스 첫 판 — 할 일 · 정할 것 · 요청 · 규칙 화면",
+      "want": "studio-qa-admin.home.tinysolver.me(LAN · Tailscale 만 · 읽기 전용 · 로그인 없음)에서 이 repo main 의 decide.json 을 주제별(그룹) 표로 — 정할 것(권장안 · 선택지 표) · 할 일(우선순위 · 막힌 것 needs) · 요청(asks 와 계획 항목 연결) — 과 rules.json(규칙마다 걸린 결정 요청)을 본다. 레지스트리에 서비스로 등록돼 작업 현황판 · 방향판에서 링크된다",
+      "now": "작업 현황판 /decide 가 다른 제품 항목과 섞어 보여 준다. Studio 만의 화면은 없다",
+      "action": "bo-home 에서 고른 자리에 opennow 백오피스를 본떠: nginx 정적 화면 + compose admin 서비스(Traefik · ipallowlist) + env/qa.env · stage.sh qa deploy(또는 고른 배포 길) · my-devops registry 등록. 결정하기(PR 열기)는 2판 — dal decide.mjs 참고",
+      "needs": [
+        "bo-home"
+      ],
+      "unblocks": [],
+      "then": [
+        "AGENTS.md · CLAUDE.md 끝에 백오피스 주소"
+      ],
+      "refs": [
+        "#bo-home"
       ]
     }
   ]
