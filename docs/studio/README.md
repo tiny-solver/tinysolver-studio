@@ -143,6 +143,24 @@ AI 생성물을 프로젝트의 재료로 받고, 재료를 다시 생성 입력
 - **입력** — `{ from, mode: turntable|still, frames(기본 72 = 3초), width · height(기본 720, 짝수로), cam_dist(기본 6.2 · 모델 높이 2 기준), yaw, pitch(기본 8°), keyframes(기본 [1]), id }`.
 - **결과** — `assets/generated/renders/<id>.mp4`(`kind: video`) + 키프레임마다 `<id>-fNNN.png`(`kind: image`), 출처 `source: { kind: render, from, workflow: blender-<mode>, params, blender, engine, seconds, frame }`. 키프레임 그림은 다음 단계(그림 편집 · i2v)의 입력이 된다.
 - 재료 종류에 `video`(mp4 · webm · mov)가 생겼다 — 서랍은 첫 프레임을 썸네일로, 미리보기 창은 재생기로 보인다.
+- **걷기** — `mode: walk`는 리깅된 모델(재료에 `bones`)을 제자리에서 1초 주기로 걷게 한다(48프레임 · 3/4 시점 yaw -30°). 팔 · 다리 사슬은 뼈 이름이 아니라 모양으로 찾는다(가장 바깥 위 끝 = 손, 가장 아래 끝 = 발 — model-pick `bench/rig/rigeval.py`). 뼈 없는 모델은 '먼저 뼈 넣기' 메모.
+
+### 단계 — T포즈 · 뼈 넣기 · 영상 (blender-video · bv-video-gen · 리깅 칸)
+
+`generate_asset`의 `kind`가 여섯이 됐다. 서랍 단추와 MCP `studio_generate_asset`이 같은 명령이다.
+
+| kind | `from` | 생성기 | 서랍 단추 | 기본값 |
+| --- | --- | --- | --- | --- |
+| `image` | (그림) | `/api/images/generate` | 그리기 | qwen-image-21-rgba(프롬프트를 RGBA 레시피로 감싼다) |
+| `edit` | 그림 | `/api/images/generate` + `source_image` | — (MCP) | qwen-image-21-edit · 배경 지우기 |
+| `tpose` | 캐릭터 그림 | 같음 | **T포즈로** | 고정 프롬프트(같은 옷 · 팔 수평 · 정면) · 입력을 밝은 회색 정사각에 놓는다(model-pick `tpose.py`) |
+| `3d` | 그림 | `/api/3d/generate` | 3D 로 | trellis2 · 쓸 곳 프리셋 |
+| `rig` | 모델 | `/api/3d/rig`(SkinTokens) | **뼈 넣기** | — |
+| `video` | 그림(렌더 키프레임) | `/api/videos/generate` | **영상으로**(그리기 칸의 글 = 동작 · 카메라 · `Audio: …`) | minimax-h3-i2v · 768² · 5초 (turbo 는 10-09 genai 500 — 이슈 1009-8) |
+
+- 캐릭터 흐름: 그림 → **T포즈로** → 3D → **뼈 넣기** → 렌더 **걷기** → 키프레임 → **영상으로**. T포즈를 3D 앞에 두는 것은 model-pick 판 ②의 결론(자연 포즈 1/6 · T포즈 5/6 리깅 성공)이다.
+- 모델의 `bones`(가장 큰 skin 의 joint 수) · `animations`는 GLB 를 읽어 재료에 남긴다. 서랍은 뼈가 있으면 **걷기**, 없으면 **뼈 넣기**를 보인다.
+- 영상 재료의 출처에는 생성기가 돌려준 실제 `width`·`height`·`frames`·`fps`와 `audio`가 남는다.
 
 ## 구조
 

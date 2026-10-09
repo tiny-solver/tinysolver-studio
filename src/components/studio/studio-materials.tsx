@@ -3,10 +3,14 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useTranslations } from "next-intl"
 import {
+  Bone,
   Box,
   Clapperboard,
   FilePlus2,
+  Film,
+  Footprints,
   ImageIcon,
+  PersonStanding,
   Plug,
   RefreshCw,
   Sparkles,
@@ -231,6 +235,82 @@ export function StudioMaterials({
     </select>
   )
 
+  /** The next steps a material can take — each one is the operation the
+   *  matching MCP tool runs (generate_asset · render_asset). */
+  const materialActions = (asset: StudioAsset): MaterialAction[] => {
+    if (!asset.exists) return []
+    const out: MaterialAction[] = []
+    const step = (
+      key: string,
+      icon: MaterialAction["icon"],
+      label: string,
+      busyLabel: string,
+      op: StudioOp
+    ) => {
+      const id = `${key}:${asset.id}`
+      out.push({
+        key,
+        icon,
+        label: pending === id ? busyLabel : label,
+        onClick: () => void run(id, op),
+      })
+    }
+    if (asset.kind === "image" && generator) {
+      step("3d", "box", t("make3d"), t("lifting"), {
+        op: "generate_asset",
+        kind: "3d",
+        from: asset.id,
+        ...(useFor ? { use: useFor } : LIFT_3D),
+      })
+      step("tpose", "tpose", t("tpose"), t("tposing"), {
+        op: "generate_asset",
+        kind: "tpose",
+        from: asset.id,
+      })
+      const motion = prompt.trim()
+      out.push({
+        key: "video",
+        icon: "video",
+        label: pending === `video:${asset.id}` ? t("videoing") : t("toVideo"),
+        title: t("toVideoHint"),
+        onClick: () => {
+          if (!motion) {
+            setError(t("needMotion"))
+            return
+          }
+          void run(`video:${asset.id}`, {
+            op: "generate_asset",
+            kind: "video",
+            from: asset.id,
+            prompt: motion,
+          }).then((ok) => {
+            if (ok) setPrompt("")
+          })
+        },
+      })
+    }
+    if (asset.kind === "model") {
+      step("render", "render", t("render"), t("rendering"), {
+        op: "render_asset",
+        from: asset.id,
+      })
+      if (typeof asset.bones === "number") {
+        step("walk", "walk", t("walk"), t("rendering"), {
+          op: "render_asset",
+          from: asset.id,
+          mode: "walk",
+        })
+      } else if (generator) {
+        step("rig", "rig", t("rig"), t("rigging"), {
+          op: "generate_asset",
+          kind: "rig",
+          from: asset.id,
+        })
+      }
+    }
+    return out
+  }
+
   const assets = list?.assets ?? []
   const loose = list?.unregistered ?? []
   const generator = list?.generator ?? null
@@ -365,25 +445,8 @@ export function StudioMaterials({
                 ? fileUrl(asset.file)
                 : null
             }
-            canRender={asset.kind === "model" && asset.exists}
-            rendering={pending === `render:${asset.id}`}
-            onRender={() =>
-              void run(`render:${asset.id}`, {
-                op: "render_asset",
-                from: asset.id,
-              })
-            }
-            canLift={Boolean(generator) && asset.kind === "image"}
-            lifting={pending === `3d:${asset.id}`}
+            actions={materialActions(asset)}
             busy={busy}
-            onLift={() =>
-              void run(`3d:${asset.id}`, {
-                op: "generate_asset",
-                kind: "3d",
-                from: asset.id,
-                ...(useFor ? { use: useFor } : LIFT_3D),
-              })
-            }
           />
         ))}
       </div>
@@ -493,7 +556,7 @@ export function StudioMaterials({
 }
 
 type Translate = (
-  key: "tris" | "texture" | "missing" | "seconds",
+  key: "tris" | "texture" | "missing" | "seconds" | "bones",
   values?: Record<string, string | number>
 ) => string
 
@@ -523,6 +586,9 @@ export function materialFacts(asset: StudioAsset, t: Translate): string[] {
             typeof asset.texture_max === "number"
               ? t("texture", { size: asset.texture_max })
               : null,
+            typeof asset.bones === "number"
+              ? t("bones", { count: asset.bones })
+              : null,
           ]
         : [
             asset.width && asset.height
@@ -534,19 +600,31 @@ export function materialFacts(asset: StudioAsset, t: Translate): string[] {
   return facts.filter((f): f is string => Boolean(f))
 }
 
+interface MaterialAction {
+  key: string
+  icon: "box" | "tpose" | "video" | "render" | "walk" | "rig"
+  label: string
+  title?: string
+  onClick: () => void
+}
+
+const ACTION_ICONS = {
+  box: Box,
+  tpose: PersonStanding,
+  video: Film,
+  render: Clapperboard,
+  walk: Footprints,
+  rig: Bone,
+} as const
+
 function MaterialRow({
   asset,
   src,
   video,
   onPreview,
   onPlace,
-  canRender,
-  rendering,
-  onRender,
-  canLift,
-  lifting,
+  actions,
   busy,
-  onLift,
 }: {
   asset: StudioAsset
   src: string | null
@@ -554,13 +632,8 @@ function MaterialRow({
   video: string | null
   onPreview?: () => void
   onPlace?: () => void
-  canRender: boolean
-  rendering: boolean
-  onRender: () => void
-  canLift: boolean
-  lifting: boolean
+  actions: MaterialAction[]
   busy: boolean
-  onLift: () => void
 }) {
   const t = useTranslations("Studio.materials")
   const tp = useTranslations("Studio.materials.presets")
@@ -607,7 +680,7 @@ function MaterialRow({
           </span>
         )}
         <Findings findings={asset.check} />
-        {(onPlace || canLift || canRender) && (
+        {(onPlace || actions.length > 0) && (
           <div className="studio-material-actions">
             {onPlace && (
               <button disabled={busy} onClick={onPlace}>
@@ -615,18 +688,20 @@ function MaterialRow({
                 {t("place")}
               </button>
             )}
-            {canRender && (
-              <button disabled={busy} onClick={onRender}>
-                <Clapperboard size={12} />
-                {rendering ? t("rendering") : t("render")}
-              </button>
-            )}
-            {canLift && (
-              <button disabled={busy} onClick={onLift}>
-                <Box size={12} />
-                {lifting ? t("lifting") : t("make3d")}
-              </button>
-            )}
+            {actions.map((a) => {
+              const Icon = ACTION_ICONS[a.icon]
+              return (
+                <button
+                  key={a.key}
+                  disabled={busy}
+                  onClick={a.onClick}
+                  title={a.title}
+                >
+                  <Icon size={12} />
+                  {a.label}
+                </button>
+              )
+            })}
           </div>
         )}
       </div>
