@@ -4100,6 +4100,8 @@ export type StudioOp =
       keyframes?: number[]
       id?: string
     }
+  | { op: "read_flow" }
+  | { op: "write_flow"; flow: object }
 
 /** `{ ok, note?, ... }` — a refusal is `ok: false` with a readable note. */
 export interface StudioOutcome {

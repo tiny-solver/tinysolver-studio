@@ -6729,5 +6729,106 @@
         "switchedOff": "Dieser Tab wurde bei ausgeschaltetem Web-Inspektor geöffnet. Schalte ihn in den Browser-Einstellungen ein und öffne die Seite erneut."
       }
     }
+  },
+  "StudioHome": {
+    "drawer": {
+      "open": "Chat öffnen",
+      "title": "Chat",
+      "close": "Chat schließen",
+      "wide": "Chat breiter",
+      "narrow": "Chat schmaler"
+    },
+    "start": {
+      "title": "Was machen wir?",
+      "placeholder": "z. B. ein kurzes Video eines niedlichen Ritters mit rotem Umhang, der auf uns zugeht",
+      "character": "Es ist eine Figur (T-Pose → Knochen)",
+      "make": "Erstellen",
+      "making": "Projekt wird erstellt…",
+      "generator": "Generator",
+      "back": "Zurück"
+    },
+    "goal": {
+      "video": "Video",
+      "model": "3D-Modell",
+      "image": "Bild",
+      "scene": "Spielszene"
+    },
+    "hint": {
+      "video": "Bild → 3D → Szene · Kamera → Rendern → Video. Gerendert wird mit Blender auf diesem Rechner; Bilder, 3D und Video macht der Generator.",
+      "model": "Bild → 3D. Eine Figur wird in T-Pose neu gezeichnet, in 3D gehoben und bekommt Knochen.",
+      "image": "Ein Bild (transparentes PNG).",
+      "scene": "Bild → 3D, dann im Editor in eine Szene setzen."
+    },
+    "recent": {
+      "title": "Letzte Projekte",
+      "loading": "Lädt…",
+      "empty": "Noch keine Projekte. Schreib oben, was entstehen soll.",
+      "noFlow": "Kein Schrittprotokoll"
+    },
+    "errors": {
+      "noFolder": "Neuer Projektordner konnte nicht erstellt werden."
+    },
+    "flow": {
+      "progress": "{done} / {total} Schritte",
+      "resume": "Weiter",
+      "editor": "Editor öffnen",
+      "chat": "Chat",
+      "new": "Neu"
+    },
+    "state": {
+      "running": "Läuft",
+      "done": "Fertig",
+      "failed": "Fehlgeschlagen",
+      "ready": "Bereit",
+      "waiting": "Wartet auf den vorigen Schritt"
+    },
+    "step": {
+      "image": {
+        "title": "Bild",
+        "running": "Zeichnet… 10–20 s",
+        "hint": "Zeichnet den Prompt (transparentes PNG)."
+      },
+      "tpose": {
+        "title": "T-Pose",
+        "running": "Zeichnet in T-Pose neu… 10–20 s",
+        "hint": "Zeichnet dieselbe Figur mit ausgestreckten Armen — Knochen sitzen viel sauberer."
+      },
+      "model": {
+        "title": "3D",
+        "running": "Erzeugt 3D… 1–10 min",
+        "hint": "Macht aus dem Bild ein texturiertes 3D-Modell (GLB)."
+      },
+      "rig": {
+        "title": "Knochen",
+        "running": "Fügt Knochen ein… etwa 30 s",
+        "hint": "Gibt dem Modell Skelett und Skin-Gewichte, damit es sich bewegt."
+      },
+      "camera": {
+        "title": "Szene · Kamera",
+        "running": "Fotografiert in Blender…",
+        "hint": "Kamerawinkel wählen und eine Aufnahme machen (Blender auf diesem Rechner)."
+      },
+      "render": {
+        "title": "Rendern",
+        "running": "Rendert in Blender… 10 s–2 min",
+        "hint": "Macht eine Drehung (mit Knochen: einen Gang) und ein Standbild des ersten Frames."
+      },
+      "video": {
+        "title": "Video",
+        "running": "Erzeugt das Video… 1–2 min",
+        "hint": "Animiert den ersten Frame des Renders — Bewegung, Kamera und Ton beschreiben.",
+        "motion": "Bewegung · Kamera · eine Zeile 'Audio: …'"
+      }
+    },
+    "camera": {
+      "yaw": "Drehung",
+      "pitch": "Höhe",
+      "cam_dist": "Abstand"
+    },
+    "card": {
+      "again": "Nochmal",
+      "run": "Ausführen",
+      "edit": "Werkzeuge"
+    }
   }
 }

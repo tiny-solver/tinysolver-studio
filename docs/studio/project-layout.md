@@ -19,6 +19,7 @@
 ```
 <project>/
 ├── codeg-project.json      매니페스트 (아래)
+├── studio-flow.json        첫 화면의 단계 기록(요청 · 단계마다 만든 재료) — 첫 화면으로 만든 프로젝트에만
 ├── AGENTS.md               폴더 규칙. 모든 에이전트 CLI가 읽는다
 ├── CLAUDE.md               AGENTS.md와 같은 내용 (Claude Code용)
 ├── README.md

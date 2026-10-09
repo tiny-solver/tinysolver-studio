@@ -80,11 +80,12 @@
       "date": "2026-10-07",
       "from": "오너",
       "text": "첫 화면이 지금(채팅창 작업공간)과 달라야 한다 — 대화창은 꺼내서 에이전트로 쓸 수 있되, 기본 흐름이 직관적으로 느껴지게. 예: 채팅에 '○○ 영상 만들어줘' 하면 3D 모델링으로 만들어 샘플 영상까지 가는 흐름이 첫 화면에서 보이게",
-      "status": "taken",
+      "status": "done",
       "items": [
         "fs-layout",
         "fs-flow"
-      ]
+      ],
+      "note": "10-09 반영 — 첫 화면 '무엇을 만들까요?' → 단계 카드 → 영상, 채팅은 오른쪽 서랍 (fs-layout A · fs-flow)."
     },
     {
       "id": "backoffice",
@@ -886,7 +887,7 @@
       "learn": [],
       "unblocks": [],
       "then": [],
-      "status": "todo",
+      "status": "done",
       "id": "fs-flow",
       "topic": "entry",
       "p": 2,
@@ -902,7 +903,11 @@
         "~/handoff/studio-notes.md §2",
         "#bv-blender-run",
         "#bv-video-gen"
-      ]
+      ],
+      "done": {
+        "date": "2026-10-09",
+        "note": "작업공간 가운데 = 만드는 흐름(시작 · 단계 카드) · 채팅은 오른쪽 서랍(대화 패널 그대로). 업스트림은 workspace/page.tsx 진입점 한 줄. 카드 = studio_run generate_asset · render_asset, 기록 studio-flow.json. 실측 찻잔 영상 다섯 칸 6분 40초 — feat/first-screen"
+      }
     },
     {
       "id": "bv-route",

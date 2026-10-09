@@ -6729,5 +6729,106 @@
         "switchedOff": "Esta pestaña se abrió con el inspector web desactivado. Actívalo en la configuración del navegador y vuelve a abrir la página."
       }
     }
+  },
+  "StudioHome": {
+    "drawer": {
+      "open": "Abrir chat",
+      "title": "Chat",
+      "close": "Cerrar chat",
+      "wide": "Ampliar chat",
+      "narrow": "Reducir chat"
+    },
+    "start": {
+      "title": "¿Qué hacemos?",
+      "placeholder": "p. ej. un vídeo corto de un caballero con capa roja caminando hacia nosotros",
+      "character": "Es un personaje (pose T → huesos)",
+      "make": "Crear",
+      "making": "Creando el proyecto…",
+      "generator": "Generador",
+      "back": "Volver"
+    },
+    "goal": {
+      "video": "Vídeo",
+      "model": "Modelo 3D",
+      "image": "Imagen",
+      "scene": "Escena de juego"
+    },
+    "hint": {
+      "video": "Imagen → 3D → escena · cámara → render → vídeo. El render usa Blender en este equipo; imágenes, 3D y vídeo los hace el generador.",
+      "model": "Imagen → 3D. Un personaje se redibuja en pose T, se pasa a 3D y recibe huesos.",
+      "image": "Una imagen (PNG transparente).",
+      "scene": "Imagen → 3D; luego colócalo en una escena en el editor."
+    },
+    "recent": {
+      "title": "Proyectos recientes",
+      "loading": "Cargando…",
+      "empty": "Aún no hay proyectos. Escribe arriba qué hacer.",
+      "noFlow": "Sin registro de pasos"
+    },
+    "errors": {
+      "noFolder": "No se pudo crear la carpeta del proyecto."
+    },
+    "flow": {
+      "progress": "{done} / {total} pasos",
+      "resume": "Continuar",
+      "editor": "Abrir editor",
+      "chat": "Chat",
+      "new": "Nuevo"
+    },
+    "state": {
+      "running": "En curso",
+      "done": "Hecho",
+      "failed": "Falló",
+      "ready": "Listo",
+      "waiting": "Esperando el paso anterior"
+    },
+    "step": {
+      "image": {
+        "title": "Imagen",
+        "running": "Dibujando… 10–20 s",
+        "hint": "Dibuja el prompt (PNG transparente)."
+      },
+      "tpose": {
+        "title": "Pose T",
+        "running": "Redibujando en pose T… 10–20 s",
+        "hint": "Redibuja el mismo personaje con los brazos abiertos — los huesos entran mucho mejor."
+      },
+      "model": {
+        "title": "3D",
+        "running": "Creando 3D… 1–10 min",
+        "hint": "Convierte la imagen en un modelo 3D texturizado (GLB)."
+      },
+      "rig": {
+        "title": "Huesos",
+        "running": "Añadiendo huesos… unos 30 s",
+        "hint": "Añade esqueleto y pesos de piel para que se mueva."
+      },
+      "camera": {
+        "title": "Escena · cámara",
+        "running": "Fotografiando en Blender…",
+        "hint": "Elige el ángulo de cámara y haz una toma (Blender en este equipo)."
+      },
+      "render": {
+        "title": "Render",
+        "running": "Renderizando en Blender… 10 s–2 min",
+        "hint": "Hace un giro (o un paseo, si tiene huesos) y una imagen del primer fotograma."
+      },
+      "video": {
+        "title": "Vídeo",
+        "running": "Creando el vídeo… 1–2 min",
+        "hint": "Anima el primer fotograma del render — escribe movimiento, cámara y sonido.",
+        "motion": "Movimiento · cámara · una línea 'Audio: …'"
+      }
+    },
+    "camera": {
+      "yaw": "Giro",
+      "pitch": "Altura",
+      "cam_dist": "Distancia"
+    },
+    "card": {
+      "again": "Otra vez",
+      "run": "Ejecutar",
+      "edit": "Herramientas"
+    }
   }
 }
