@@ -55,6 +55,8 @@ pub enum StudioOp {
         #[serde(default)]
         url: Option<String>,
     },
+    /// Render a model material with the user's Blender ([`crate::studio_render`]).
+    RenderAsset(crate::studio_render::RenderRequest),
 }
 
 /// Whether a folder is (or is shaped like) a content project, i.e. whether
@@ -158,6 +160,7 @@ pub async fn run(root: PathBuf, op: StudioOp) -> Value {
         StudioOp::GenerateAsset(req) => studio_assets::generate(&root, req).await,
         StudioOp::UpdateAsset { id, use_for } => studio_assets::update(&root, &id, use_for).await,
         StudioOp::ConnectGenerator { url } => studio_assets::connect(&root, url).await,
+        StudioOp::RenderAsset(req) => crate::studio_render::render(&root, req).await,
     }
 }
 

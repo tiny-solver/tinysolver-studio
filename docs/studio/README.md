@@ -88,7 +88,7 @@ pnpm dev
 
 - 명령은 전체 배치가 검증된 경우에만 적용된다. 실패하면 원본을 유지한다.
 - 행동은 명령이 따로 없다. `node.update`의 `props.script`에 이름, `{ name, …설정 }`, 또는 그 배열을 쓴다(`null`이면 제거). 인스펙터의 **행동** 섹션이 이 값을 편집하며, 선택 목록과 내장 스크립트의 기본 설정은 엔진이 `codeg:ready`로 알려 준 것이다(`src/lib/studio/behaviors.ts`).
-- 에이전트는 같은 명령을 MCP 도구로 쓴다. 콘텐츠 프로젝트 폴더에서 연 세션에는 codeg-mcp 동반 프로세스가 `studio_list_scenes`·`studio_read_scene`·`studio_apply_scene_commands`·`studio_build`·`studio_publish`와 재료 도구 `studio_list_assets`·`studio_import_asset`·`studio_generate_asset`을 노출한다. 검증기는 `src-tauri/src/studio_scene.rs`(이 문서의 `document.ts`와 같은 규칙)이고, 파일에 쓰면 편집기와 미리보기가 감시 스트림으로 알아챈다.
+- 에이전트는 같은 명령을 MCP 도구로 쓴다. 콘텐츠 프로젝트 폴더에서 연 세션에는 codeg-mcp 동반 프로세스가 `studio_list_scenes`·`studio_read_scene`·`studio_apply_scene_commands`·`studio_build`·`studio_publish`와 재료 도구 `studio_list_assets`·`studio_import_asset`·`studio_generate_asset`·`studio_update_asset`·`studio_render`를 노출한다. 검증기는 `src-tauri/src/studio_scene.rs`(이 문서의 `document.ts`와 같은 규칙)이고, 파일에 쓰면 편집기와 미리보기가 감시 스트림으로 알아챈다.
 - 편집기 → 에이전트: 헤더의 **대화로 보내기**가 장면 파일 배지와 함께 현재 장면·선택한 노드·미리보기 런타임 오류를 옆 대화의 입력창에 넣는다. 전송은 사용자가 한다. 게임 보기의 오류 띠에도 같은 버튼이 있다.
 - 미리보기 서버는 서빙하는 HTML에 오류 보고 스크립트를 주입한다(`codeg:error` postMessage). 엔진을 에이전트가 새로 썼더라도 예외·거부된 프로미스·`console.error`·리소스 로드 실패가 편집기에 뜬다. 빌드 산출물에는 들어가지 않는다.
 - 같은 자리에 미리보기 표식 `window.__codegPreview`를 심는다. 엔진은 이 표식이 있는 iframe에서만 편집기 프로토콜(`codeg:*`)을 말한다 — afterplay처럼 게임을 iframe에 띄우는 다른 곳에 편집기 메시지를 보내지 않는다. 플랫폼 층 이전에 만든 프로젝트의 importmap에는 `codeg-platform` 항목을 미리보기·빌드가 채워 준다(프로젝트 파일은 고치지 않는다).
@@ -133,6 +133,16 @@ AI 생성물을 프로젝트의 재료로 받고, 재료를 다시 생성 입력
 - **미리보기** — 썸네일을 누르면 이미지는 크게, GLB 는 미리보기 서버의 `__codeg/viewer/model.html?src=…`(벤더링한 three 0.170 GLTFLoader · OrbitControls, 빌드에는 안 들어간다)로 돌려 본다. 출처(workflow · prompt · seed · from)도 함께.
 - **장면에 놓기** — 이미지 재료를 열린 장면에 선언(`asset.set`)하고 sprite 노드를 하나 더한다(컨테이너 40% 안으로 맞춤, 한 번의 실행 취소). 장면 명령 `asset.set`·`asset.remove`는 두 검증기(`document.ts` · `studio_scene.rs`)에 같이 있다.
 - 구현: `src-tauri/src/studio_assets.rs`(목록 · 받기 · 생성 · 연결 · GLB 숫자), `src/components/studio/studio-materials.tsx`(서랍), `src-tauri/engines/viewer/model.html`.
+
+### 렌더 — 사용자 PC 의 Blender (blender-video · bv-blender-run)
+
+모델 재료를 Blender 로 헤드리스 렌더해 영상 · 키프레임 그림을 재료로 받는다. 서랍의 모델 **렌더** 단추와 MCP `studio_render`가 같은 명령 `render_asset`이다(decide `bv-where` A — 사용자 PC 렌더 · 생성기에 렌더를 넣지 않는다).
+
+- **Blender 찾기** — `codeg-project.json`의 `render.blender` → 환경 변수 `BLENDER` → `PATH`의 `blender` → OS 표준 위치(macOS `/Applications/Blender.app/Contents/MacOS/Blender` · `~/Applications/…`, Linux `/snap/bin/blender` · `/usr/bin` · `/usr/local/bin` · `/opt/blender` · flatpak, Windows `Program Files\Blender Foundation\Blender *\blender.exe` 최신 먼저). 없으면 설치 · 경로 지정 방법을 메모로 돌려준다.
+- **스크립트** — `src-tauri/src/studio_render.py` 를 바이너리에 넣어(`include_str!`) 임시 폴더에 풀고 `blender -b --factory-startup -P studio_render.py -- job.json` 으로 부른다. 장면은 10-07 실측 레시피(handoff `turntable.py`): 높이 2 · 바닥 중앙 · 바닥판 · area light 셋 · 밝은 world · pivot 에 붙은 카메라. 엔진 EEVEE. 영상은 Blender 내장 FFmpeg(H.264 mp4)이라 따로 ffmpeg 가 필요 없다. 30분 넘으면 멈춘다.
+- **입력** — `{ from, mode: turntable|still, frames(기본 72 = 3초), width · height(기본 720, 짝수로), cam_dist(기본 6.2 · 모델 높이 2 기준), yaw, pitch(기본 8°), keyframes(기본 [1]), id }`.
+- **결과** — `assets/generated/renders/<id>.mp4`(`kind: video`) + 키프레임마다 `<id>-fNNN.png`(`kind: image`), 출처 `source: { kind: render, from, workflow: blender-<mode>, params, blender, engine, seconds, frame }`. 키프레임 그림은 다음 단계(그림 편집 · i2v)의 입력이 된다.
+- 재료 종류에 `video`(mp4 · webm · mov)가 생겼다 — 서랍은 첫 프레임을 썸네일로, 미리보기 창은 재생기로 보인다.
 
 ## 구조
 

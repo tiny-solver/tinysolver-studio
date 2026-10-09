@@ -260,7 +260,7 @@ impl CompanionFeatures {
             "browser_eval" => self.browser && self.browser_eval,
             "studio_list_scenes" | "studio_read_scene" | "studio_apply_scene_commands"
             | "studio_build" | "studio_publish" | "studio_list_assets" | "studio_import_asset"
-            | "studio_generate_asset" | "studio_update_asset" => self.studio,
+            | "studio_generate_asset" | "studio_update_asset" | "studio_render" => self.studio,
             "delegate_to_agent" | "get_delegation_status" | "cancel_delegation"
             | "resume_delegation" => self.delegation,
             _ => false,
@@ -741,7 +741,7 @@ async fn build_tools_call_spawn(
         }
         "studio_list_scenes" | "studio_read_scene" | "studio_apply_scene_commands"
         | "studio_build" | "studio_publish" | "studio_list_assets" | "studio_import_asset"
-        | "studio_generate_asset" | "studio_update_asset" => {
+        | "studio_generate_asset" | "studio_update_asset" | "studio_render" => {
             let op = match parse_studio_op(&name, &arguments) {
                 Ok(op) => op,
                 Err(msg) => return LineAction::Respond(err(id, -32602, msg)),
@@ -2668,6 +2668,15 @@ pub fn parse_studio_op(tool: &str, arguments: &Value) -> Result<StudioOp, String
                 .map(StudioOp::GenerateAsset)
                 .map_err(|e| format!("studio_generate_asset: {e} (needs `kind`: image or 3d)"))
         }
+        "studio_render" => {
+            let mut args = arguments.clone();
+            if let Some(obj) = args.as_object_mut() {
+                obj.remove("project");
+            }
+            serde_json::from_value(args)
+                .map(StudioOp::RenderAsset)
+                .map_err(|e| format!("studio_render: {e} (needs `from`: a 3D model material id)"))
+        }
         "studio_build" => Ok(StudioOp::Build),
         "studio_publish" => {
             let target = arguments
@@ -3865,7 +3874,7 @@ mod tests {
         browser_eval: false,
     };
 
-    const STUDIO_TOOLS: [&str; 9] = [
+    const STUDIO_TOOLS: [&str; 10] = [
         "studio_list_scenes",
         "studio_read_scene",
         "studio_apply_scene_commands",
@@ -3875,6 +3884,7 @@ mod tests {
         "studio_import_asset",
         "studio_generate_asset",
         "studio_update_asset",
+        "studio_render",
     ];
 
     #[tokio::test]
@@ -3911,6 +3921,7 @@ mod tests {
             ("studio_import_asset", json!({ "url": "https://x/a.png", "source": { "seed": 1 } })),
             ("studio_generate_asset", json!({ "kind": "3d", "from": "cup", "target_faces": 10000 })),
             ("studio_update_asset", json!({ "id": "cup", "use": "web-ar" })),
+            ("studio_render", json!({ "from": "cup-3d", "frames": 48, "keyframes": [1, 25] })),
         ] {
             let line = json!({
                 "jsonrpc": "2.0", "id": 40, "method": "tools/call",
@@ -3948,6 +3959,7 @@ mod tests {
             ("studio_import_asset", json!({ "id": "x" }), "url"),
             ("studio_generate_asset", json!({ "prompt": "cup" }), "kind"),
             ("studio_update_asset", json!({ "use": "web-ar" }), "id"),
+            ("studio_render", json!({ "frames": 48 }), "from"),
         ] {
             let line = json!({
                 "jsonrpc": "2.0", "id": 41, "method": "tools/call",
