@@ -98,6 +98,14 @@
         "bo-build"
       ],
       "note": "10-09 — https://studio-admin.home.tinysolver.me 첫 판(읽기 전용). 결정하기 · 쓰기는 다음 판"
+    },
+    {
+      "id": "step-options",
+      "date": "2026-10-09",
+      "from": "오너",
+      "text": "첫 화면 · 단계 카드에서 선택지를 고를 수 있게 — 그림 모델(지금은 qwen-image-21-rgba 고정)을 바꾸고, codex gpt-image(내 ChatGPT 구독)와 나노바나나 2.1(Google · 10-06 출시)도 쓰고 싶다. 3D 면 수 · 텍스처, 영상 모델 같은 다른 단계 값도 같이",
+      "status": "new",
+      "items": []
     }
   ],
   "topics": [
