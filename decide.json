@@ -772,7 +772,7 @@
       "learn": [],
       "unblocks": [],
       "then": [],
-      "status": "todo",
+      "status": "done",
       "id": "bv-blender-run",
       "topic": "video",
       "p": 2,
@@ -788,7 +788,11 @@
         "~/handoff/studio-notes.md (10-07 실측)",
         "linux-1 ~/handoff/3d-pose-bench/turntable.py · shot.py",
         "#aw-3d-assemble"
-      ]
+      ],
+      "done": {
+        "date": "2026-10-09",
+        "note": "studio_render.rs — Blender 찾기(render.blender → $BLENDER → PATH → OS 표준 위치) · 내장 스크립트 헤드리스 렌더 · 턴테이블 mp4(Blender 내장 FFmpeg) + 키프레임 PNG 를 assets/generated/renders/ 재료로 · 서랍 '렌더' · MCP studio_render — feat/blender-render"
+      }
     },
     {
       "role": "제품",

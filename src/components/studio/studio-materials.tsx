@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { useTranslations } from "next-intl"
 import {
   Box,
+  Clapperboard,
   FilePlus2,
   ImageIcon,
   Plug,
@@ -11,6 +12,7 @@ import {
   Sparkles,
   SquarePlus,
   Upload,
+  Video,
 } from "lucide-react"
 import { studioRun } from "@/lib/api"
 import { toErrorMessage } from "@/lib/app-error"
@@ -264,7 +266,7 @@ export function StudioMaterials({
           type="file"
           multiple
           hidden
-          accept="image/png,image/jpeg,image/webp,image/gif,.glb,.gltf"
+          accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm,.glb,.gltf"
           onChange={(e) => {
             void upload(e.target.files)
             e.target.value = ""
@@ -358,6 +360,19 @@ export function StudioMaterials({
                 ? () => onPlace(asset)
                 : undefined
             }
+            video={
+              asset.kind === "video" && asset.exists
+                ? fileUrl(asset.file)
+                : null
+            }
+            canRender={asset.kind === "model" && asset.exists}
+            rendering={pending === `render:${asset.id}`}
+            onRender={() =>
+              void run(`render:${asset.id}`, {
+                op: "render_asset",
+                from: asset.id,
+              })
+            }
             canLift={Boolean(generator) && asset.kind === "image"}
             lifting={pending === `3d:${asset.id}`}
             busy={busy}
@@ -433,6 +448,15 @@ export function StudioMaterials({
                     title={previewing.id}
                     src={modelViewerUrl(previewing.file) ?? undefined}
                   />
+                ) : previewing.kind === "video" ? (
+                  <video
+                    src={fileUrl(previewing.file) ?? undefined}
+                    controls
+                    autoPlay
+                    loop
+                    muted
+                    playsInline
+                  />
                 ) : (
                   // eslint-disable-next-line @next/next/no-img-element -- served by the preview server, not a static asset
                   <img
@@ -469,25 +493,42 @@ export function StudioMaterials({
 }
 
 type Translate = (
-  key: "tris" | "texture" | "missing",
+  key: "tris" | "texture" | "missing" | "seconds",
   values?: Record<string, string | number>
 ) => string
 
 /** The numbers a material is judged by: kind, pixel size or faces and
- *  texture, bytes. */
-function materialFacts(asset: StudioAsset, t: Translate): string[] {
+ *  texture (or length for a clip), bytes. */
+export function materialFacts(asset: StudioAsset, t: Translate): string[] {
+  const params = asset.source?.params as
+    | { width?: number; height?: number; frames?: number }
+    | undefined
   const facts: (string | null)[] =
-    asset.kind === "model"
+    asset.kind === "video"
       ? [
-          "GLB",
-          typeof asset.triangles === "number"
-            ? t("tris", { count: asset.triangles.toLocaleString() })
+          asset.file.split(".").pop()?.toUpperCase() ?? null,
+          params?.width && params?.height
+            ? `${params.width}×${params.height}`
             : null,
-          typeof asset.texture_max === "number"
-            ? t("texture", { size: asset.texture_max })
+          params?.frames
+            ? `${(params.frames / 24).toFixed(1)} ${t("seconds")}`
             : null,
         ]
-      : [asset.width && asset.height ? `${asset.width}×${asset.height}` : null]
+      : asset.kind === "model"
+        ? [
+            "GLB",
+            typeof asset.triangles === "number"
+              ? t("tris", { count: asset.triangles.toLocaleString() })
+              : null,
+            typeof asset.texture_max === "number"
+              ? t("texture", { size: asset.texture_max })
+              : null,
+          ]
+        : [
+            asset.width && asset.height
+              ? `${asset.width}×${asset.height}`
+              : null,
+          ]
   facts.push(formatBytes(asset.bytes) || null)
   if (!asset.exists) facts.push(t("missing"))
   return facts.filter((f): f is string => Boolean(f))
@@ -496,8 +537,12 @@ function materialFacts(asset: StudioAsset, t: Translate): string[] {
 function MaterialRow({
   asset,
   src,
+  video,
   onPreview,
   onPlace,
+  canRender,
+  rendering,
+  onRender,
   canLift,
   lifting,
   busy,
@@ -505,8 +550,13 @@ function MaterialRow({
 }: {
   asset: StudioAsset
   src: string | null
+  /** A clip's URL — its first frame is the thumbnail. */
+  video: string | null
   onPreview?: () => void
   onPlace?: () => void
+  canRender: boolean
+  rendering: boolean
+  onRender: () => void
   canLift: boolean
   lifting: boolean
   busy: boolean
@@ -534,8 +584,13 @@ function MaterialRow({
         {src ? (
           // eslint-disable-next-line @next/next/no-img-element -- served by the preview server, not a static asset
           <img src={src} alt={asset.id} loading="lazy" />
+        ) : video ? (
+          // `#t=0.1` makes the browser paint a frame instead of a blank box.
+          <video src={`${video}#t=0.1`} muted preload="metadata" playsInline />
         ) : asset.kind === "model" ? (
           <Box size={18} />
+        ) : asset.kind === "video" ? (
+          <Video size={18} />
         ) : (
           <ImageIcon size={18} />
         )}
@@ -552,12 +607,18 @@ function MaterialRow({
           </span>
         )}
         <Findings findings={asset.check} />
-        {(onPlace || canLift) && (
+        {(onPlace || canLift || canRender) && (
           <div className="studio-material-actions">
             {onPlace && (
               <button disabled={busy} onClick={onPlace}>
                 <SquarePlus size={12} />
                 {t("place")}
+              </button>
+            )}
+            {canRender && (
+              <button disabled={busy} onClick={onRender}>
+                <Clapperboard size={12} />
+                {rendering ? t("rendering") : t("render")}
               </button>
             )}
             {canLift && (

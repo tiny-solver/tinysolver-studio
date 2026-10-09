@@ -580,6 +580,74 @@
     }
   },
   {
+    "name": "studio_render",
+    "description": "Render a 3D model material with Blender on the user's computer (headless, no window) — the same operation as the Render button on a model in the Studio's material drawer. `mode: \"turntable\"` (default) circles the camera once around the model and saves a video (H.264 mp4, 24 fps) plus stills at `keyframes`; `mode: \"still\"` saves one picture. The model is scaled to height 2 and stood on a light ground plate with soft studio lights. Results are registered as materials under assets/generated/renders/ (the video `kind: video`, each still `kind: image`) with their provenance. A still is the usual first frame for a generated video. Takes ~10 s–2 min. If Blender is not installed the result says how to install it or point codeg-project.json `render.blender` at it — tell the user; do not install it yourself.",
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "from"
+      ],
+      "properties": {
+        "from": {
+          "type": "string",
+          "description": "Id of a 3D model material (GLB) from studio_list_assets."
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "turntable",
+            "still"
+          ]
+        },
+        "frames": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 720,
+          "description": "Turntable length at 24 fps. Default 72 (3 s)."
+        },
+        "width": {
+          "type": "integer",
+          "minimum": 64,
+          "maximum": 2048,
+          "description": "Default 720."
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 64,
+          "maximum": 2048,
+          "description": "Default 720."
+        },
+        "cam_dist": {
+          "type": "number",
+          "description": "Camera distance; the model is 2 tall. Default 6.2 (whole body with margin); ~4 frames it tighter."
+        },
+        "yaw": {
+          "type": "number",
+          "description": "Where the camera starts, degrees around the model (0 = front)."
+        },
+        "pitch": {
+          "type": "number",
+          "description": "Camera height angle, degrees. Default 8."
+        },
+        "keyframes": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          },
+          "description": "Frames saved as stills. Default [1]."
+        },
+        "id": {
+          "type": "string",
+          "description": "Id for the new materials (stills get -fNNN)."
+        },
+        "project": {
+          "type": "string",
+          "description": "Absolute path of the content project root. Omit it: the default is this session's working directory, which is the project when you were opened in one."
+        }
+      }
+    }
+  },
+  {
     "name": "browser_list_tabs",
     "description": "List the pages open in codeg's built-in browser — the browser panel inside the app, not the user's Chrome or Safari. Each tab comes back with its `tabId`, the site it is on, and whether it is shared with you. READING A PAGE REQUIRES THE USER TO SHARE THAT TAB: they press \"Share with agents\" in the tab's own toolbar, and only they can do it — there is no tool that grants it, and asking again does not help. Sharing is per tab and per site, and ends by itself the moment the page navigates somewhere else, so a tab that was readable a minute ago may not be now. A tab's title is only shown once it is shared, because the title is part of the page. Call this before browser_snapshot to find out which tab to read, or to tell the user which tab they need to share.",
     "inputSchema": {

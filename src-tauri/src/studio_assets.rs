@@ -111,14 +111,14 @@ pub struct GenerateRequest {
     pub use_for: Option<String>,
 }
 
-fn assets_dir(root: &Path, manifest: Option<&cp::ContentProjectManifest>) -> PathBuf {
+pub(crate) fn assets_dir(root: &Path, manifest: Option<&cp::ContentProjectManifest>) -> PathBuf {
     let rel = manifest
         .map(|m| m.paths.assets.clone())
         .unwrap_or_else(|| "assets".into());
     root.join(rel)
 }
 
-async fn project(root: &Path) -> Result<Option<cp::ContentProjectManifest>, String> {
+pub(crate) async fn project(root: &Path) -> Result<Option<cp::ContentProjectManifest>, String> {
     cp::read_content_project(root.to_string_lossy().to_string())
         .await
         .map_err(|e| e.message)
@@ -132,7 +132,7 @@ pub fn generator_url(manifest: Option<&cp::ContentProjectManifest>) -> Option<St
         .filter(|u| !u.is_empty())
 }
 
-async fn read_register(dir: &Path) -> Result<Value, String> {
+pub(crate) async fn read_register(dir: &Path) -> Result<Value, String> {
     let path = dir.join(MANIFEST);
     match tokio::fs::read_to_string(&path).await {
         Ok(raw) => {
@@ -229,15 +229,16 @@ fn entries(register: &Value) -> &[Value] {
     register["assets"].as_array().map(Vec::as_slice).unwrap_or(&[])
 }
 
-fn find<'a>(register: &'a Value, id: &str) -> Option<&'a Value> {
+pub(crate) fn find<'a>(register: &'a Value, id: &str) -> Option<&'a Value> {
     entries(register).iter().find(|e| e["id"] == id)
 }
 
-/// `image` · `model` · `other`, by extension.
+/// `image` · `model` · `video` · `other`, by extension.
 pub fn kind_of(file: &str) -> &'static str {
     match ext_of(file).as_str() {
         "png" | "jpg" | "jpeg" | "webp" | "gif" => "image",
         "glb" | "gltf" => "model",
+        "mp4" | "webm" | "mov" => "video",
         _ => "other",
     }
 }
@@ -258,6 +259,9 @@ fn ext_for_mime(mime: &str) -> Option<&'static str> {
         "image/gif" => Some("gif"),
         "model/gltf-binary" => Some("glb"),
         "model/gltf+json" => Some("gltf"),
+        "video/mp4" => Some("mp4"),
+        "video/webm" => Some("webm"),
+        "video/quicktime" => Some("mov"),
         _ => None,
     }
 }
@@ -654,7 +658,7 @@ pub async fn import(root: &Path, req: ImportRequest) -> Value {
             return fail("file: a file name under assets/");
         }
         if kind_of(name) == "other" {
-            return fail("Only images (png, jpg, webp, gif) and models (glb, gltf) are materials.");
+            return fail("Only images (png, jpg, webp, gif), models (glb, gltf) and videos (mp4, webm, mov) are materials.");
         }
         if entries(&register).iter().any(|e| e["file"] == existing.as_str()) {
             return fail(format!("{existing} is already registered"));
@@ -673,7 +677,7 @@ pub async fn import(root: &Path, req: ImportRequest) -> Value {
         };
         let ext = match ext.filter(|e| kind_of(&format!("x.{e}")) != "other") {
             Some(e) => e,
-            None => return fail("Only images (png, jpg, webp, gif) and models (glb, gltf) are materials."),
+            None => return fail("Only images (png, jpg, webp, gif), models (glb, gltf) and videos (mp4, webm, mov) are materials."),
         };
         let kind = kind_of(&format!("x.{ext}"));
         let sub = match req.dir.as_deref() {
@@ -681,7 +685,12 @@ pub async fn import(root: &Path, req: ImportRequest) -> Value {
                 Ok(d) => d,
                 Err(note) => return fail(note),
             },
-            None => if kind == "model" { "generated/models" } else { "generated/images" }.to_string(),
+            None => match kind {
+                "model" => "generated/models",
+                "video" => "generated/videos",
+                _ => "generated/images",
+            }
+            .to_string(),
         };
         let wanted = req.id.clone().unwrap_or_else(|| {
             let name = url

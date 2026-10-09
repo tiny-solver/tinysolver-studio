@@ -4024,7 +4024,7 @@ export interface StudioAsset {
   id: string
   /** Relative to the assets directory. */
   file: string
-  kind?: "image" | "model" | "other"
+  kind?: "image" | "model" | "video" | "other"
   bytes?: number
   width?: number
   height?: number
@@ -4077,6 +4077,20 @@ export type StudioOp =
     }
   | { op: "update_asset"; id: string; use: string | null }
   | { op: "connect_generator"; url: string | null }
+  | {
+      /** Headless Blender on this computer (`studio_render.rs`). */
+      op: "render_asset"
+      from: string
+      mode?: "turntable" | "still"
+      frames?: number
+      width?: number
+      height?: number
+      cam_dist?: number
+      yaw?: number
+      pitch?: number
+      keyframes?: number[]
+      id?: string
+    }
 
 /** `{ ok, note?, ... }` — a refusal is `ok: false` with a readable note. */
 export interface StudioOutcome {
