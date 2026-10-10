@@ -1125,3 +1125,31 @@
 .studio-material-check .is-info {
   color: var(--muted-foreground);
 }
+
+/* 3D film set view (studio-film-set.tsx) */
+.studio-film-btn {
+  display: inline-flex;
+  height: 1.5rem;
+  align-items: center;
+  gap: 0.25rem;
+  border-radius: 0.25rem;
+  border: 1px solid var(--border);
+  background: var(--background);
+  padding: 0 0.4rem;
+  font-size: 0.75rem;
+}
+.studio-film-btn:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--primary) 8%, transparent);
+}
+.studio-film-btn:disabled {
+  opacity: 0.5;
+}
+.studio-film-btn.is-on {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+.studio-film-btn.is-primary {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: var(--primary-foreground);
+}

@@ -4122,6 +4122,23 @@ export type StudioOp =
     }
   | { op: "read_flow" }
   | { op: "write_flow"; flow: object }
+  /** Film sets, `outputs/film/sets/*.set.json` (`studio_set.rs`). */
+  | { op: "list_sets" }
+  | { op: "read_set"; set: string }
+  | { op: "create_set"; set: string; name?: string }
+  | { op: "apply_set_commands"; set: string; commands: object[] }
+  | {
+      /** Film one camera of a set with this computer's Blender. */
+      op: "render_set"
+      set: string
+      camera: string
+      from?: number
+      to?: number
+      width?: number
+      height?: number
+      stills?: number[]
+      id?: string
+    }
 
 /** `{ ok, note?, ... }` — a refusal is `ok: false` with a readable note. */
 export interface StudioOutcome {

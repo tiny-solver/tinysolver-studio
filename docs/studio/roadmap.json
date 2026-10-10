@@ -1,7 +1,7 @@
 {
   "title": "Content Studio",
   "subtitle": "재료를 만들고, 가공하고, 바로 확인하는 웹 제작 작업공간",
-  "updated": "2026-10-09",
+  "updated": "2026-10-10",
   "version": "0.6 · materials workbench",
   "goal": "대화로 게임을 고치고, 편집기와 미리보기에서 바로 보고, 빌드하고, 링크로 출시한다.",
   "firstSlice": [
@@ -82,7 +82,7 @@
       "id": "S6",
       "title": "제작 공정과 분야별 확장",
       "status": "planned",
-      "detail": "재료 작업대(asset-workbench): ① 생성 ↔ 재료 — 완료(아래 checks 2026-10-07), ② 재료 서랍 — 완료(업로드 · 손으로 둔 파일 등록 · 이미지/GLB 미리보기 · 면 수 · 텍스처 · 용량 · 장면에 놓기), ③ 기준 프리셋 · 검사 — 완료(쓸 곳 6종 · 생성 값 · 면 수/텍스처/용량/투명 경고), ④ 3D 조립 — 완료(엔진 0.5.0 model 노드: 놓기 · 크기 · yaw/pitch · turntable). 남은 3D: 3D 카메라 · 조명 장면 · 지형 · 재질 · 내비게이션. 그 밖에 타임라인·애니메이션 클립, 타일맵, 오디오, 3D 지형·재질·내비게이션, 가공 작업·의존성·캐시·재생성, 0.2.x 프로젝트 이전 도구, publish 프리셋 UI, 매니페스트 agents 역할 반영.",
+      "detail": "재료 작업대(asset-workbench): ① 생성 ↔ 재료 — 완료(아래 checks 2026-10-07), ② 재료 서랍 — 완료(업로드 · 손으로 둔 파일 등록 · 이미지/GLB 미리보기 · 면 수 · 텍스처 · 용량 · 장면에 놓기), ③ 기준 프리셋 · 검사 — 완료(쓸 곳 6종 · 생성 값 · 면 수/텍스처/용량/투명 경고), ④ 3D 조립 — 완료(엔진 0.5.0 model 노드: 놓기 · 크기 · yaw/pitch · turntable). 3D 촬영장(film-set · fs3-set) — 완료: outputs/film/sets/<id>.set.json(세트 · 배우 · 조명 · 카메라 경로 xyz) · 3D 촬영장 화면 · studio_*_set 명령 · Blender 렌더. 남은 3D: 지형 · 재질 · 내비게이션(게임 장면 쪽). 그 밖에 타임라인·애니메이션 클립, 타일맵, 오디오, 3D 지형·재질·내비게이션, 가공 작업·의존성·캐시·재생성, 0.2.x 프로젝트 이전 도구, publish 프리셋 UI, 매니페스트 agents 역할 반영.",
       "acceptance": "원본 변경의 영향을 추적하고 필요한 산출물만 재생성한다."
     }
   ],
@@ -99,7 +99,8 @@
     "0.2.x 프로젝트를 관리형 엔진으로 옮기는 자동 도구가 없다. index.html의 importmap과 src/main.js를 새 스캐폴드처럼 바꾸면 된다.",
     "빌드는 outputs/game·assets 복사 + 엔진(__codeg/) 실체화 + zip이다. engine.build가 있으면 먼저 실행하지만, 미리보기 전에 자동으로 돌리지는 않는다.",
     "/play/<slug>/ 링크는 인증이 없고 Studio 서버만큼만 공개된다. 데스크톱에서는 이 기기와 LAN용이다. 외부 호스트는 publish.command가 부르는 CLI와 그 계정에 달려 있고, 프리셋 UI는 없다.",
-    "행동 선택 목록과 액션 연산 안내는 실행 중인 엔진이 알려 준 것이다. 모드·목록을 알리지 않는 엔진(0.2.x, 직접 쓴 엔진)에서는 이름을 직접 입력해야 하고 게임 변수 패널이 나오지 않는다."
+    "행동 선택 목록과 액션 연산 안내는 실행 중인 엔진이 알려 준 것이다. 모드·목록을 알리지 않는 엔진(0.2.x, 직접 쓴 엔진)에서는 이름을 직접 입력해야 하고 게임 변수 패널이 나오지 않는다.",
+    "3D 촬영장 화면의 조명은 근사다(area → 점광원 · 와트/20). 최종 밝기 · 그림자는 Blender 렌더가 정본이다. 미리보기의 배우는 걷기를 하지 않고 위치만 키를 따른다 — 걷기 동작은 렌더에서 보인다. 끌기는 자유 시점에서만 된다(카메라로 보기는 구도 확인용)."
   ],
   "decisions": [
     {
@@ -166,6 +167,11 @@
       "id": "D13",
       "decision": "편집기의 엔진 개념은 엔진이 알려 준 것에서 나온다",
       "reason": "행동·연산 목록을 편집기에 하드코딩하면 엔진과 어긋나고 프로젝트가 등록한 스크립트가 보이지 않는다. 엔진이 codeg:ready로 등록된 이름과 내장 스크립트의 기본 설정을 알리면 편집기는 그것으로 선택 목록과 입력란을 만들고, 저장은 기존 props·명령 경로를 그대로 쓴다."
+    },
+    {
+      "id": "D14",
+      "decision": "3D 촬영장의 정본은 JSON 문서이고, 규칙은 Rust 한 곳에만 둔다",
+      "reason": "decide fs3-truth A. 에이전트(감독들)가 고칠 수 있어야 공정이 돈다 — 장면 문서처럼 검증된 명령 · 원자적 배치 · git diff. 장면 문서와 달리 TypeScript 쌍둥이를 두지 않는다: 3D 화면은 끌기가 끝나면 명령을 보내고 돌아온 문서를 그릴 뿐이라 규칙이 갈라질 곳이 없다. 시간 보간 규칙(키 사이 smooth = u²(3−2u))만 세 곳(studio_set.rs · set.html · studio_render.py)에 같은 식으로 둔다 — 미리보기와 렌더의 카메라가 프레임마다 같아야 해서. Blender 는 문서를 bpy 로 바꿔 렌더만 한다."
     }
   ],
   "checks": [
@@ -202,7 +208,8 @@
     "2026-10-09 · 렌더(bv-blender-run): studio_render Rust 테스트(입력 기본값 · 범위 거부, Blender 찾는 순서, 가짜 Blender 셸 스크립트로 렌더 → 재료 등록 · 다시 렌더하면 새 id) · companion studio_render 도구 목록 · 인자 테스트 통과. linux-2(Blender 5.2.2 snap)에서 codeg-server studio_run render_asset teacup-3d(8,000면) → teacup-3d-turntable.mp4(720² · 72프레임 · H.264 · 199KB) + 키프레임 셋 · 11초. linux-1(Blender 없음)은 설치 · render.blender 안내 메모. next dev + Playwright: 서랍 모델 줄 '렌더' 단추, 영상 재료 첫 프레임 썸네일 · 미리보기 창 재생기 확인. 맥북(/Applications/Blender.app) 실측은 아직.",
     "2026-10-09 · 단계(bv-video-gen + 리깅 칸): studio_assets Rust 테스트(kind edit · tpose · rig · video 의 경로 · 본문 · 거부, T포즈 입력 정사각 회색, GLB skins → bones · animations), studio_render walk 기본값 · 뼈 없으면 거부, companion 인자 테스트 통과. 실제로 codeg-server studio_run 만으로 캐릭터 흐름: image knight 8초 → tpose 12초(같은 옷 · 팔 수평) → 3d mobile-character 39초(7,889면) → rig 28초(뼈 32) → linux-2 Blender walk 9초 → 키프레임 f001 → video 113초(768² · 124프레임 · 소리). 발견 셋: ① genai minimax-h3-i2v-turbo 가 즉시 500 — 기본값을 minimax-h3-i2v 로, 이슈 1009-8 ② SkinTokens seed 1 뼈대는 모든 뼈가 루트에 바로 붙은 별 모양 — 걷기가 '다리 사슬 없음 · 다른 seed 로 다시' 메모로 거부, seed 2(깊이 7)는 걷는다 ③ glTF 가져오기가 만든 뼈 표시용 Icosphere 가 크기 재기에 섞여 모델이 작게 잡히던 것을 고침(평가된 정점으로 잰다). Playwright: 서랍에 T포즈로 · 영상으로 · 뼈 넣기 · 걷기 · 뼈 수 표시.",
     "2026-10-09 · 첫 화면(fs-layout A · fs-flow): flow.ts Vitest(칩마다 단계 · 캐릭터 T포즈 · 뼈, 단계마다 명령 · 입력 기다림, 결과 기록 두 모양, 다시 하기가 뒤 카드를 비움, 프로젝트 이름) · studio_tools read_flow/write_flow Rust 테스트 통과. next dev + codeg-server(linux-2, SSH 포워딩) Playwright: /workspace 가 '무엇을 만들까요?'로 열림 → 'a small blue ceramic teacup with a gold rim' · 영상 · 생성기 → 만들기 → ~/TinysolverStudio/a-small-blue-ceramic 생성 · 사이드바 폴더 · 카드 다섯이 저절로 그림 → 3D(9,779면) → 장면 · 카메라 → 렌더 → 영상 6분 40초에 다 참. 새로고침하면 studio-flow.json 에서 카드가 돌아오고, 대화 서랍은 그 폴더의 새 대화로 열림, 새로 만들기 → 최근 프로젝트에 썸네일.",
-    "2026-10-09 · 단계마다 고르기(step-options): studio_assets Rust 테스트(그림 공급자 · 모델 검증 — openrouter 는 model 필수 · comfyui 에 model 거부 · workflow 와 섞기 거부 · 그림 밖 kind 에 클라우드 거부, compress_textures 통과, 선택지 모양 — 기본 먼저 · LoRA/편집/파이프라인 제외 · 내놓는 선택지는 모두 검증 통과) · companion 도구 목록 11 · flow.ts Vitest(선택이 명령에 실림 · 파일 왕복) 통과. codeg-server(웹 모드) + Playwright(ko-KR): 같은 문장 'a small blue ceramic teacup with a gold rim, cute, soft studio light' · 그림을 첫 화면 빠른 고르기로 qwen-image-21-rgba 20초(투명) · Nano Banana 2.1 15초 · gpt-image-2(Codex) 287초(앞선 중단 잡 뒤 대기 포함) — 카드 아래 '모델 · 무료/구독/종량 · 이번 N초'. 3D 카드 설정 모바일 소품(1,000면 · 1024) → 생성기에 그대로 · 실제 855면 · 461초."
+    "2026-10-09 · 단계마다 고르기(step-options): studio_assets Rust 테스트(그림 공급자 · 모델 검증 — openrouter 는 model 필수 · comfyui 에 model 거부 · workflow 와 섞기 거부 · 그림 밖 kind 에 클라우드 거부, compress_textures 통과, 선택지 모양 — 기본 먼저 · LoRA/편집/파이프라인 제외 · 내놓는 선택지는 모두 검증 통과) · companion 도구 목록 11 · flow.ts Vitest(선택이 명령에 실림 · 파일 왕복) 통과. codeg-server(웹 모드) + Playwright(ko-KR): 같은 문장 'a small blue ceramic teacup with a gold rim, cute, soft studio light' · 그림을 첫 화면 빠른 고르기로 qwen-image-21-rgba 20초(투명) · Nano Banana 2.1 15초 · gpt-image-2(Codex) 287초(앞선 중단 잡 뒤 대기 포함) — 카드 아래 '모델 · 무료/구독/종량 · 이번 N초'. 3D 카드 설정 모바일 소품(1,000면 · 1024) → 생성기에 그대로 · 실제 855면 · 461초.",
+    "2026-10-10 · 3D 촬영장(fs3-set): studio_set Rust 테스트(기본값 · 키 정렬 · 모르는 필드 보존 · 멱등, 잘못된 입력 10종 거부, 명령 7종 원자 적용 · 같은 t 키 합치기 · null 로 지우기, issues — 없는 재료 · 뼈 없는 걷기 · 길이 밖 키 · 자기 자리를 보는 카메라 · 카메라/조명 없음, 보간 smooth/linear · 끝 고정) · studio_tools(만들기 · 중복 거부 · README · 명령 · 읽기 · 목록) · studio_render set_job(초 → 프레임 · 스틸이 to 면 마지막 프레임 · 범위 거부) + 가짜 Blender 로 set 렌더 → 재료 `<set>-<camera>` · 출처 set:<id> · companion 도구 16개 · 인자 거부 통과, film-set.ts Vitest. linux-2 Blender 5.2.2: 바닥 · 조명 셋 · 소품 GLB(racer, 높이 1.2 · yaw 30) · 재료 없는 소품(상자 + warnings) · 리깅 배우(unirig player, 걷기 + 키 2개로 이동 · yaw 90) · 카메라 경로(smooth) 48프레임 360×640 → mp4 + 스틸 둘 8.6초. 같은 문서를 t=3s cam_a 스틸로 찍어 3D 화면의 '카메라로 보기'와 나란히 — 배우 · 소품 위치 · 크기 · 지평선이 맞음. 촬영장 렌더는 AgX(Standard 는 키 조명 가까운 바닥이 255 로 날아감 — 실측). codeg-server(웹) + next dev + Playwright: /studio?path=…&view=set — 목록 · 인스펙터 · 타임라인 · 기즈모 끌기(car x 1.6 → 3.029 저장) · 높이 필드 · 디스크에서 고친 조명 세기 2초 안에 반영 · 재생 위치에 카메라 키 추가 · Blender 없는 linux-1 에서 렌더 단추 → 설치 안내문. 찾은 버그 둘 고침: 모델 크기를 배치된 뒤 월드 좌표로 재서 어긋남 · Group.lookAt 이 +Z 를 겨눠 카메라가 반대로 봄. 맥북 Blender 실측은 아직."
   ],
   "maintenance": "기능 변경 시 roadmap.json의 상태·완료 기준·검증 결과를 갱신하고 pnpm studio:plan을 실행한다. HTML을 직접 수정하지 않는다.",
   "sources": [

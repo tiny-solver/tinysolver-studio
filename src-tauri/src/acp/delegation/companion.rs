@@ -261,7 +261,8 @@ impl CompanionFeatures {
             "studio_list_scenes" | "studio_read_scene" | "studio_apply_scene_commands"
             | "studio_build" | "studio_publish" | "studio_list_assets" | "studio_import_asset"
             | "studio_generate_asset" | "studio_update_asset" | "studio_render"
-            | "studio_generator_options" => self.studio,
+            | "studio_generator_options" | "studio_list_sets" | "studio_read_set"
+            | "studio_create_set" | "studio_apply_set_commands" | "studio_render_set" => self.studio,
             "delegate_to_agent" | "get_delegation_status" | "cancel_delegation"
             | "resume_delegation" => self.delegation,
             _ => false,
@@ -743,7 +744,8 @@ async fn build_tools_call_spawn(
         "studio_list_scenes" | "studio_read_scene" | "studio_apply_scene_commands"
         | "studio_build" | "studio_publish" | "studio_list_assets" | "studio_import_asset"
         | "studio_generate_asset" | "studio_update_asset" | "studio_render"
-            | "studio_generator_options" => {
+            | "studio_generator_options" | "studio_list_sets" | "studio_read_set"
+            | "studio_create_set" | "studio_apply_set_commands" | "studio_render_set" => {
             let op = match parse_studio_op(&name, &arguments) {
                 Ok(op) => op,
                 Err(msg) => return LineAction::Respond(err(id, -32602, msg)),
@@ -2625,6 +2627,16 @@ fn studio_scene_arg(tool: &str, arguments: &Value) -> Result<String, String> {
         })
 }
 
+fn studio_set_arg(tool: &str, arguments: &Value) -> Result<String, String> {
+    arguments
+        .get("set")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
+        .ok_or_else(|| format!("{tool} requires a non-empty `set` id (call studio_list_sets for the ids)"))
+}
+
 /// Turn a `studio_*` tool call into the operation the listener runs. Argument
 /// shape problems come back as the `-32602` message so the LLM can fix them;
 /// everything about the project itself (missing scene, invalid command) is
@@ -2679,6 +2691,36 @@ pub fn parse_studio_op(tool: &str, arguments: &Value) -> Result<StudioOp, String
             serde_json::from_value(args)
                 .map(StudioOp::RenderAsset)
                 .map_err(|e| format!("studio_render: {e} (needs `from`: a 3D model material id)"))
+        }
+        "studio_list_sets" => Ok(StudioOp::ListSets),
+        "studio_read_set" => Ok(StudioOp::ReadSet { set: studio_set_arg(tool, arguments)? }),
+        "studio_create_set" => Ok(StudioOp::CreateSet {
+            set: studio_set_arg(tool, arguments)?,
+            name: arguments
+                .get("name")
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(str::to_string),
+        }),
+        "studio_apply_set_commands" => {
+            let set = studio_set_arg(tool, arguments)?;
+            let commands = arguments
+                .get("commands")
+                .filter(|c| c.as_array().is_some_and(|a| !a.is_empty()))
+                .cloned()
+                .ok_or("studio_apply_set_commands requires a non-empty `commands` array")?;
+            Ok(StudioOp::ApplySetCommands { set, commands })
+        }
+        "studio_render_set" => {
+            studio_set_arg(tool, arguments)?;
+            let mut args = arguments.clone();
+            if let Some(obj) = args.as_object_mut() {
+                obj.remove("project");
+            }
+            serde_json::from_value(args)
+                .map(StudioOp::RenderSet)
+                .map_err(|e| format!("studio_render_set: {e} (needs `set` and `camera` ids)"))
         }
         "studio_build" => Ok(StudioOp::Build),
         "studio_publish" => {
@@ -2835,6 +2877,41 @@ fn render_studio_ok_text(outcome: &Value) -> String {
             "{head}{check}\n{}",
             serde_json::to_string_pretty(asset).unwrap_or_default()
         );
+    }
+    if let Some(sets) = outcome.get("sets").and_then(Value::as_array) {
+        let mut lines = vec![format!("Film sets in {}/:", str_of("dir"))];
+        for set in sets {
+            lines.push(format!("- {}", serde_json::to_string(set).unwrap_or_default()));
+        }
+        let note = str_of("note");
+        if !note.is_empty() {
+            lines.push(note.to_string());
+        }
+        return lines.join("\n");
+    }
+    if let (Some(file), Some(set)) = (outcome.get("file"), outcome.get("set").and_then(Value::as_str)) {
+        let issues: Vec<String> = outcome
+            .get("issues")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_str)
+            .map(|i| format!("- {i}"))
+            .collect();
+        let head = match outcome.get("changed").and_then(Value::as_array) {
+            Some(changed) => format!(
+                "Set `{set}` written ({}) · changed {}. The 3D set view reloads it.",
+                str_of("path"),
+                changed.iter().filter_map(Value::as_str).collect::<Vec<_>>().join(", ")
+            ),
+            None => format!("Set `{set}` ({}):", str_of("path")),
+        };
+        let issues = if issues.is_empty() {
+            "\nNo issues.".to_string()
+        } else {
+            format!("\nIssues (fix before rendering):\n{}", issues.join("\n"))
+        };
+        return format!("{head}{issues}\n{}", serde_json::to_string_pretty(file).unwrap_or_default());
     }
     if let Some(file) = outcome.get("file") {
         return format!(
@@ -3877,7 +3954,7 @@ mod tests {
         browser_eval: false,
     };
 
-    const STUDIO_TOOLS: [&str; 11] = [
+    const STUDIO_TOOLS: [&str; 16] = [
         "studio_list_scenes",
         "studio_read_scene",
         "studio_apply_scene_commands",
@@ -3889,6 +3966,11 @@ mod tests {
         "studio_update_asset",
         "studio_render",
         "studio_generator_options",
+        "studio_list_sets",
+        "studio_read_set",
+        "studio_create_set",
+        "studio_apply_set_commands",
+        "studio_render_set",
     ];
 
     #[tokio::test]
@@ -3928,6 +4010,11 @@ mod tests {
             ("studio_render", json!({ "from": "hero-rig", "mode": "walk" })),
             ("studio_update_asset", json!({ "id": "cup", "use": "web-ar" })),
             ("studio_render", json!({ "from": "cup-3d", "frames": 48, "keyframes": [1, 25] })),
+            ("studio_list_sets", json!({})),
+            ("studio_read_set", json!({ "set": "cafe" })),
+            ("studio_create_set", json!({ "set": "cafe", "name": "카페" })),
+            ("studio_apply_set_commands", json!({ "set": "cafe", "commands": [{ "type": "remove", "id": "rim" }] })),
+            ("studio_render_set", json!({ "set": "cafe", "camera": "cam_a", "from": 0, "to": 5, "stills": [0, 2.5] })),
         ] {
             let line = json!({
                 "jsonrpc": "2.0", "id": 40, "method": "tools/call",
@@ -3966,6 +4053,10 @@ mod tests {
             ("studio_generate_asset", json!({ "prompt": "cup" }), "kind"),
             ("studio_update_asset", json!({ "use": "web-ar" }), "id"),
             ("studio_render", json!({ "frames": 48 }), "from"),
+            ("studio_read_set", json!({}), "set"),
+            ("studio_apply_set_commands", json!({ "set": "cafe" }), "commands"),
+            ("studio_render_set", json!({ "set": "cafe" }), "camera"),
+            ("studio_render_set", json!({ "camera": "cam_a" }), "set"),
         ] {
             let line = json!({
                 "jsonrpc": "2.0", "id": 41, "method": "tools/call",

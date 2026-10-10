@@ -20,6 +20,7 @@ use serde_json::{json, Value};
 use crate::commands::content_project as cp;
 use crate::studio_assets;
 use crate::studio_scene;
+use crate::studio_set;
 
 /// One studio operation, carried inside a broker request.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -70,7 +71,25 @@ pub enum StudioOp {
     /// Replace the step record. The editor owns its shape; this only checks
     /// that it is an object and writes it atomically.
     WriteFlow { flow: Value },
+    /// The film sets, `outputs/film/sets/*.set.json` ([`crate::studio_set`]).
+    ListSets,
+    /// One set, normalized, with its `issues` and the model files it names.
+    ReadSet { set: String },
+    /// A starter set (floor, three lights, one camera). Refuses an existing id.
+    CreateSet {
+        set: String,
+        #[serde(default)]
+        name: Option<String>,
+    },
+    /// A validated, atomic batch over a set — the 3D view's drags and the
+    /// agents' edits both come through here.
+    ApplySetCommands { set: String, commands: Value },
+    /// Render one camera of a set with the user's Blender.
+    RenderSet(crate::studio_render::SetRenderRequest),
 }
+
+/// Where the film sets live, from the project root.
+pub const SETS_DIR: &str = "outputs/film/sets";
 
 /// Where the first screen keeps its step record.
 pub const FLOW_FILE: &str = "studio-flow.json";
@@ -189,6 +208,41 @@ pub async fn run(root: PathBuf, op: StudioOp) -> Value {
                 Err(e) => fail(format!("Could not read {FLOW_FILE}: {e}")),
             }
         }
+        StudioOp::ListSets => list_sets(&root).await,
+        StudioOp::ReadSet { set } => match read_set(&root, &set).await {
+            Ok((path, file)) => {
+                let mut out = describe_set(&root, &file).await;
+                out["path"] = json!(rel(&root, &path));
+                out
+            }
+            Err(note) => fail(note),
+        },
+        StudioOp::CreateSet { set, name } => create_set(&root, &set, name.as_deref()).await,
+        StudioOp::ApplySetCommands { set, commands } => {
+            let (path, current) = match read_set(&root, &set).await {
+                Ok(v) => v,
+                Err(note) => return fail(note),
+            };
+            let next = match studio_set::apply_commands(&current, &commands) {
+                Ok(n) => n,
+                Err(e) => return fail(format!("Batch rejected, nothing written: {e}")),
+            };
+            if let Err(e) = write_atomic(&path, &next).await {
+                return fail(format!("Could not write {}: {e}", rel(&root, &path)));
+            }
+            let mut out = describe_set(&root, &next).await;
+            out["path"] = json!(rel(&root, &path));
+            out["changed"] = json!(studio_set::command_targets(&commands));
+            out["note"] = json!("Written. The Studio's 3D set view picks the change up from disk.");
+            out
+        }
+        StudioOp::RenderSet(req) => {
+            let (_, file) = match read_set(&root, &req.set).await {
+                Ok(v) => v,
+                Err(note) => return fail(note),
+            };
+            crate::studio_render::render_set(&root, &file, req).await
+        }
         StudioOp::WriteFlow { flow } => {
             if !flow.is_object() {
                 return fail("flow must be an object");
@@ -241,6 +295,130 @@ async fn read_scene(root: &Path, scene: &str) -> Result<(PathBuf, Value), String
     let parsed = studio_scene::parse_scene(&value).map_err(|e| format!("{shown}: {e}"))?;
     Ok((path, parsed))
 }
+
+fn set_path(root: &Path, set: &str) -> Result<PathBuf, String> {
+    if !studio_scene::is_id(set) {
+        return Err("set: ids use letters, digits, - and _ (max 100)".into());
+    }
+    Ok(root.join(SETS_DIR).join(format!("{set}.set.json")))
+}
+
+pub(crate) async fn read_set(root: &Path, set: &str) -> Result<(PathBuf, Value), String> {
+    let path = set_path(root, set)?;
+    let shown = rel(root, &path);
+    let raw = match tokio::fs::read_to_string(&path).await {
+        Ok(raw) => raw,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            return Err(format!(
+                "Set `{set}` not found ({shown}). Call studio_list_sets for the ids, or studio_create_set."
+            ))
+        }
+        Err(e) => return Err(format!("Could not read {shown}: {e}")),
+    };
+    let value: Value = serde_json::from_str(&raw).map_err(|e| format!("{shown} is not valid JSON: {e}"))?;
+    let parsed = studio_set::parse_set(&value).map_err(|e| format!("{shown}: {e}"))?;
+    if parsed["id"] != set {
+        return Err(format!("{shown}: its id is `{}`, the file name says `{set}`", parsed["id"].as_str().unwrap_or("")));
+    }
+    Ok((path, parsed))
+}
+
+/// A set as the tools hand it back: the file, what would spoil a render, and
+/// where each model it names is (`assets/`-relative) so the 3D view can load
+/// it.
+async fn describe_set(root: &Path, file: &Value) -> Value {
+    let manifest = studio_assets::project(root).await.ok().flatten();
+    let dir = studio_assets::assets_dir(root, manifest.as_ref());
+    let register = studio_assets::read_register(&dir).await.unwrap_or(Value::Null);
+    let lookup = |asset: &str| {
+        studio_assets::find(&register, asset).map(|e| studio_set::Material {
+            is_model: studio_assets::kind_of(e["file"].as_str().unwrap_or("")) == "model",
+            rigged: e.get("bones").is_some(),
+        })
+    };
+    let issues = studio_set::issues(file, lookup);
+    let mut models = serde_json::Map::new();
+    for list in ["props", "actors"] {
+        for item in file[list].as_array().into_iter().flatten() {
+            let asset = item["asset"].as_str().unwrap_or("");
+            if let Some(e) = studio_assets::find(&register, asset) {
+                let f = e["file"].as_str().unwrap_or("");
+                if studio_assets::kind_of(f) == "model" && dir.join(f).is_file() {
+                    models.insert(asset.to_string(), json!(f));
+                }
+            }
+        }
+    }
+    json!({
+        "ok": true,
+        "set": file["id"],
+        "file": file,
+        "issues": issues,
+        "models": models,
+        "assets_dir": rel(root, &dir),
+    })
+}
+
+async fn list_sets(root: &Path) -> Value {
+    let dir = root.join(SETS_DIR);
+    let mut sets = Vec::new();
+    if let Ok(mut read) = tokio::fs::read_dir(&dir).await {
+        while let Ok(Some(entry)) = read.next_entry().await {
+            let name = entry.file_name().to_string_lossy().to_string();
+            let Some(stem) = name.strip_suffix(".set.json") else { continue };
+            let summary = match read_set(root, stem).await {
+                Ok((_, s)) => json!({
+                    "id": stem,
+                    "name": s["name"],
+                    "duration": s["duration"],
+                    "props": s["props"].as_array().map(Vec::len),
+                    "actors": s["actors"].as_array().map(Vec::len),
+                    "cameras": s["cameras"].as_array().map(|c| c.iter().map(|c| c["id"].clone()).collect::<Vec<_>>()),
+                }),
+                Err(note) => json!({ "id": stem, "error": note }),
+            };
+            sets.push(summary);
+        }
+    }
+    sets.sort_by(|a, b| a["id"].as_str().cmp(&b["id"].as_str()));
+    json!({
+        "ok": true,
+        "dir": SETS_DIR,
+        "sets": sets,
+        "note": if sets.is_empty() { "No set yet. studio_create_set makes one (floor, lights, a camera); the schema is in outputs/film/sets/README.md once it exists." } else { "" },
+    })
+}
+
+async fn create_set(root: &Path, set: &str, name: Option<&str>) -> Value {
+    let path = match set_path(root, set) {
+        Ok(p) => p,
+        Err(note) => return fail(note),
+    };
+    if path.exists() {
+        return fail(format!("Set `{set}` already exists ({}).", rel(root, &path)));
+    }
+    let file = match studio_set::parse_set(&studio_set::starter(set, name)) {
+        Ok(f) => f,
+        Err(e) => return fail(e),
+    };
+    let dir = root.join(SETS_DIR);
+    if let Err(e) = tokio::fs::create_dir_all(&dir).await {
+        return fail(format!("Could not create {SETS_DIR}: {e}"));
+    }
+    let readme = dir.join("README.md");
+    if !readme.exists() {
+        let _ = tokio::fs::write(&readme, SETS_README).await;
+    }
+    if let Err(e) = write_atomic(&path, &file).await {
+        return fail(format!("Could not write {}: {e}", rel(root, &path)));
+    }
+    let mut out = describe_set(root, &file).await;
+    out["path"] = json!(rel(root, &path));
+    out
+}
+
+/// Written next to the first set, for the agents that edit them by hand.
+pub const SETS_README: &str = include_str!("studio_set_readme.md");
 
 async fn write_atomic(path: &Path, value: &Value) -> std::io::Result<()> {
     let mut body = serde_json::to_string_pretty(value)?;
@@ -326,6 +504,55 @@ mod tests {
         assert_eq!(run(root.clone(), StudioOp::WriteFlow { flow: flow.clone() }).await["ok"], true);
         assert_eq!(run(root.clone(), StudioOp::ReadFlow).await["flow"], flow);
         assert_eq!(run(root, StudioOp::WriteFlow { flow: json!([1]) }).await["ok"], false);
+    }
+
+    #[tokio::test]
+    async fn sets_create_edit_and_report_issues() {
+        let tmp = project().await;
+        let root = tmp.path().join("tools-check");
+        let listed = run(root.clone(), StudioOp::ListSets).await;
+        assert_eq!(listed["sets"], json!([]));
+        assert!(listed["note"].as_str().unwrap().contains("studio_create_set"));
+
+        let made = run(root.clone(), StudioOp::CreateSet { set: "cafe".into(), name: Some("카페".into()) }).await;
+        assert_eq!(made["ok"], true, "{made}");
+        assert_eq!(made["path"], "outputs/film/sets/cafe.set.json");
+        assert!(root.join("outputs/film/sets/README.md").is_file());
+        assert_eq!(made["issues"], json!([]));
+        let again = run(root.clone(), StudioOp::CreateSet { set: "cafe".into(), name: None }).await;
+        assert!(again["note"].as_str().unwrap().contains("already exists"));
+
+        let applied = run(
+            root.clone(),
+            StudioOp::ApplySetCommands {
+                set: "cafe".into(),
+                commands: json!([
+                    { "type": "add", "kind": "actor", "item": { "id": "mina", "asset": "ghost", "motion": "walk" } },
+                    { "type": "key.set", "id": "cam_a", "key": { "t": 3, "position": [2, 1.5, 4], "target": [0, 1, 0] } }
+                ]),
+            },
+        )
+        .await;
+        assert_eq!(applied["ok"], true, "{applied}");
+        assert_eq!(applied["changed"], json!(["mina", "cam_a"]));
+        assert!(applied["issues"][0].as_str().unwrap().contains("`ghost` is not in"));
+        let read = run(root.clone(), StudioOp::ReadSet { set: "cafe".into() }).await;
+        assert_eq!(read["file"]["cameras"][0]["keys"].as_array().unwrap().len(), 2);
+        assert_eq!(read["file"]["name"], "카페");
+
+        let rejected = run(
+            root.clone(),
+            StudioOp::ApplySetCommands { set: "cafe".into(), commands: json!([{ "type": "remove", "id": "nope" }]) },
+        )
+        .await;
+        assert!(rejected["note"].as_str().unwrap().contains("nothing written"));
+        let listed = run(root.clone(), StudioOp::ListSets).await;
+        assert_eq!(listed["sets"][0]["id"], "cafe");
+        assert_eq!(listed["sets"][0]["actors"], 1);
+        let missing = run(root.clone(), StudioOp::ReadSet { set: "nope".into() }).await;
+        assert!(missing["note"].as_str().unwrap().contains("studio_list_sets"));
+        let bad = run(root, StudioOp::ReadSet { set: "../x".into() }).await;
+        assert_eq!(bad["ok"], false);
     }
 
     #[tokio::test]

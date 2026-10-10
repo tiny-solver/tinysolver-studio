@@ -6483,7 +6483,8 @@
       }
     },
     "yaw": "左右旋转(°)",
-    "pitch": "上下旋转(°)"
+    "pitch": "上下旋转(°)",
+    "setView": "片场"
   },
   "Browser": {
     "toolbar": {
@@ -6870,5 +6871,51 @@
         "generator_off": "生成器没有返回列表 — 可能已关闭或繁忙。重新打开设置会再询问一次。"
       }
     }
+  },
+  "StudioSet": {
+    "set": "片场",
+    "noSet": "还没有片场",
+    "newPlaceholder": "新片场名称",
+    "create": "新建",
+    "view": "视图",
+    "freeView": "自由视角",
+    "through": "通过 {name} 看",
+    "move": "移动 (W)",
+    "rotate": "旋转 (E)",
+    "render": "渲染 {camera}",
+    "rendering": "渲染中…",
+    "renderHint": "用本机 Blender 以此摄像机拍摄整个片场 — 视频和静帧成为素材",
+    "empty": "片场是拍摄镜头的 3D 舞台：道具、演员、灯光和摄像机。在上方输入新片场名称，或让智能体创建（studio_create_set）。",
+    "play": "播放",
+    "pause": "暂停",
+    "time": "时间",
+    "addProp": "道具",
+    "addActor": "演员",
+    "addLight": "灯光",
+    "addCamera": "摄像机",
+    "issues": "渲染前请检查",
+    "lastRender": "最近渲染",
+    "hint": "保存在 {file}。在视图中拖动、在此输入精确值，或由智能体用 studio_apply_set_commands 编辑。",
+    "delete": "删除",
+    "asset": "模型",
+    "position": "位置",
+    "rotation": "旋转",
+    "height": "高度 (m)",
+    "yaw": "朝向 (°)",
+    "motion": "动作",
+    "motionStill": "静止",
+    "motionWalk": "行走",
+    "lightType": "类型",
+    "target": "照向",
+    "power": "强度",
+    "color": "颜色",
+    "lens": "焦距 (mm)",
+    "ease": "关键帧之间",
+    "easeSmooth": "平滑",
+    "easeLinear": "线性",
+    "keys": "{count} 个关键帧 · {t} 秒",
+    "addKey": "在此加关键帧",
+    "removeKey": "删除关键帧",
+    "keyHint": "把播放头移到时间轴上的点（关键帧）即可编辑，或在此添加关键帧。"
   }
 }

@@ -6483,7 +6483,8 @@
       }
     },
     "yaw": "Lacet (°)",
-    "pitch": "Tangage (°)"
+    "pitch": "Tangage (°)",
+    "setView": "Plateau"
   },
   "Browser": {
     "toolbar": {
@@ -6870,5 +6871,51 @@
         "generator_off": "Le générateur n’a pas renvoyé sa liste — il est peut-être éteint ou occupé. Rouvrez les réglages pour redemander."
       }
     }
+  },
+  "StudioSet": {
+    "set": "Plateau",
+    "noSet": "Pas encore de plateau",
+    "newPlaceholder": "Nom du nouveau plateau",
+    "create": "Nouveau",
+    "view": "Vue",
+    "freeView": "Vue libre",
+    "through": "Par {name}",
+    "move": "Déplacer (W)",
+    "rotate": "Pivoter (E)",
+    "render": "Rendre {camera}",
+    "rendering": "Rendu…",
+    "renderHint": "Filme tout le plateau avec cette caméra via Blender sur cet ordinateur — le clip et les images fixes deviennent des matériaux",
+    "empty": "Un plateau est la scène 3D où l'on tourne les plans : accessoires, acteurs, lumières et caméras. Nommez un nouveau plateau ci-dessus, ou demandez à l'agent d'en créer un (studio_create_set).",
+    "play": "Lecture",
+    "pause": "Pause",
+    "time": "Temps",
+    "addProp": "Accessoire",
+    "addActor": "Acteur",
+    "addLight": "Lumière",
+    "addCamera": "Caméra",
+    "issues": "Avant le rendu",
+    "lastRender": "Dernier rendu",
+    "hint": "Enregistré dans {file}. Faites glisser dans la vue, saisissez des valeurs exactes ici, ou laissez l'agent le modifier avec studio_apply_set_commands.",
+    "delete": "Supprimer",
+    "asset": "Modèle",
+    "position": "Position",
+    "rotation": "Rotation",
+    "height": "Hauteur (m)",
+    "yaw": "Orientation (°)",
+    "motion": "Mouvement",
+    "motionStill": "Immobile",
+    "motionWalk": "Marcher",
+    "lightType": "Type",
+    "target": "Vise",
+    "power": "Puissance",
+    "color": "Couleur",
+    "lens": "Objectif (mm)",
+    "ease": "Entre les clés",
+    "easeSmooth": "Doux",
+    "easeLinear": "Linéaire",
+    "keys": "{count} clés · à {t}s",
+    "addKey": "Clé ici",
+    "removeKey": "Retirer la clé",
+    "keyHint": "Placez la tête de lecture sur une clé (point sur la timeline) pour la modifier, ou ajoutez une clé ici."
   }
 }

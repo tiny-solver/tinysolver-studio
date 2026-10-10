@@ -6483,7 +6483,8 @@
       }
     },
     "yaw": "左右旋轉(°)",
-    "pitch": "上下旋轉(°)"
+    "pitch": "上下旋轉(°)",
+    "setView": "片場"
   },
   "Browser": {
     "toolbar": {
@@ -6870,5 +6871,51 @@
         "generator_off": "生成器沒有回傳清單 — 可能已關閉或忙碌。重新開啟設定會再詢問一次。"
       }
     }
+  },
+  "StudioSet": {
+    "set": "片場",
+    "noSet": "尚無片場",
+    "newPlaceholder": "新片場名稱",
+    "create": "新增",
+    "view": "檢視",
+    "freeView": "自由視角",
+    "through": "透過 {name} 看",
+    "move": "移動 (W)",
+    "rotate": "旋轉 (E)",
+    "render": "算繪 {camera}",
+    "rendering": "算繪中…",
+    "renderHint": "用本機 Blender 以此攝影機拍攝整個片場 — 影片與靜態畫面成為素材",
+    "empty": "片場是拍攝鏡頭的 3D 舞台：道具、演員、燈光與攝影機。在上方輸入新片場名稱，或請代理建立（studio_create_set）。",
+    "play": "播放",
+    "pause": "暫停",
+    "time": "時間",
+    "addProp": "道具",
+    "addActor": "演員",
+    "addLight": "燈光",
+    "addCamera": "攝影機",
+    "issues": "算繪前請檢查",
+    "lastRender": "最近算繪",
+    "hint": "儲存在 {file}。在檢視中拖曳、在此輸入精確值，或由代理以 studio_apply_set_commands 編輯。",
+    "delete": "刪除",
+    "asset": "模型",
+    "position": "位置",
+    "rotation": "旋轉",
+    "height": "高度 (m)",
+    "yaw": "朝向 (°)",
+    "motion": "動作",
+    "motionStill": "靜止",
+    "motionWalk": "行走",
+    "lightType": "類型",
+    "target": "照向",
+    "power": "強度",
+    "color": "顏色",
+    "lens": "焦距 (mm)",
+    "ease": "關鍵影格之間",
+    "easeSmooth": "平滑",
+    "easeLinear": "線性",
+    "keys": "{count} 個關鍵影格 · {t} 秒",
+    "addKey": "在此加關鍵影格",
+    "removeKey": "刪除關鍵影格",
+    "keyHint": "將播放頭移到時間軸上的點（關鍵影格）即可編輯，或在此新增關鍵影格。"
   }
 }

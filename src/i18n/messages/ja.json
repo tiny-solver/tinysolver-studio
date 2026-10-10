@@ -6483,7 +6483,8 @@
       }
     },
     "yaw": "左右回転(°)",
-    "pitch": "上下回転(°)"
+    "pitch": "上下回転(°)",
+    "setView": "撮影セット"
   },
   "Browser": {
     "toolbar": {
@@ -6870,5 +6871,51 @@
         "generator_off": "生成機が一覧に応答しません — 停止中か混雑中かもしれません。設定を開き直すと再度問い合わせます。"
       }
     }
+  },
+  "StudioSet": {
+    "set": "撮影セット",
+    "noSet": "セットなし",
+    "newPlaceholder": "新しいセット名",
+    "create": "作成",
+    "view": "表示",
+    "freeView": "自由視点",
+    "through": "{name} から見る",
+    "move": "移動 (W)",
+    "rotate": "回転 (E)",
+    "render": "{camera} をレンダー",
+    "rendering": "レンダー中…",
+    "renderHint": "このカメラでセット全体をこの PC の Blender で撮影 — 動画とスチルが素材になる",
+    "empty": "撮影セットはショットを撮る 3D の舞台です — 小道具・俳優・照明・カメラ。上で新しいセット名を入れるか、エージェントに作成を頼んでください（studio_create_set）。",
+    "play": "再生",
+    "pause": "一時停止",
+    "time": "時間",
+    "addProp": "小道具",
+    "addActor": "俳優",
+    "addLight": "照明",
+    "addCamera": "カメラ",
+    "issues": "レンダー前の確認",
+    "lastRender": "最新のレンダー",
+    "hint": "{file} に保存されます。ビューでドラッグ、ここで数値入力、またはエージェントが studio_apply_set_commands で編集します。",
+    "delete": "削除",
+    "asset": "モデル",
+    "position": "位置",
+    "rotation": "回転",
+    "height": "高さ (m)",
+    "yaw": "向き (°)",
+    "motion": "動き",
+    "motionStill": "静止",
+    "motionWalk": "歩く",
+    "lightType": "種類",
+    "target": "照らす先",
+    "power": "強さ",
+    "color": "色",
+    "lens": "レンズ (mm)",
+    "ease": "キーの間",
+    "easeSmooth": "なめらか",
+    "easeLinear": "一定",
+    "keys": "キー {count} 個 · {t} 秒",
+    "addKey": "ここにキー",
+    "removeKey": "キー削除",
+    "keyHint": "タイムラインの点（キー）に合わせると編集できます。またはここにキーを追加します。"
   }
 }

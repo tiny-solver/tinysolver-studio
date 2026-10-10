@@ -6483,7 +6483,8 @@
       }
     },
     "yaw": "Yaw (°)",
-    "pitch": "Pitch (°)"
+    "pitch": "Pitch (°)",
+    "setView": "Set"
   },
   "Browser": {
     "toolbar": {
@@ -6870,5 +6871,51 @@
         "generator_off": "The generator did not answer with its list — it may be off or busy. Open settings again to ask once more."
       }
     }
+  },
+  "StudioSet": {
+    "set": "Film set",
+    "noSet": "No set yet",
+    "newPlaceholder": "New set name",
+    "create": "New",
+    "view": "View",
+    "freeView": "Free view",
+    "through": "Through {name}",
+    "move": "Move (W)",
+    "rotate": "Rotate (E)",
+    "render": "Render {camera}",
+    "rendering": "Rendering…",
+    "renderHint": "Film this camera over the whole set with Blender on this computer — the clip and stills become materials",
+    "empty": "A film set is the 3D stage shots are filmed on: props, actors, lights and cameras. Name a new set above, or ask the agent to make one (studio_create_set).",
+    "play": "Play",
+    "pause": "Pause",
+    "time": "Time",
+    "addProp": "Prop",
+    "addActor": "Actor",
+    "addLight": "Light",
+    "addCamera": "Camera",
+    "issues": "Before rendering",
+    "lastRender": "Last render",
+    "hint": "Saved to {file}. Drag in the view, type exact values here, or let the agent edit it with studio_apply_set_commands.",
+    "delete": "Delete",
+    "asset": "Model",
+    "position": "Position",
+    "rotation": "Rotation",
+    "height": "Height (m)",
+    "yaw": "Facing (°)",
+    "motion": "Motion",
+    "motionStill": "Still",
+    "motionWalk": "Walk",
+    "lightType": "Type",
+    "target": "Aim at",
+    "power": "Power",
+    "color": "Colour",
+    "lens": "Lens (mm)",
+    "ease": "Between keys",
+    "easeSmooth": "Smooth",
+    "easeLinear": "Linear",
+    "keys": "{count} keys · at {t}s",
+    "addKey": "Key here",
+    "removeKey": "Remove key",
+    "keyHint": "Move the playhead onto a key (dot on the timeline) to edit it, or add a key here."
   }
 }

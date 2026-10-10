@@ -33,6 +33,7 @@ pub mod studio_assets;
 pub mod studio_presets;
 pub mod studio_render;
 pub mod studio_scene;
+pub mod studio_set;
 pub mod studio_tools;
 pub mod db;
 pub mod deep_link;

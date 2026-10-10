@@ -2,19 +2,20 @@
 
 import { useState } from "react"
 import { useTranslations } from "next-intl"
-import { Gamepad2, Layers } from "lucide-react"
+import { Clapperboard, Gamepad2, Layers } from "lucide-react"
 
 import { useContentProject } from "@/hooks/use-content-project"
 import { splitEntry } from "@/lib/studio/game-url"
 import { cn } from "@/lib/utils"
 import { GamePreview } from "./game-preview"
+import { StudioFilmSet } from "./studio-film-set"
 import { StudioWorkspace } from "./studio-workspace"
 
-type View = "game" | "scene"
+type View = "game" | "scene" | "set"
 
 /**
  * The Content Studio pane beside the chat: the running game first, the scene
- * editor behind a toggle. "Game" is what the agent is actually building in
+ * editor and the 3D film set view behind toggles. "Game" is what the agent is actually building in
  * `outputs/game/`, so it is the default whenever the project's manifest
  * names an engine entry; projects without one open straight on the editor.
  */
@@ -63,12 +64,27 @@ export function StudioPane({ projectRoot }: { projectRoot: string }) {
           <Layers className="h-3.5 w-3.5" />
           {t("sceneView")}
         </button>
+        <button
+          type="button"
+          onClick={() => pick("set")}
+          className={cn(
+            tabBtn,
+            view === "set"
+              ? "bg-primary/10 text-primary"
+              : "text-muted-foreground hover:bg-primary/8"
+          )}
+        >
+          <Clapperboard className="h-3.5 w-3.5" />
+          {t("setView")}
+        </button>
         <span className="min-w-0 flex-1 truncate pl-2 text-xs text-muted-foreground">
           {manifest?.name ?? ""}
         </span>
       </div>
       <div className="min-h-0 flex-1">
-        {view === "game" && entry ? (
+        {view === "set" ? (
+          <StudioFilmSet projectRoot={projectRoot} />
+        ) : view === "game" && entry ? (
           <GamePreview
             root={projectRoot}
             dir={splitEntry(entry).dir}

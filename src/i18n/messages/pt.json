@@ -6483,7 +6483,8 @@
       }
     },
     "yaw": "Giro horizontal (°)",
-    "pitch": "Giro vertical (°)"
+    "pitch": "Giro vertical (°)",
+    "setView": "Set"
   },
   "Browser": {
     "toolbar": {
@@ -6870,5 +6871,51 @@
         "generator_off": "O gerador não respondeu com a lista — pode estar desligado ou ocupado. Abra os ajustes de novo para perguntar outra vez."
       }
     }
+  },
+  "StudioSet": {
+    "set": "Set de filmagem",
+    "noSet": "Ainda sem set",
+    "newPlaceholder": "Nome do novo set",
+    "create": "Novo",
+    "view": "Vista",
+    "freeView": "Vista livre",
+    "through": "Por {name}",
+    "move": "Mover (W)",
+    "rotate": "Girar (E)",
+    "render": "Renderizar {camera}",
+    "rendering": "Renderizando…",
+    "renderHint": "Filma o set inteiro com esta câmera usando o Blender deste computador — o clipe e os quadros viram materiais",
+    "empty": "Um set é o palco 3D onde as tomadas são filmadas: objetos, atores, luzes e câmeras. Dê nome a um novo set acima ou peça ao agente para criar um (studio_create_set).",
+    "play": "Reproduzir",
+    "pause": "Pausar",
+    "time": "Tempo",
+    "addProp": "Objeto",
+    "addActor": "Ator",
+    "addLight": "Luz",
+    "addCamera": "Câmera",
+    "issues": "Antes de renderizar",
+    "lastRender": "Último render",
+    "hint": "Salvo em {file}. Arraste na vista, digite valores exatos aqui ou deixe o agente editar com studio_apply_set_commands.",
+    "delete": "Excluir",
+    "asset": "Modelo",
+    "position": "Posição",
+    "rotation": "Rotação",
+    "height": "Altura (m)",
+    "yaw": "Direção (°)",
+    "motion": "Movimento",
+    "motionStill": "Parado",
+    "motionWalk": "Andar",
+    "lightType": "Tipo",
+    "target": "Aponta para",
+    "power": "Potência",
+    "color": "Cor",
+    "lens": "Lente (mm)",
+    "ease": "Entre chaves",
+    "easeSmooth": "Suave",
+    "easeLinear": "Linear",
+    "keys": "{count} chaves · em {t}s",
+    "addKey": "Chave aqui",
+    "removeKey": "Remover chave",
+    "keyHint": "Leve o cursor de reprodução até uma chave (ponto na linha do tempo) para editá-la, ou adicione uma chave aqui."
   }
 }

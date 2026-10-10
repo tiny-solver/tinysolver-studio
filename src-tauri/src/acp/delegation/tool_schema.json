@@ -702,6 +702,166 @@
     }
   },
   {
+    "name": "studio_list_sets",
+    "description": "List the film sets of this content project (outputs/film/sets/*.set.json): id, name, duration, how many props and actors, camera ids. A film set is the 3D stage a shot is filmed on — floor, lights, props, actors (rigged models with motion), cameras with paths — that the Studio's 3D set view, these tools and the Blender render share.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "project": {
+          "type": "string",
+          "description": "Absolute path of the content project root. Omit it: the default is this session's working directory, which is the project when you were opened in one."
+        }
+      }
+    }
+  },
+  {
+    "name": "studio_read_set",
+    "description": "Return one film set as JSON plus `issues` (things that do not break the file but would spoil a render: missing materials, a walking actor without bones, keys after the duration, no camera) and `models` (material id → file under assets/). Fields: fps, duration, frame {width,height} (output size — 720×1280 is a 9:16 short), stage {floor {size,color}|null, background, ambient}, props [{id, asset, position, rotation, height?, scale?}], actors [{id, asset, position, rotation, height?, motion: still|walk, ease, keys?: [{t, position, yaw?}]}], lights [{id, type: sun|point|spot|area, position, target, color, power (sun ≈1–5, others watts), size?}], cameras [{id, name?, lens (mm on a 36 mm sensor, long side), ease, keys: [{t, position, target, roll?}]}]. Space: metres, Y up, right-handed (the glTF convention), front is +Z; rotation is XYZ Euler degrees; a model stands with the middle of its footprint at `position`, `height` scales it to that many metres tall. Time: seconds 0–duration; cameras and moving actors carry `keys`, blended per segment with `ease` (smooth = u²(3−2u), default · linear), the first key holds before it and the last after it. Read it before changing a set so your commands use existing ids.",
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "set"
+      ],
+      "properties": {
+        "set": {
+          "type": "string",
+          "description": "Set id — the file stem of outputs/film/sets/<id>.set.json (letters, digits, - and _). Get the ids from studio_list_sets."
+        },
+        "project": {
+          "type": "string",
+          "description": "Absolute path of the content project root. Omit it: the default is this session's working directory, which is the project when you were opened in one."
+        }
+      }
+    }
+  },
+  {
+    "name": "studio_create_set",
+    "description": "Create a film set outputs/film/sets/<set>.set.json with a starter stage: a 30 m floor, three area lights (key, fill, rim), one camera `cam_a` 6 m in front looking at the middle, 15 s at 24 fps, 720×1280 (writes outputs/film/sets/README.md with the schema the first time). Refuses an existing id. Then add props and actors (3D model materials from studio_list_assets) and cameras with studio_apply_set_commands.",
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "set"
+      ],
+      "properties": {
+        "set": {
+          "type": "string",
+          "description": "New set id (letters, digits, - and _)."
+        },
+        "name": {
+          "type": "string",
+          "description": "Display name, e.g. 카페."
+        },
+        "project": {
+          "type": "string",
+          "description": "Absolute path of the content project root. Omit it: the default is this session's working directory, which is the project when you were opened in one."
+        }
+      }
+    }
+  },
+  {
+    "name": "studio_apply_set_commands",
+    "description": "Edit a film set with a validated command batch and write it to disk — the same operation the Studio's 3D set view runs when the user drags something, applied atomically (one invalid command rejects the whole batch and nothing is written). The view reloads from disk on its own. PREFER THIS over rewriting the .set.json by hand: it keeps ids unique, numbers in range, keys sorted, and preserves every field it does not know. The result carries the new file and its `issues` — fix them. Commands: {type:'set.update', name?, fps?, duration?, frame?:{width,height}, stage?:{floor?, background?, ambient?}} (frame and stage merge) · {type:'add', kind:'prop'|'actor'|'light'|'camera', item:{id, ...}} (ids are unique across all four kinds; a camera needs keys:[{t, position, target}]) · {type:'update', id, patch:{...}} (shallow merge; null clears a field such as height) · {type:'remove', id} · {type:'key.set', id, key:{t, position?, target?, yaw?, roll?}} (a camera's or actor's key at t — merged into the key already at that time, else added; a new camera key needs position and target) · {type:'key.remove', id, t}. Space: metres, Y up, right-handed (the glTF convention), front is +Z; rotation is XYZ Euler degrees; a model stands with the middle of its footprint at `position`, `height` scales it to that many metres tall. Time: seconds 0–duration; cameras and moving actors carry `keys`, blended per segment with `ease` (smooth = u²(3−2u), default · linear), the first key holds before it and the last after it.",
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "set",
+        "commands"
+      ],
+      "properties": {
+        "set": {
+          "type": "string",
+          "description": "Set id — the file stem of outputs/film/sets/<id>.set.json (letters, digits, - and _). Get the ids from studio_list_sets."
+        },
+        "commands": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 200,
+          "items": {
+            "type": "object",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "set.update",
+                  "add",
+                  "update",
+                  "remove",
+                  "key.set",
+                  "key.remove"
+                ]
+              }
+            }
+          }
+        },
+        "project": {
+          "type": "string",
+          "description": "Absolute path of the content project root. Omit it: the default is this session's working directory, which is the project when you were opened in one."
+        }
+      }
+    }
+  },
+  {
+    "name": "studio_render_set",
+    "description": "Film one camera of a film set with Blender on the user's computer (headless): the set document becomes a Blender scene as written — floor, lights, each prop and actor model placed and sized, walking actors taking a procedural stride while their keys move them, the camera following its keys — and the span from..to is rendered as a video (H.264 mp4 at the set's fps) plus stills at `stills` (seconds). Results are registered as materials under assets/generated/renders/ (`<set>-<camera>` by default; stills get -fNNN) with their provenance (source.from `set:<id>`, camera, span). Missing model files draw as boxes and come back in `warnings`. A still is the usual first frame for a generated video (studio_generate_asset kind video). Takes ~10 s–a few minutes. If Blender is not installed the result says how to install it — tell the user; do not install it yourself.",
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "set",
+        "camera"
+      ],
+      "properties": {
+        "set": {
+          "type": "string",
+          "description": "Set id — the file stem of outputs/film/sets/<id>.set.json (letters, digits, - and _). Get the ids from studio_list_sets."
+        },
+        "camera": {
+          "type": "string",
+          "description": "Camera id in the set."
+        },
+        "from": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Start, seconds. Default 0."
+        },
+        "to": {
+          "type": "number",
+          "minimum": 0,
+          "description": "End, seconds. Default the set's duration; from == to renders one still."
+        },
+        "width": {
+          "type": "integer",
+          "minimum": 64,
+          "maximum": 4096,
+          "description": "Default the set's frame.width."
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 64,
+          "maximum": 4096,
+          "description": "Default the set's frame.height."
+        },
+        "stills": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "description": "Times (seconds, within from..to) saved as stills. Default [from]."
+        },
+        "id": {
+          "type": "string",
+          "description": "Id for the new materials."
+        },
+        "project": {
+          "type": "string",
+          "description": "Absolute path of the content project root. Omit it: the default is this session's working directory, which is the project when you were opened in one."
+        }
+      }
+    }
+  },
+  {
     "name": "browser_list_tabs",
     "description": "List the pages open in codeg's built-in browser — the browser panel inside the app, not the user's Chrome or Safari. Each tab comes back with its `tabId`, the site it is on, and whether it is shared with you. READING A PAGE REQUIRES THE USER TO SHARE THAT TAB: they press \"Share with agents\" in the tab's own toolbar, and only they can do it — there is no tool that grants it, and asking again does not help. Sharing is per tab and per site, and ends by itself the moment the page navigates somewhere else, so a tab that was readable a minute ago may not be now. A tab's title is only shown once it is shared, because the title is part of the page. Call this before browser_snapshot to find out which tab to read, or to tell the user which tab they need to share.",
     "inputSchema": {
