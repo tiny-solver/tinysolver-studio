@@ -73,7 +73,7 @@
         "bv-camera-path",
         "bv-vace"
       ],
-      "note": "10-09: 길 A 가 Studio 안에서 끝까지 된다 — bv-blender-run(렌더) · bv-video-gen(영상) · 리깅 칸(T포즈 → 뼈 넣기 → 걷기) 반영. 남은 것 bv-camera-path · bv-vace."
+      "note": "10-09: 길 A 가 Studio 안에서 끝까지 된다 — bv-blender-run(렌더) · bv-video-gen(영상) · 리깅 칸(T포즈 → 뼈 넣기 → 걷기) 반영. 남은 것 bv-camera-path · bv-vace. 10-10: bv-camera-path 는 fs3-set 에서 풀림. 남은 것 bv-vace."
     },
     {
       "id": "first-screen",
@@ -124,7 +124,7 @@
         "fs3-crew",
         "fs3-film"
       ],
-      "note": "10-09 받음 — 정할 것 둘(3D 정본 자리 · 첫 결과물) + 할 일 넷. 기존 bv-camera-path · bv-vace 가 이 공정의 카메라 · 영상화 칸이 된다."
+      "note": "10-09 받음 — 정할 것 둘(3D 정본 자리 · 첫 결과물) + 할 일 넷. 기존 bv-camera-path · bv-vace 가 이 공정의 카메라 · 영상화 칸이 된다. 10-10: fs3-set 반영(촬영장 문서 · 3D 화면 · MCP · Blender 렌더) — 다음 fs3-shots."
     },
     {
       "id": "action-direction-guide",
@@ -883,7 +883,7 @@
       "learn": [],
       "unblocks": [],
       "then": [],
-      "status": "todo",
+      "status": "done",
       "id": "bv-camera-path",
       "topic": "video",
       "p": 3,
@@ -898,7 +898,11 @@
       "refs": [
         "#aw-3d-assemble",
         "docs/studio/roadmap.json S6 '3D 카메라'"
-      ]
+      ],
+      "done": {
+        "date": "2026-10-10",
+        "note": "fs3-set 안에서 풀림 — 카메라는 촬영장 문서의 keys(t · position · target · roll, ease smooth/linear)이고, 3D 화면에서 끌어 잡고 render_set 이 프레임마다 같은 식으로 Blender 카메라에 넣는다 — feat/film-set"
+      }
     },
     {
       "role": "제품",
@@ -1426,7 +1430,7 @@
       "id": "fs3-set",
       "topic": "film",
       "p": 2,
-      "status": "todo",
+      "status": "done",
       "q": "촬영장 문서 — 세트 · 배우 · 조명 · 카메라 여러 대를 3D 로",
       "want": "outputs/film/sets/<set>.set.json 하나에 세트(배경 GLB · 바닥 · 조명) · 배우(리깅된 GLB + 동작) · 카메라(위치 · 렌즈 · 경로 키프레임)를 xyz 로 두고, Studio 3D 화면에서 끌어 잡고, MCP 명령으로 에이전트가 고친다",
       "now": "재료 서랍 · 그림 → 3D → T포즈 → 뼈 넣기 → 걷기 렌더는 있다. 3D 공간 · 카메라 개념이 없다",
@@ -1438,7 +1442,11 @@
         "#bv-camera-path",
         "#bv-blender-run"
       ],
-      "from": "ask:film-set"
+      "from": "ask:film-set",
+      "done": {
+        "date": "2026-10-10",
+        "note": "studio_set.rs(스키마 · 검증 · 명령 7종 원자적 · issues) · MCP studio_list_sets · read_set · create_set · apply_set_commands · render_set · Studio 패널 '촬영장' 탭(three.js set.html — 끌어 옮기기/돌리기 · 카메라로 보기 9:16 · 타임라인 · 키) · Blender mode set(문서 → bpy · AgX). linux-2 Blender 5.2.2 실측: 소품 · 리깅 배우 걷기 + 이동 · 카메라 경로 48프레임 8.6초, 미리보기와 렌더 구도 일치 — feat/film-set"
+      }
     },
     {
       "role": "제품",

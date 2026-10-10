@@ -1,106 +1,120 @@
-# Tinysolver Studio — headless Blender render of one model material
-# (embedded by studio_render.rs; the same file runs on every OS).
+# Tinysolver Studio — headless Blender render (embedded by studio_render.rs;
+# the same file runs on every OS).
 #   blender -b -P studio_render.py -- <job.json>
 # job: { model, out, mode: turntable|still|walk, frames, width, height,
 #        cam_dist, yaw, pitch, keyframes: [frame…], video: bool }
+#   or { mode: "set", out, set, camera, fps, start, frames, width, height,
+#        keyframes, video } — a film set document (studio_set.rs, its models
+#        given as absolute `model` paths) filmed through one of its cameras.
 # Writes <out>/key_NNN.png per keyframe, <out>/video.mp4 when video, and
-# <out>/result.json. Scene recipe from the 2026-10-07 measurement
+# <out>/result.json. One-model recipe from the 2026-10-07 measurement
 # (handoff 3d-pose-bench turntable.py): height 2 on a ground plate, three
 # area lights, a bright world, a camera on a pivot.
 import bpy, math, sys, os, json, time
-from mathutils import Vector
+from mathutils import Vector, Matrix, Euler, Quaternion
 
 job = json.load(open(sys.argv[sys.argv.index("--") + 1]))
 t0 = time.time()
-model, out = job["model"], job["out"]
+out = job["out"]
 mode = job.get("mode", "turntable")
 frames = max(1, int(job.get("frames", 72)))
 width, height = int(job.get("width", 720)), int(job.get("height", 720))
-cam_dist = float(job.get("cam_dist", 6.2))
-yaw, pitch = float(job.get("yaw", 0)), float(job.get("pitch", 8))
 keys = [k for k in job.get("keyframes", [1]) if 1 <= int(k) <= frames] or [1]
+warnings = []
 os.makedirs(out, exist_ok=True)
 
 bpy.ops.wm.read_factory_settings(use_empty=True)
 bpy.context.preferences.edit.keyframe_new_interpolation_type = 'LINEAR'
-if model.lower().endswith(".fbx"):
-    bpy.ops.import_scene.fbx(filepath=model)
-else:
-    bpy.ops.import_scene.gltf(filepath=model)
 sc = bpy.context.scene
-# The glTF importer adds a mesh to draw bones with (an Icosphere at unit
-# size); it is not part of the model and would skew the framing.
-for arm in [o for o in sc.objects if o.type == 'ARMATURE']:
-    for pb in arm.pose.bones:
-        shape = pb.custom_shape
-        if shape is not None and shape.name in bpy.data.objects:
-            pb.custom_shape = None
-            bpy.data.objects.remove(shape)
-objs = [o for o in sc.objects if o.type == 'MESH']
-if not objs:
-    json.dump({"ok": False, "note": "The model has no mesh."}, open(os.path.join(out, "result.json"), "w"))
+
+
+def give_up(note):
+    json.dump({"ok": False, "note": note}, open(os.path.join(out, "result.json"), "w"))
     sys.exit(0)
-# Bounds → centred, standing on the ground, height 2. Measured on the
-# evaluated vertices: a skinned mesh's bound_box can be far off its pose.
-bpy.context.view_layer.update()
-dg = bpy.context.evaluated_depsgraph_get()
-mn = Vector((1e9,) * 3); mx = Vector((-1e9,) * 3)
-for o in objs:
-    e = o.evaluated_get(dg); me = e.to_mesh()
-    for v in me.vertices:
-        w = e.matrix_world @ v.co
-        mn = Vector(map(min, mn, w)); mx = Vector(map(max, mx, w))
-    e.to_mesh_clear()
-s = 2.0 / max(max(mx - mn), 1e-6)
-root = bpy.data.objects.new("root", None); sc.collection.objects.link(root)
-for o in list(sc.objects):
-    if o is not root and o.parent is None and o.type in ('MESH', 'ARMATURE', 'EMPTY'):
-        o.parent = root
-root.scale = (s, s, s)
-ctr = (mn + mx) / 2
-root.location = (-ctr.x * s, -ctr.y * s, -mn.z * s)
 
-bpy.ops.mesh.primitive_plane_add(size=200)
-g = bpy.context.object
-m = bpy.data.materials.new("ground"); m.use_nodes = True
-m.node_tree.nodes["Principled BSDF"].inputs["Base Color"].default_value = (0.93, 0.9, 0.86, 1)
-g.data.materials.append(m)
 
-def light(loc, energy, size):
-    d = bpy.data.lights.new("area", 'AREA'); d.energy = energy; d.size = size
-    o = bpy.data.objects.new("area", d); o.location = loc
+def import_model(path):
+    """Import a GLB/FBX; the new top-level objects and all new objects."""
+    before = set(o.name for o in sc.objects)
+    if path.lower().endswith(".fbx"):
+        bpy.ops.import_scene.fbx(filepath=path)
+    else:
+        bpy.ops.import_scene.gltf(filepath=path)
+    new = [o for o in sc.objects if o.name not in before]
+    # The glTF importer adds a mesh to draw bones with (an Icosphere at unit
+    # size); it is not part of the model and would skew the framing.
+    shapes = set()
+    for arm in [o for o in new if o.type == 'ARMATURE']:
+        for pb in arm.pose.bones:
+            if pb.custom_shape is not None:
+                shapes.add(pb.custom_shape.name)
+                pb.custom_shape = None
+    new = [o for o in new if o.name not in shapes]
+    for name in shapes:
+        if name in bpy.data.objects:
+            bpy.data.objects.remove(bpy.data.objects[name])
+    return new
+
+
+def bounds(objs):
+    """World bounds of the evaluated meshes: a skinned mesh's bound_box can
+    be far off its pose."""
+    bpy.context.view_layer.update()
+    dg = bpy.context.evaluated_depsgraph_get()
+    mn = Vector((1e9,) * 3); mx = Vector((-1e9,) * 3)
+    for o in objs:
+        if o.type != 'MESH':
+            continue
+        e = o.evaluated_get(dg); me = e.to_mesh()
+        for v in me.vertices:
+            w = e.matrix_world @ v.co
+            mn = Vector(map(min, mn, w)); mx = Vector(map(max, mx, w))
+        e.to_mesh_clear()
+    return mn, mx
+
+
+def fit(objs, name, tall=None, scale=None):
+    """Parent `objs` under holder → fit: the footprint's middle at the
+    holder's origin, standing on it, `tall` metres high (else `scale`)."""
+    holder = bpy.data.objects.new(name, None); sc.collection.objects.link(holder)
+    inner = bpy.data.objects.new(name + "_fit", None); sc.collection.objects.link(inner)
+    inner.parent = holder
+    mn, mx = bounds(objs)
+    for o in objs:
+        if o.parent is None:
+            o.parent = inner
+    if mx.z < mn.z:
+        return holder
+    s = (tall / max(mx.z - mn.z, 1e-6)) if tall else (scale or 1.0)
+    ctr = (mn + mx) / 2
+    inner.scale = (s, s, s)
+    inner.location = (-ctr.x * s, -ctr.y * s, -mn.z * s)
+    return holder
+
+
+def material(rgb):
+    m = bpy.data.materials.new("m"); m.use_nodes = True
+    m.node_tree.nodes["Principled BSDF"].inputs["Base Color"].default_value = (*rgb, 1)
+    return m
+
+
+def area_light(loc, energy, size, target=(0, 0, 0), color=(1, 1, 1), kind='AREA', name="area"):
+    d = bpy.data.lights.new(name, kind); d.energy = energy; d.color = color
+    if kind == 'AREA':
+        d.size = size
+    o = bpy.data.objects.new(name, d); o.location = loc
     sc.collection.objects.link(o)
-    o.rotation_euler = (Vector((0, 0, 1)) - Vector(loc)).to_track_quat('-Z', 'Y').to_euler()
-light((3, -3, 4), 600, 3); light((-4, -1, 2.5), 200, 4); light((0, 4, 3), 300, 3)
-world = bpy.data.worlds.new("w"); sc.world = world; world.use_nodes = True
-world.node_tree.nodes["Background"].inputs[0].default_value = (0.95, 0.93, 0.9, 1)
-world.node_tree.nodes["Background"].inputs[1].default_value = 0.6
-
-pivot = bpy.data.objects.new("pivot", None); sc.collection.objects.link(pivot)
-pivot.location = (0, 0, 1.0)
-cam_d = bpy.data.cameras.new("cam"); cam_d.lens = 50
-cam = bpy.data.objects.new("cam", cam_d); sc.collection.objects.link(cam)
-cam.parent = pivot
-p = math.radians(pitch)
-cam.location = (0, -cam_dist * math.cos(p), cam_dist * math.sin(p))
-cam.rotation_euler = (math.radians(90) - p, 0, 0)
-sc.camera = cam
-sc.frame_start, sc.frame_end = 1, frames
-sc.render.fps = 24
-pivot.rotation_euler = (0, 0, math.radians(yaw))
-if mode == "turntable":
-    pivot.keyframe_insert("rotation_euler", frame=1)
-    pivot.rotation_euler = (0, 0, math.radians(yaw + 360))
-    pivot.keyframe_insert("rotation_euler", frame=frames + 1)
+    o.rotation_euler = (Vector(target) - Vector(loc)).to_track_quat('-Z', 'Y').to_euler()
+    return o
 
 
 # ── walk: a procedural 1-second stride on a rigged model (model-pick
 # bench/rig rigeval.py, 2026-10-08). Limbs are found by shape, not bone
 # names (every auto-rigger names them differently): the outermost high leaf
 # is a hand, the lowest leaf a foot, each chain walked back to the body.
-def walk(frames):
+def walk(frames, scope=None):
     from mathutils import Matrix, Quaternion
-    arms_ = [o for o in sc.objects if o.type == 'ARMATURE']
+    arms_ = [o for o in (scope or sc.objects) if o.type == 'ARMATURE']
     if not arms_:
         return "The model has no skeleton. Rig it first (studio_generate_asset kind rig)."
     arm = max(arms_, key=lambda a: len(a.data.bones))
@@ -189,15 +203,187 @@ def walk(frames):
     bpy.ops.object.mode_set(mode='OBJECT')
     return None
 
-if mode == "walk":
-    why = walk(frames)
-    if why:
-        json.dump({"ok": False, "note": why}, open(os.path.join(out, "result.json"), "w"))
-        sys.exit(0)
+
+def one_model():
+    """One material on a ground plate, the camera on a pivot around it."""
+    model = job["model"]
+    cam_dist = float(job.get("cam_dist", 6.2))
+    yaw, pitch = float(job.get("yaw", 0)), float(job.get("pitch", 8))
+    new = import_model(model)
+    objs = [o for o in new if o.type == 'MESH']
+    if not objs:
+        give_up("The model has no mesh.")
+    # Centred, standing on the ground, height 2.
+    fit(new, "root", tall=2.0)
+
+    bpy.ops.mesh.primitive_plane_add(size=200)
+    bpy.context.object.data.materials.append(material((0.93, 0.9, 0.86)))
+    area_light((3, -3, 4), 600, 3); area_light((-4, -1, 2.5), 200, 4); area_light((0, 4, 3), 300, 3)
+    world = bpy.data.worlds.new("w"); sc.world = world; world.use_nodes = True
+    world.node_tree.nodes["Background"].inputs[0].default_value = (0.95, 0.93, 0.9, 1)
+    world.node_tree.nodes["Background"].inputs[1].default_value = 0.6
+
+    pivot = bpy.data.objects.new("pivot", None); sc.collection.objects.link(pivot)
+    pivot.location = (0, 0, 1.0)
+    cam_d = bpy.data.cameras.new("cam"); cam_d.lens = 50
+    cam = bpy.data.objects.new("cam", cam_d); sc.collection.objects.link(cam)
+    cam.parent = pivot
+    p = math.radians(pitch)
+    cam.location = (0, -cam_dist * math.cos(p), cam_dist * math.sin(p))
+    cam.rotation_euler = (math.radians(90) - p, 0, 0)
+    sc.camera = cam
+    sc.frame_start, sc.frame_end = 1, frames
+    sc.render.fps = 24
+    pivot.rotation_euler = (0, 0, math.radians(yaw))
+    if mode == "turntable":
+        pivot.keyframe_insert("rotation_euler", frame=1)
+        pivot.rotation_euler = (0, 0, math.radians(yaw + 360))
+        pivot.keyframe_insert("rotation_euler", frame=frames + 1)
+    if mode == "walk":
+        why = walk(frames)
+        if why:
+            give_up(why)
+
+
+# ── film set: the document's space is metres, Y up (glTF); Blender is Z up.
+C = Matrix(((1, 0, 0), (0, 0, -1), (0, 1, 0)))
+
+
+def B(v):
+    return Vector((v[0], -v[2], v[1]))
+
+
+def rot_b(r):
+    """XYZ Euler degrees in the document's frame → a Blender rotation."""
+    return (C @ Euler([math.radians(x) for x in r], 'XYZ').to_matrix() @ C.inverted()).to_euler('XYZ')
+
+
+def linear(hex_):
+    h = hex_.lstrip('#')
+    if len(h) == 3:
+        h = ''.join(c * 2 for c in h)
+    c = [int(h[i:i + 2], 16) / 255 for i in (0, 2, 4)]
+    return tuple(x / 12.92 if x <= 0.04045 else ((x + 0.055) / 1.055) ** 2.4 for x in c)
+
+
+def sample(item, t):
+    """studio_set::sample — the same rule the 3D view uses."""
+    ks = item.get("keys") or []
+    if not ks:
+        return None
+    j = next((i for i, k in enumerate(ks) if k["t"] > t), None)
+    if j == 0:
+        a = b = ks[0]; u = 0.0
+    elif j is None:
+        a = b = ks[-1]; u = 0.0
+    else:
+        a, b = ks[j - 1], ks[j]
+        span = b["t"] - a["t"]
+        u = (t - a["t"]) / span if span > 0 else 0.0
+        if item.get("ease") != "linear":
+            u = u * u * (3 - 2 * u)
+    lerp = lambda p, q: [p[i] + (q[i] - p[i]) * u for i in range(3)]
+    s = {"position": lerp(a["position"], b["position"])}
+    if "target" in a:
+        s["target"] = lerp(a["target"], b["target"])
+        s["roll"] = a.get("roll", 0) + (b.get("roll", 0) - a.get("roll", 0)) * u
+    base = (item.get("rotation") or [0, 0, 0])[1]
+    s["yaw"] = a.get("yaw", base) + (b.get("yaw", base) - a.get("yaw", base)) * u
+    return s
+
+
+def film_set():
+    st = job["set"]
+    fps = float(job.get("fps", st.get("fps", 24)))
+    start = float(job.get("start", 0))
+    at = lambda f: start + (f - 1) / fps
+    sc.frame_start, sc.frame_end = 1, frames
+    sc.render.fps = int(round(fps))
+    stage = st.get("stage") or {}
+
+    world = bpy.data.worlds.new("w"); sc.world = world; world.use_nodes = True
+    world.node_tree.nodes["Background"].inputs[0].default_value = (*linear(stage.get("background", "#ebe6de")), 1)
+    world.node_tree.nodes["Background"].inputs[1].default_value = float(stage.get("ambient", 0.6))
+    floor = stage.get("floor")
+    if floor:
+        bpy.ops.mesh.primitive_plane_add(size=float(floor.get("size", 30)))
+        bpy.context.object.name = "floor"
+        bpy.context.object.data.materials.append(material(linear(floor.get("color", "#d9d2c5"))))
+
+    kinds = {"sun": 'SUN', "point": 'POINT', "spot": 'SPOT', "area": 'AREA'}
+    for L in st.get("lights", []):
+        area_light(B(L["position"]), float(L.get("power", 500)), float(L.get("size", 2)),
+                   target=B(L.get("target", [0, 1, 0])), color=linear(L.get("color", "#ffffff")),
+                   kind=kinds.get(L.get("type"), 'AREA'), name=L["id"])
+
+    for kind in ("props", "actors"):
+        for item in st.get(kind, []):
+            tall = item.get("height") or (1.7 if kind == "actors" and not item.get("scale") else None)
+            path = item.get("model")
+            if path and os.path.isfile(path):
+                new = import_model(path)
+            else:
+                warnings.append(f"{item['id']}: material `{item.get('asset')}` has no model file — drawn as a box")
+                if kind == "actors":
+                    bpy.ops.mesh.primitive_cylinder_add(radius=0.25, depth=1)
+                else:
+                    bpy.ops.mesh.primitive_cube_add(size=1)
+                new = [bpy.context.object]
+                new[0].data.materials.append(material((0.75, 0.7, 0.62)))
+            holder = fit(new, item["id"], tall=tall, scale=item.get("scale"))
+            if kind == "actors" and item.get("motion") == "walk":
+                why = walk(frames, scope=new)
+                if why:
+                    warnings.append(f"{item['id']}: {why}")
+            rot = list(item.get("rotation") or [0, 0, 0])
+            if item.get("keys"):
+                holder.rotation_mode = 'XYZ'
+                for f in range(1, frames + 1):
+                    s = sample(item, at(f))
+                    holder.location = B(s["position"])
+                    holder.rotation_euler = rot_b([rot[0], s["yaw"], rot[2]])
+                    holder.keyframe_insert("location", frame=f)
+                    holder.keyframe_insert("rotation_euler", frame=f)
+            else:
+                holder.location = B(item.get("position", [0, 0, 0]))
+                holder.rotation_euler = rot_b(rot)
+
+    spec = next(c for c in st["cameras"] if c["id"] == job["camera"])
+    cam_d = bpy.data.cameras.new(spec["id"])
+    cam_d.lens = float(spec.get("lens", 35)); cam_d.sensor_width = 36; cam_d.sensor_fit = 'AUTO'
+    cam_d.clip_start = 0.05; cam_d.clip_end = 2000
+    cam = bpy.data.objects.new(spec["id"], cam_d); sc.collection.objects.link(cam)
+    cam.rotation_mode = 'QUATERNION'
+    sc.camera = cam
+    for f in range(1, frames + 1):
+        s = sample(spec, at(f))
+        loc = B(s["position"])
+        look = B(s["target"]) - loc
+        q = look.to_track_quat('-Z', 'Y') if look.length > 1e-9 else Quaternion()
+        if s.get("roll"):
+            q = q @ Quaternion((0, 0, 1), math.radians(s["roll"]))
+        cam.location = loc; cam.rotation_quaternion = q
+        cam.keyframe_insert("location", frame=f)
+        cam.keyframe_insert("rotation_quaternion", frame=f)
+
+
+if mode == "set":
+    film_set()
+else:
+    one_model()
 
 engines = [e.identifier for e in bpy.types.RenderSettings.bl_rna.properties['engine'].enum_items]
 sc.render.engine = 'BLENDER_EEVEE' if 'BLENDER_EEVEE' in engines else 'BLENDER_EEVEE_NEXT'
+# One material: true colours. A film set: AgX, so a lit floor near the key
+# light rolls off instead of clipping to white (measured 2026-10-10).
 sc.view_settings.view_transform = "Standard"
+if mode == "set":
+    for vt in ("AgX", "Filmic"):  # AgX from Blender 4.0, Filmic before
+        try:
+            sc.view_settings.view_transform = vt
+            break
+        except TypeError:
+            pass
 sc.render.resolution_x, sc.render.resolution_y = width, height
 sc.render.resolution_percentage = 100
 
@@ -238,5 +424,6 @@ json.dump({
     "keyframes": written,
     "video": video,
     "seconds": round(time.time() - t0, 1),
+    "warnings": warnings,
 }, open(os.path.join(out, "result.json"), "w"), indent=1)
 print("STUDIO_RENDER_DONE")

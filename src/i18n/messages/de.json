@@ -6483,7 +6483,8 @@
       }
     },
     "yaw": "Drehung links/rechts (°)",
-    "pitch": "Neigung (°)"
+    "pitch": "Neigung (°)",
+    "setView": "Set"
   },
   "Browser": {
     "toolbar": {
@@ -6870,5 +6871,51 @@
         "generator_off": "Der Generator hat seine Liste nicht geliefert — er ist vielleicht aus oder beschäftigt. Öffne die Einstellungen erneut, um noch einmal zu fragen."
       }
     }
+  },
+  "StudioSet": {
+    "set": "Filmset",
+    "noSet": "Noch kein Set",
+    "newPlaceholder": "Name des neuen Sets",
+    "create": "Neu",
+    "view": "Ansicht",
+    "freeView": "Freie Ansicht",
+    "through": "Durch {name}",
+    "move": "Verschieben (W)",
+    "rotate": "Drehen (E)",
+    "render": "{camera} rendern",
+    "rendering": "Rendert…",
+    "renderHint": "Filmt das ganze Set mit dieser Kamera per Blender auf diesem Rechner — Clip und Standbilder werden Materialien",
+    "empty": "Ein Filmset ist die 3D-Bühne, auf der Einstellungen gedreht werden: Requisiten, Darsteller, Lichter und Kameras. Gib oben einen Namen für ein neues Set ein oder lass den Agenten eines anlegen (studio_create_set).",
+    "play": "Abspielen",
+    "pause": "Pause",
+    "time": "Zeit",
+    "addProp": "Requisit",
+    "addActor": "Darsteller",
+    "addLight": "Licht",
+    "addCamera": "Kamera",
+    "issues": "Vor dem Rendern",
+    "lastRender": "Letztes Rendering",
+    "hint": "Gespeichert in {file}. In der Ansicht ziehen, hier genaue Werte eingeben oder den Agenten mit studio_apply_set_commands bearbeiten lassen.",
+    "delete": "Löschen",
+    "asset": "Modell",
+    "position": "Position",
+    "rotation": "Drehung",
+    "height": "Höhe (m)",
+    "yaw": "Blickrichtung (°)",
+    "motion": "Bewegung",
+    "motionStill": "Stehen",
+    "motionWalk": "Gehen",
+    "lightType": "Art",
+    "target": "Zielt auf",
+    "power": "Stärke",
+    "color": "Farbe",
+    "lens": "Objektiv (mm)",
+    "ease": "Zwischen Keys",
+    "easeSmooth": "Weich",
+    "easeLinear": "Linear",
+    "keys": "{count} Keys · bei {t}s",
+    "addKey": "Key hier",
+    "removeKey": "Key entfernen",
+    "keyHint": "Setze den Abspielkopf auf einen Key (Punkt auf der Zeitleiste), um ihn zu bearbeiten, oder füge hier einen Key hinzu."
   }
 }

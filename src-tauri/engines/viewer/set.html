@@ -1,0 +1,446 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Film set</title>
+<!-- Tinysolver Studio 3D set view (decide fs3-truth A). Served by the preview
+     server at __codeg/viewer/set.html; editor-only, builds never carry it.
+
+     It draws a film set document (outputs/film/sets/<id>.set.json) and lets
+     the person drag props, actors, lights, cameras and camera targets. It
+     never writes: a finished drag is posted to the parent as set commands
+     (the same ones studio_apply_set_commands takes), the parent applies them
+     through the Studio and posts the new document back.
+
+     parent → view  { type: "codeg-set:load", set, models: { asset: url }, selected, t, view, mode }
+                    { type: "codeg-set:time", t } · { type: "codeg-set:select", id }
+                    { type: "codeg-set:view", view: "free" | <camera id> } · { type: "codeg-set:mode", mode: "translate" | "rotate" }
+     view → parent  { type: "codeg-set:ready" } · { type: "codeg-set:select", id }
+                    { type: "codeg-set:commands", commands: [...] } · { type: "codeg-set:error", message }
+
+     Space and time follow studio_set.rs: metres, Y up, rotation XYZ degrees,
+     a model's footprint middle at `position`, `height` metres tall; keys are
+     blended per segment with `ease` (smooth = u²(3−2u)). Lights are an
+     approximation — the Blender render is the reference. -->
+<style>
+  html, body { margin: 0; height: 100%; background: #16181d; color: #c9ced8;
+    font: 12px system-ui, sans-serif; overflow: hidden; }
+  canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+  #info { position: fixed; left: 10px; bottom: 8px; opacity: .8; pointer-events: none;
+    text-shadow: 0 1px 2px #000; }
+</style>
+<script type="importmap">
+  { "imports": { "three": "../vendor/three.module.min.js" } }
+</script>
+</head>
+<body>
+<div id="info"></div>
+<script type="module">
+import * as THREE from "three"
+import { GLTFLoader } from "../vendor/addons/loaders/GLTFLoader.js"
+import { OrbitControls } from "../vendor/addons/controls/OrbitControls.js"
+import { TransformControls } from "../vendor/addons/controls/TransformControls.js"
+
+const post = (msg) => parent.postMessage(msg, "*")
+const info = document.getElementById("info")
+const DEG = Math.PI / 180
+
+const renderer = new THREE.WebGLRenderer({ antialias: true })
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2))
+renderer.outputColorSpace = THREE.SRGBColorSpace
+renderer.toneMapping = THREE.ACESFilmicToneMapping
+renderer.setScissorTest(true)
+document.body.prepend(renderer.domElement)
+
+const scene = new THREE.Scene()
+const free = new THREE.PerspectiveCamera(45, 1, 0.05, 2000)
+free.position.set(7, 6, 10)
+const orbit = new OrbitControls(free, renderer.domElement)
+orbit.target.set(0, 1, 0)
+orbit.enableDamping = true
+const shot = new THREE.PerspectiveCamera(40, 9 / 16, 0.05, 2000)
+
+const gizmo = new TransformControls(free, renderer.domElement)
+gizmo.setSize(0.8)
+scene.add(gizmo.getHelper())
+gizmo.addEventListener("dragging-changed", (e) => {
+  orbit.enabled = !e.value
+  if (!e.value) commit()
+})
+
+const world = new THREE.Group() // everything the document makes
+scene.add(world)
+const grid = new THREE.GridHelper(30, 30, 0x888888, 0x555555)
+grid.position.y = 0.002
+scene.add(grid)
+
+let doc = null
+let models = {}
+let selected = null
+let t = 0
+let view = "free"
+const nodes = new Map() // id → { kind, item, holder, fit, url }
+const loader = new GLTFLoader()
+
+// ── the document's rules (studio_set.rs) ────────────────────────────────
+function sample(item, at) {
+  const ks = item.keys || []
+  if (!ks.length) return null
+  const j = ks.findIndex((k) => k.t > at)
+  let a, b, u
+  if (j === 0) { a = b = ks[0]; u = 0 }
+  else if (j < 0) { a = b = ks[ks.length - 1]; u = 0 }
+  else {
+    a = ks[j - 1]; b = ks[j]
+    const span = b.t - a.t
+    u = span > 0 ? (at - a.t) / span : 0
+    if (item.ease !== "linear") u = u * u * (3 - 2 * u)
+  }
+  const lerp = (p, q) => p.map((v, i) => v + (q[i] - v) * u)
+  const s = { position: lerp(a.position, b.position) }
+  if (a.target) {
+    s.target = lerp(a.target, b.target)
+    s.roll = (a.roll ?? 0) + ((b.roll ?? 0) - (a.roll ?? 0)) * u
+  }
+  const base = (item.rotation || [0, 0, 0])[1]
+  s.yaw = (a.yaw ?? base) + ((b.yaw ?? base) - (a.yaw ?? base)) * u
+  return s
+}
+const round = (n, d = 3) => Math.round(n * 10 ** d) / 10 ** d
+const v3 = (v) => [round(v.x), round(v.y), round(v.z)]
+const deg3 = (e) => [round(e.x / DEG, 2), round(e.y / DEG, 2), round(e.z / DEG, 2)]
+const frameT = () => (doc ? round(Math.round(t * doc.fps) / doc.fps) : 0)
+
+/** Vertical fov of a lens on a 36 mm sensor fitted to the long side —
+ *  Blender's `sensor_fit: AUTO`. */
+function fovOf(lens, aspect) {
+  const half = Math.atan(18 / lens)
+  return (aspect >= 1 ? 2 * Math.atan(Math.tan(half) / aspect) : 2 * half) / DEG
+}
+
+// ── building ─────────────────────────────────────────────────────────────
+const pickable = []
+function tag(obj, id) {
+  obj.traverse((o) => {
+    o.userData.pick = id
+    if (o.isMesh) pickable.push(o)
+  })
+}
+const colour = (hex) => new THREE.Color(hex || "#ffffff")
+
+function fitModel(fit, root, item, kind) {
+  fit.clear()
+  // Measured on its own (not yet under the placed holder), so the box is in
+  // the model's frame. A skinned mesh is drawn through its bones: measure
+  // the posed vertices (bone matrices first), as Blender measures the
+  // evaluated mesh.
+  root.updateMatrixWorld(true)
+  root.traverse((o) => { if (o.isSkinnedMesh) o.skeleton.update() })
+  const box = new THREE.Box3().setFromObject(root, true)
+  const size = box.getSize(new THREE.Vector3())
+  const ctr = box.getCenter(new THREE.Vector3())
+  const tall = item.height || (kind === "actor" && !item.scale ? 1.7 : null)
+  const s = tall ? tall / Math.max(size.y, 1e-6) : item.scale || 1
+  root.scale.setScalar(s)
+  root.position.set(-ctr.x * s, -box.min.y * s, -ctr.z * s)
+  fit.add(root)
+}
+
+function placeholder(item, kind) {
+  const h = item.height || (kind === "actor" ? 1.7 : 1)
+  const geo = kind === "actor"
+    ? new THREE.CapsuleGeometry(0.25 * h / 1.7, h - 0.5 * h / 1.7, 4, 12)
+    : new THREE.BoxGeometry(h, h, h)
+  const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: 0xb8ab95, roughness: 0.8 }))
+  mesh.position.y = h / 2
+  return mesh
+}
+
+function buildModel(kind, item) {
+  const prev = nodes.get(item.id)
+  const url = models[item.asset] || null
+  const same = prev && prev.url === url && prev.kind === kind &&
+    prev.item.height === item.height && prev.item.scale === item.scale
+  const holder = same ? prev.holder : new THREE.Group()
+  const fit = same ? prev.fit : new THREE.Group()
+  if (!same) {
+    if (prev) world.remove(prev.holder)
+    holder.add(fit)
+    fit.add(placeholder(item, kind))
+    if (url) loader.load(url, (g) => {
+      if (nodes.get(item.id)?.holder !== holder) return
+      fitModel(fit, g.scene, item, kind)
+      retag()
+    }, undefined, (e) => post({ type: "codeg-set:error", message: `${item.id}: ${e?.message ?? e}` }))
+  }
+  world.add(holder)
+  const rot = item.rotation || [0, 0, 0]
+  holder.position.fromArray(item.position || [0, 0, 0])
+  holder.rotation.set(rot[0] * DEG, rot[1] * DEG, rot[2] * DEG)
+  nodes.set(item.id, { kind, item, holder, fit, url })
+  if (item.keys?.length) world.add(pathLine(item, 0x7fd18b))
+}
+
+function buildLight(item) {
+  const c = colour(item.color)
+  let light
+  if (item.type === "sun") light = new THREE.DirectionalLight(c, item.power * 0.9)
+  else if (item.type === "spot") light = new THREE.SpotLight(c, item.power / 20, 0, 45 * DEG, 0.4, 2)
+  else light = new THREE.PointLight(c, item.power / 20, 0, 2)
+  const holder = new THREE.Group()
+  holder.position.fromArray(item.position)
+  holder.add(light)
+  if (light.target) {
+    light.target.position.fromArray(item.target)
+    world.add(light.target)
+    light.position.set(0, 0, 0)
+  }
+  const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.12, 12, 8), new THREE.MeshBasicMaterial({ color: c }))
+  holder.add(bulb)
+  world.add(holder)
+  nodes.set(item.id, { kind: "light", item, holder })
+}
+
+function pathLine(item, color) {
+  const pts = []
+  const end = Math.max(doc.duration, item.keys[item.keys.length - 1].t)
+  for (let i = 0; i <= 80; i++) pts.push(new THREE.Vector3(...sample(item, (end * i) / 80).position))
+  const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts),
+    new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.7 }))
+  for (const k of item.keys) {
+    const dot = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6), new THREE.MeshBasicMaterial({ color }))
+    dot.position.fromArray(k.position)
+    line.add(dot)
+  }
+  line.userData.decor = true
+  return line
+}
+
+function buildCamera(item) {
+  const holder = new THREE.Group()
+  const body = new THREE.Group()
+  const mat = new THREE.MeshBasicMaterial({ color: 0xffb454 })
+  const box = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.16, 0.3), mat)
+  box.position.z = 0.15
+  body.add(box)
+  // A small frustum, pointing down -Z like a camera.
+  const aspect = doc.frame.width / doc.frame.height
+  const fov = fovOf(item.lens, aspect) * DEG
+  const d = 0.6, hy = Math.tan(fov / 2) * d, hx = hy * aspect
+  const c = [[-hx, -hy], [hx, -hy], [hx, hy], [-hx, hy]].map(([x, y]) => new THREE.Vector3(x, y, -d))
+  const o = new THREE.Vector3()
+  const segs = [o, c[0], o, c[1], o, c[2], o, c[3], c[0], c[1], c[1], c[2], c[2], c[3], c[3], c[0]]
+  body.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(segs), new THREE.LineBasicMaterial({ color: 0xffb454 })))
+  holder.add(body)
+  const target = new THREE.Mesh(new THREE.SphereGeometry(0.08, 12, 8), new THREE.MeshBasicMaterial({ color: 0xff6b6b }))
+  world.add(holder, target)
+  world.add(pathLine(item, 0xffb454))
+  nodes.set(item.id, { kind: "camera", item, holder, body, target })
+}
+
+function rebuild() {
+  // Keep loaded models (by id) across loads; rebuild everything else.
+  const keep = new Set()
+  for (const [id, n] of nodes) if (n.fit) keep.add(n.holder)
+  world.children.slice().forEach((ch) => { if (!keep.has(ch)) world.remove(ch) })
+  const ids = new Set()
+  for (const p of doc.props) { buildModel("prop", p); ids.add(p.id) }
+  for (const a of doc.actors) { buildModel("actor", a); ids.add(a.id) }
+  for (const [id, n] of nodes) if (n.fit && !ids.has(id)) { world.remove(n.holder); nodes.delete(id) }
+  for (const [id, n] of nodes) if (!n.fit) nodes.delete(id)
+  for (const l of doc.lights) buildLight(l)
+  for (const c of doc.cameras) buildCamera(c)
+
+  const st = doc.stage || {}
+  scene.background = colour(st.background)
+  const hemi = new THREE.HemisphereLight(colour(st.background), colour(st.floor?.color ?? "#444444"), (st.ambient ?? 0.6) * 1.6)
+  world.add(hemi)
+  if (st.floor) {
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(st.floor.size, st.floor.size),
+      new THREE.MeshStandardMaterial({ color: colour(st.floor.color), roughness: 0.95 }))
+    floor.rotation.x = -Math.PI / 2
+    floor.userData.floor = true
+    world.add(floor)
+  }
+  retag()
+  pose()
+  attach()
+}
+
+function retag() {
+  pickable.length = 0
+  for (const [id, n] of nodes) {
+    tag(n.holder, id)
+    if (n.target) tag(n.target, `${id}::target`)
+  }
+}
+
+const aim = new THREE.Matrix4()
+const UP = new THREE.Vector3(0, 1, 0)
+
+/** Everything that moves, at time `t`. */
+function pose() {
+  if (!doc) return
+  for (const [, n] of nodes) {
+    if (n.kind === "camera") {
+      const s = sample(n.item, t)
+      n.holder.position.fromArray(s.position)
+      n.target.position.fromArray(s.target)
+      // Camera convention: -Z at the target, +Y up (a Group's own lookAt
+      // would aim +Z) — Blender's to_track_quat('-Z', 'Y').
+      aim.lookAt(n.holder.position, n.target.position, UP)
+      n.holder.quaternion.setFromRotationMatrix(aim)
+      n.holder.rotateZ((s.roll || 0) * DEG)
+    } else if (n.kind === "actor" && n.item.keys?.length) {
+      const s = sample(n.item, t)
+      const rot = n.item.rotation || [0, 0, 0]
+      n.holder.position.fromArray(s.position)
+      n.holder.rotation.set(rot[0] * DEG, s.yaw * DEG, rot[2] * DEG)
+    }
+  }
+  const cam = view !== "free" ? nodes.get(view) : null
+  if (cam) {
+    shot.position.copy(cam.holder.position)
+    shot.quaternion.copy(cam.holder.quaternion)
+    shot.fov = fovOf(cam.item.lens, doc.frame.width / doc.frame.height)
+    shot.aspect = doc.frame.width / doc.frame.height
+    shot.updateProjectionMatrix()
+  }
+  const sel = selected && nodes.get(selected.split("::")[0])
+  info.textContent = `${t.toFixed(2)}s / ${doc.duration}s` + (sel ? ` · ${selected}` : "") +
+    (view !== "free" ? ` · ${view}` : "")
+}
+
+function attach() {
+  gizmo.detach()
+  if (!selected || !doc) return
+  const [id, part] = selected.split("::")
+  const n = nodes.get(id)
+  // Drags happen in the free view; looking through a camera is for framing.
+  if (!n || view !== "free") return
+  const obj = part === "target" ? n.target : n.holder
+  if (!obj) return
+  if (gizmo.mode === "rotate" && (n.kind === "camera" || n.kind === "light" || part)) gizmo.setMode("translate")
+  gizmo.attach(obj)
+}
+
+/** The drag that just ended, as set commands. */
+function commit() {
+  const obj = gizmo.object
+  if (!obj || !selected) return
+  const [id, part] = selected.split("::")
+  const n = nodes.get(id)
+  if (!n) return
+  const at = frameT()
+  let cmd
+  if (n.kind === "camera") {
+    const s = sample(n.item, t)
+    cmd = { type: "key.set", id, key: part === "target"
+      ? { t: at, position: s.position.map((v) => round(v)), target: v3(n.target.position) }
+      : { t: at, position: v3(n.holder.position), target: s.target.map((v) => round(v)) } }
+  } else if (n.kind === "actor" && n.item.keys?.length) {
+    cmd = { type: "key.set", id, key: { t: at, position: v3(n.holder.position), yaw: round(n.holder.rotation.y / DEG, 2) } }
+  } else if (gizmo.mode === "rotate") {
+    cmd = { type: "update", id, patch: { rotation: deg3(n.holder.rotation) } }
+  } else {
+    cmd = { type: "update", id, patch: { position: v3(n.holder.position) } }
+  }
+  post({ type: "codeg-set:commands", commands: [cmd] })
+}
+
+// ── picking ──────────────────────────────────────────────────────────────
+const ray = new THREE.Raycaster()
+let down = null
+renderer.domElement.addEventListener("pointerdown", (e) => { down = [e.clientX, e.clientY] })
+renderer.domElement.addEventListener("pointerup", (e) => {
+  if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 4 || gizmo.dragging) return
+  if (gizmo.axis || view !== "free") return
+  const r = renderer.domElement.getBoundingClientRect()
+  const p = new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1)
+  ray.setFromCamera(p, free)
+  const hit = ray.intersectObjects(pickable, false)[0]
+  const id = hit ? hit.object.userData.pick : null
+  selected = id
+  attach()
+  pose()
+  post({ type: "codeg-set:select", id })
+})
+addEventListener("keydown", (e) => {
+  if (e.key === "w" || e.key === "g") { gizmo.setMode("translate"); attach() }
+  if (e.key === "e" || e.key === "r") { gizmo.setMode("rotate"); attach() }
+})
+
+// ── messages ─────────────────────────────────────────────────────────────
+addEventListener("message", (e) => {
+  if (e.source !== parent) return
+  const m = e.data || {}
+  if (m.type === "codeg-set:load") {
+    const first = !doc
+    doc = m.set
+    models = m.models || {}
+    if ("selected" in m) selected = m.selected
+    if (typeof m.t === "number") t = m.t
+    if (m.view) view = m.view
+    if (m.mode) gizmo.setMode(m.mode)
+    rebuild()
+    if (first) frameAll()
+  } else if (m.type === "codeg-set:time") { t = m.t; pose() }
+  else if (m.type === "codeg-set:select") { selected = m.id; attach(); pose() }
+  else if (m.type === "codeg-set:view") { view = m.view; pose(); attach() }
+  else if (m.type === "codeg-set:mode") { gizmo.setMode(m.mode); attach() }
+})
+
+function frameAll() {
+  const box = new THREE.Box3()
+  for (const [, n] of nodes) if (n.kind !== "light") box.expandByObject(n.holder)
+  if (box.isEmpty()) return
+  const c = box.getCenter(new THREE.Vector3())
+  const r = Math.max(box.getSize(new THREE.Vector3()).length() / 2, 3)
+  orbit.target.copy(c)
+  free.position.copy(c).add(new THREE.Vector3(0.6, 0.5, 1).normalize().multiplyScalar(r * 2.2))
+}
+
+// ── drawing ──────────────────────────────────────────────────────────────
+function resize() {
+  renderer.setSize(innerWidth, innerHeight, false)
+  free.aspect = innerWidth / innerHeight
+  free.updateProjectionMatrix()
+}
+addEventListener("resize", resize)
+resize()
+
+renderer.setAnimationLoop(() => {
+  orbit.update()
+  const W = innerWidth, H = innerHeight
+  const through = doc && view !== "free" && nodes.get(view)
+  renderer.setScissor(0, 0, W, H)
+  renderer.setViewport(0, 0, W, H)
+  if (!through) {
+    renderer.render(scene, free)
+    return
+  }
+  // Look through the camera: the frame's aspect, letterboxed.
+  const a = doc.frame.width / doc.frame.height
+  let w = W, h = W / a
+  if (h > H) { h = H; w = H * a }
+  const x = (W - w) / 2, y = (H - h) / 2
+  renderer.setClearColor(0x0c0d10)
+  renderer.clear()
+  renderer.setScissor(x, y, w, h)
+  renderer.setViewport(x, y, w, h)
+  const helpers = []
+  scene.traverse((o) => { if (o.userData.decor && o.visible) { helpers.push(o); o.visible = false } })
+  const cam = nodes.get(view)
+  cam.holder.visible = cam.target.visible = false
+  renderer.render(scene, shot)
+  cam.holder.visible = cam.target.visible = true
+  helpers.forEach((o) => (o.visible = true))
+})
+
+// For browser checks (tests/studio): what the view built.
+window.__codegSet = { THREE, scene, nodes, free }
+post({ type: "codeg-set:ready" })
+</script>
+</body>
+</html>

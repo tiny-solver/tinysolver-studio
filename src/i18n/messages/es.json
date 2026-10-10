@@ -6483,7 +6483,8 @@
       }
     },
     "yaw": "Giro horizontal (°)",
-    "pitch": "Giro vertical (°)"
+    "pitch": "Giro vertical (°)",
+    "setView": "Plató"
   },
   "Browser": {
     "toolbar": {
@@ -6870,5 +6871,51 @@
         "generator_off": "El generador no respondió con su lista: puede estar apagado u ocupado. Abre los ajustes de nuevo para volver a preguntar."
       }
     }
+  },
+  "StudioSet": {
+    "set": "Plató",
+    "noSet": "Aún no hay plató",
+    "newPlaceholder": "Nombre del nuevo plató",
+    "create": "Nuevo",
+    "view": "Vista",
+    "freeView": "Vista libre",
+    "through": "Desde {name}",
+    "move": "Mover (W)",
+    "rotate": "Girar (E)",
+    "render": "Renderizar {camera}",
+    "rendering": "Renderizando…",
+    "renderHint": "Filma con esta cámara todo el plató con Blender en este equipo — el clip y los fotogramas pasan a ser materiales",
+    "empty": "Un plató es el escenario 3D donde se filman las tomas: atrezo, actores, luces y cámaras. Pon nombre a un plató nuevo arriba o pide al agente que cree uno (studio_create_set).",
+    "play": "Reproducir",
+    "pause": "Pausa",
+    "time": "Tiempo",
+    "addProp": "Atrezo",
+    "addActor": "Actor",
+    "addLight": "Luz",
+    "addCamera": "Cámara",
+    "issues": "Antes de renderizar",
+    "lastRender": "Último render",
+    "hint": "Se guarda en {file}. Arrastra en la vista, escribe valores exactos aquí o deja que el agente lo edite con studio_apply_set_commands.",
+    "delete": "Eliminar",
+    "asset": "Modelo",
+    "position": "Posición",
+    "rotation": "Rotación",
+    "height": "Altura (m)",
+    "yaw": "Orientación (°)",
+    "motion": "Movimiento",
+    "motionStill": "Quieto",
+    "motionWalk": "Caminar",
+    "lightType": "Tipo",
+    "target": "Apunta a",
+    "power": "Potencia",
+    "color": "Color",
+    "lens": "Lente (mm)",
+    "ease": "Entre claves",
+    "easeSmooth": "Suave",
+    "easeLinear": "Lineal",
+    "keys": "{count} claves · en {t}s",
+    "addKey": "Clave aquí",
+    "removeKey": "Quitar clave",
+    "keyHint": "Lleva el cabezal a una clave (punto en la línea de tiempo) para editarla, o añade una clave aquí."
   }
 }

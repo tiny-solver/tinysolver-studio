@@ -83,10 +83,23 @@ static FILES: &[EngineFile] = &[
         bytes: include_bytes!("../engines/vendor/addons/controls/OrbitControls.js"),
         content_type: JS,
     },
+    // Drag handles for the 3D set view. Editor-only like the orbit controls.
+    EngineFile {
+        path: "__codeg/vendor/addons/controls/TransformControls.js",
+        bytes: include_bytes!("../engines/vendor/addons/controls/TransformControls.js"),
+        content_type: JS,
+    },
     // The editor's material preview (`?src=<glb url>`). Never in a build.
     EngineFile {
         path: "__codeg/viewer/model.html",
         bytes: include_bytes!("../engines/viewer/model.html"),
+        content_type: HTML,
+    },
+    // The 3D set view (`outputs/film/sets/*.set.json`, driven by the editor
+    // over postMessage). Never in a build.
+    EngineFile {
+        path: "__codeg/viewer/set.html",
+        bytes: include_bytes!("../engines/viewer/set.html"),
         content_type: HTML,
     },
     EngineFile {

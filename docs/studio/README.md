@@ -175,6 +175,17 @@ AI 생성물을 프로젝트의 재료로 받고, 재료를 다시 생성 입력
 - 모델의 `bones`(가장 큰 skin 의 joint 수) · `animations`는 GLB 를 읽어 재료에 남긴다. 서랍은 뼈가 있으면 **걷기**, 없으면 **뼈 넣기**를 보인다.
 - 영상 재료의 출처에는 생성기가 돌려준 실제 `width`·`height`·`frames`·`fps`와 `audio`가 남는다.
 
+## 3D 촬영장 (film-set · fs3-set · fs3-truth A)
+
+쇼츠 · 뮤비 · 영화 · 웹툰을 찍는 3D 무대. 정본은 `outputs/film/sets/<id>.set.json` 하나다 — 세트(바닥 · 배경 · 조명) · 소품(GLB 재료) · 배우(리깅된 GLB + 동작 + 키) · 카메라 여러 대(렌즈 · 경로 키). 스키마는 처음 만들 때 같은 폴더에 쓰이는 `README.md`(원본 `src-tauri/src/studio_set_readme.md`).
+
+- **공간 · 시간** — 미터, Y 위, 오른손(glTF 와 같다) · 정면 +Z · 회전은 XYZ 오일러 도. 모델은 발밑 가운데가 `position`, `height` 로 키를 맞춘다. 키 사이는 `ease`(smooth = 구간마다 u²(3−2u), linear). 이 보간 식은 `studio_set.rs::sample` · `set.html` · `studio_render.py` 세 곳에 같은 식으로 있다 — 미리보기와 렌더의 카메라가 프레임마다 같아야 한다.
+- **규칙은 Rust 한 곳** — `studio_set.rs`(검증 · 명령 `set.update` · `add` · `update` · `remove` · `key.set` · `key.remove` · 원자적 · 모르는 필드 보존 · `issues`). TypeScript 쌍둥이는 없다: 3D 화면은 끌기가 끝나면 명령을 보내고 돌아온 문서를 그린다.
+- **명령 = MCP 도구** — `studio_run` 의 `list_sets` · `read_set` · `create_set` · `apply_set_commands` · `render_set` 이 MCP `studio_list_sets` · `studio_read_set` · `studio_create_set` · `studio_apply_set_commands` · `studio_render_set` 이다.
+- **3D 화면** — Studio 패널의 **촬영장** 탭(또는 `/studio?path=<프로젝트>&view=set`). 미리보기 서버의 `__codeg/viewer/set.html`(three.js · OrbitControls · TransformControls, 빌드에는 안 들어간다)을 iframe 으로 띄우고 postMessage 로 문서를 넘긴다(`codeg-set:load` · `time` · `select` · `view` · `mode` ↔ `ready` · `select` · `commands`). 끌기(W 옮기기 · E 돌리기)는 자유 시점에서, **카메라로 보기**는 결과 비율(기본 720×1280)로 레터박스. 키가 있는 배우 · 카메라는 재생 위치의 키를 고친다(없으면 그 시각에 새 키). 오른쪽은 목록 · 값 · 키 · `issues` · 마지막 렌더. 파일은 2초마다 다시 읽어 에이전트의 수정을 보인다.
+- **렌더** — `render_set { set, camera, from?, to?, stills?(초), width?, height?, id? }` 가 `studio_render.py` 의 `mode: set` 으로 문서를 Blender 장면으로 만든다(조명 · 바닥 · 소품/배우 GLB 를 높이에 맞춰 놓기 · 걷기 배우는 제자리 걸음 + 키 이동 · 카메라를 프레임마다 키에서 계산). AgX 톤. 결과는 `assets/generated/renders/<set>-<camera>.mp4` + `-fNNN.png`, 출처 `source.from: set:<id>` · `workflow: blender-set` · 스틸마다 `t`.
+- 미리보기 조명은 근사(area → 점광원)이고 배우는 걷지 않는다 — 렌더가 정본이다.
+
 ## 구조
 
 ```mermaid
