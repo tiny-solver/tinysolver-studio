@@ -130,8 +130,15 @@
       "id": "action-direction-guide",
       "date": "2026-10-10",
       "from": "오너",
-      "status": "new",
-      "text": "AI 에게 웹툰 액션 장면을 시키면 밋밋하다 — 드래곤볼에서 뽑은 액션 연출 원리를 작가 · 작품 이름 없이 지침으로 쓰고 싶다"
+      "status": "taken",
+      "text": "AI 에게 웹툰 액션 장면을 시키면 밋밋하다 — 드래곤볼에서 뽑은 액션 연출 원리를 작가 · 작품 이름 없이 지침으로 쓰고 싶다",
+      "items": [
+        "ad-place",
+        "ad-guide",
+        "ad-image",
+        "ad-conti"
+      ],
+      "note": "10-10 받음 — 초안 docs/studio/action-direction-guide.md(F1–F6 · F7 보류). 자리는 둘로(ad-place): 여러 컷 원리는 콘티 글 단계, 한 컷 원리는 그림 카드에서 켜고 끄기. 문구 확정은 model-pick action-direction-bench 뒤."
     }
   ],
   "topics": [
@@ -1505,6 +1512,148 @@
         "#bv-video-gen"
       ],
       "from": "ask:film-set"
+    },
+    {
+      "role": "제품",
+      "asked": "2026-10-10",
+      "goal": "안 적음",
+      "prep": [],
+      "who": [],
+      "learn": [],
+      "unblocks": [],
+      "then": [],
+      "id": "ad-place",
+      "rule": "none",
+      "topic": "film",
+      "p": 2,
+      "status": "decided",
+      "q": "액션 연출 지침을 Studio 어디에 넣나 — 콘티 글 단계 · 그림 프롬프트 단계 · 카드별 켜고 끄기",
+      "now": "Studio 에 웹툰 콘티 단계는 아직 없다(fs3-shots · fs3-crew 예정). 그림 단계는 프롬프트를 그대로 생성기에 보낸다(qwen 만 RGBA 레시피로 감쌈)",
+      "facets": [
+        "지침이 듣는 자리",
+        "끄기",
+        "선행"
+      ],
+      "options": [
+        {
+          "key": "A",
+          "title": "둘로 나눈다 — 여러 컷 원리(F1 첫 컷 부감 · F5 원인/결과 분할)는 콘티 글 단계, 한 컷 원리(F1 대각선 · F2 · F3 · F4 · F6)는 그림 카드의 '액션 연출' 켜고 끄기",
+          "facets": {
+            "지침이 듣는 자리": "컷 나누기는 콘티가, 화면 연출은 그림 모델이 — 각자 할 수 있는 것만",
+            "끄기": "그림 카드마다(액션 컷만 켠다) · 기본 꺼짐",
+            "선행": "그림 쪽은 지금 바로 · 콘티 쪽은 fs3-shots"
+          }
+        },
+        {
+          "key": "B",
+          "title": "그림 프롬프트에만 — 여섯 요소를 매 컷에 다 붙인다",
+          "facets": {
+            "지침이 듣는 자리": "그림 한 장은 컷 분할 · 첫 컷 같은 여러 컷 원리를 지킬 수 없다",
+            "끄기": "전역 하나",
+            "선행": "없음"
+          }
+        },
+        {
+          "key": "C",
+          "title": "콘티 글 단계에만 — 연출 에이전트가 컷마다 글로 풀어 쓴다",
+          "facets": {
+            "지침이 듣는 자리": "그림 모델이 받는 글이 에이전트 손을 거쳐 흐려질 수 있다",
+            "끄기": "장면마다",
+            "선행": "fs3-shots · fs3-crew 가 와야 쓸 수 있다"
+          }
+        }
+      ],
+      "pick": "A",
+      "reason": "F5 컷 분할 · F1 첫 컷은 컷 여러 장 사이의 일이라 그림 한 장 프롬프트로는 지킬 수 없고, F2 · F3 · F4 · F6 는 한 장 안의 화면 연출이라 그림 모델에 바로 줘야 듣는다. 액션이 아닌 컷에 속도선이 붙으면 망가지므로 카드별로 켠다",
+      "needs": [],
+      "refs": [
+        "docs/studio/action-direction-guide.md",
+        "#so-pick",
+        "#fs3-shots"
+      ],
+      "decided": {
+        "date": "2026-10-10",
+        "pick": "A",
+        "note": "오너가 자리는 studio 가 정하라고 넘김(10-10) — studio 판단"
+      },
+      "from": "ask:action-direction-guide"
+    },
+    {
+      "role": "제품",
+      "asked": "2026-10-10",
+      "goal": "안 적음",
+      "prep": [],
+      "who": [],
+      "learn": [],
+      "unblocks": [],
+      "then": [],
+      "id": "ad-guide",
+      "topic": "film",
+      "p": 2,
+      "status": "todo",
+      "q": "액션 연출 지침 문구 확정 — 요소 6개(F7 표정 보류) · 공통 원리 '덜 그려서 더 빠르고 세게'",
+      "want": "실사용 프롬프트 · 에이전트 지시에 작가 · 작품 이름 없음(출처는 지침 머리말 한 줄) · 원본 컷을 참조 그림으로 넣지 않음 · 요소마다 지시 | 확인 항목 · 그림 모델용 영어 조각",
+      "now": "초안 docs/studio/action-direction-guide.md (10-10). 조각 문구는 아직 재 보지 않았다",
+      "action": "model-pick action-direction-bench 결과(어떤 조각이 어느 모델에서 듣나 · 다 붙이면 싸우나)를 보고 문구 확정 → 초안 표시를 뗀다",
+      "needs": [],
+      "refs": [
+        "docs/studio/action-direction-guide.md",
+        "model-pick ask:action-direction-bench"
+      ],
+      "from": "ask:action-direction-guide"
+    },
+    {
+      "role": "제품",
+      "asked": "2026-10-10",
+      "goal": "안 적음",
+      "prep": [],
+      "who": [],
+      "learn": [],
+      "unblocks": [],
+      "then": [],
+      "id": "ad-image",
+      "topic": "film",
+      "p": 2,
+      "status": "todo",
+      "q": "그림 카드 '액션 연출' 켜고 끄기 — 한 컷 원리 조각을 프롬프트에 붙인다",
+      "want": "그림 카드 설정(⚙)에 '액션 연출' 켜기 + 이 컷의 요소 고르기(동작 · 타격 · 강조 · 효과음) · MCP studio_generate_asset 도 같은 칸 · 붙인 조각은 재료 source 에 남아 카드 '만든 값' 줄에 보인다 · 기본 꺼짐",
+      "now": "그림 카드 설정은 공급자 · 모델만(so-pick). 프롬프트는 그대로 보낸다",
+      "action": "조각 표는 Rust 한 곳(generator_call 이 붙인다 — 화면 · MCP 같은 길) · 문구는 ad-guide 초안으로 먼저, 확정되면 바꾼다",
+      "needs": [
+        "ad-place"
+      ],
+      "refs": [
+        "#so-pick",
+        "docs/studio/action-direction-guide.md"
+      ],
+      "from": "ask:action-direction-guide"
+    },
+    {
+      "role": "제품",
+      "asked": "2026-10-10",
+      "goal": "안 적음",
+      "prep": [],
+      "who": [],
+      "learn": [],
+      "unblocks": [],
+      "then": [],
+      "id": "ad-conti",
+      "topic": "film",
+      "p": 3,
+      "status": "todo",
+      "q": "콘티 글 단계에 액션 연출 지침 — 첫 컷 부감 · 원인/결과 컷 분할 · 강조 컷 하나 · 컷마다 쓸 요소 표시",
+      "want": "연출 에이전트가 액션 장면을 컷으로 나눌 때 지침의 '콘티 단계 지시'를 따르고, 컷마다 고른 요소를 그림 단계(ad-image)로 넘긴다 · 확인 항목을 검토 체크리스트로",
+      "now": "콘티 · 샷 단계가 아직 없다",
+      "action": "fs3-shots(샷 · 콘티) · fs3-crew(연출 에이전트) 가 들어올 때 그 지시문에 넣는다",
+      "needs": [
+        "ad-place",
+        "fs3-shots",
+        "fs3-crew"
+      ],
+      "refs": [
+        "docs/studio/action-direction-guide.md"
+      ],
+      "from": "ask:action-direction-guide"
     }
   ]
 }
