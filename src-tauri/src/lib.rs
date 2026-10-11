@@ -30,6 +30,7 @@ pub mod content_preview;
 pub mod content_publish;
 pub mod studio_agent_cli;
 pub mod studio_assets;
+pub mod studio_model_once;
 pub mod studio_presets;
 pub mod studio_render;
 pub mod studio_scene;
