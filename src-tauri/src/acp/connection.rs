@@ -5885,6 +5885,12 @@ async fn run_connection(
             } else {
                 None
             };
+            // tinysolver fork: a flow's agent node sees its Studio parts only.
+            crate::studio_agent_node::narrow_mcp_servers(
+                &state.read().await.owner_window_label,
+                &mut mcp_servers,
+                delegate_injection.as_ref().map(|i| i.token.as_str()),
+            );
             {
                 let mut s = state.write().await;
                 // Native steering is independent of the MCP companion — set it
@@ -15022,6 +15028,11 @@ async fn emit_conversation_update(
             emit_with_state(state, emitter, AcpEvent::AvailableCommands { commands }).await;
         }
         SessionUpdate::UsageUpdate(update) => {
+            // tinysolver fork: a flow's agent node stops on session cost.
+            if let Some(cost) = &update.cost {
+                let conn = state.read().await.connection_id.clone();
+                crate::studio_agent_node::note_cost(&conn, cost.amount, &cost.currency);
+            }
             emit_with_state(
                 state,
                 emitter,
