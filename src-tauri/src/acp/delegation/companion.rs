@@ -258,11 +258,8 @@ impl CompanionFeatures {
             // parent bug, or someone editing the agent's MCP config by hand —
             // cannot leave the strongest tool as the only one present.
             "browser_eval" => self.browser && self.browser_eval,
-            "studio_list_scenes" | "studio_read_scene" | "studio_apply_scene_commands"
-            | "studio_build" | "studio_publish" | "studio_list_assets" | "studio_import_asset"
-            | "studio_generate_asset" | "studio_update_asset" | "studio_render"
-            | "studio_generator_options" | "studio_list_sets" | "studio_read_set"
-            | "studio_create_set" | "studio_apply_set_commands" | "studio_render_set" => self.studio,
+            // The `studio_*` tools come from the Studio's op registry.
+            name if crate::studio_ops::is_mcp_tool(name) => self.studio,
             "delegate_to_agent" | "get_delegation_status" | "cancel_delegation"
             | "resume_delegation" => self.delegation,
             _ => false,
@@ -439,7 +436,7 @@ pub async fn dispatch_line(
             // The embedded schema is a JSON array of every tool the companion
             // can carry; filter to the groups enabled for this launch so a
             // disabled feature's tools never surface to the LLM.
-            let all: Value = match serde_json::from_str(TOOL_SCHEMA_JSON) {
+            let mut all: Value = match serde_json::from_str(TOOL_SCHEMA_JSON) {
                 Ok(v) => v,
                 Err(e) => {
                     return LineAction::Respond(err(
@@ -449,6 +446,11 @@ pub async fn dispatch_line(
                     ));
                 }
             };
+            // The `studio_*` tools are not in the embedded file: they are
+            // built from the Studio's op registry (`crate::studio_ops`).
+            if let Some(arr) = all.as_array_mut() {
+                arr.extend(crate::studio_ops::mcp_tools());
+            }
             let mut tools = match all.as_array() {
                 Some(arr) => Value::Array(
                     arr.iter()
@@ -741,11 +743,7 @@ async fn build_tools_call_spawn(
                 Box::pin(async move { client_session_round_trip(&socket, &req).await });
             register_and_spawn(inflight, id, None, round_trip, render_session_result).await
         }
-        "studio_list_scenes" | "studio_read_scene" | "studio_apply_scene_commands"
-        | "studio_build" | "studio_publish" | "studio_list_assets" | "studio_import_asset"
-        | "studio_generate_asset" | "studio_update_asset" | "studio_render"
-            | "studio_generator_options" | "studio_list_sets" | "studio_read_set"
-            | "studio_create_set" | "studio_apply_set_commands" | "studio_render_set" => {
+        tool if crate::studio_ops::is_mcp_tool(tool) => {
             let op = match parse_studio_op(&name, &arguments) {
                 Ok(op) => op,
                 Err(msg) => return LineAction::Respond(err(id, -32602, msg)),

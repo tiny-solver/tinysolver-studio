@@ -35,6 +35,7 @@ pub enum StudioOp {
     Publish {
         #[serde(default)]
         version: Option<String>,
+        #[serde(default = "local_target")]
         target: String,
     },
     /// The material register `<assets>/manifest.json` ([`crate::studio_assets`]).
@@ -86,6 +87,10 @@ pub enum StudioOp {
     ApplySetCommands { set: String, commands: Value },
     /// Render one camera of a set with the user's Blender.
     RenderSet(crate::studio_render::SetRenderRequest),
+}
+
+fn local_target() -> String {
+    "local".into()
 }
 
 /// Where the film sets live, from the project root.

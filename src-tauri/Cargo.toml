@@ -72,6 +72,12 @@ name = "codeg-mcp"
 path = "src/bin/codeg_mcp.rs"
 required-features = []
 
+# tinysolver fork: the Studio's parts from the command line (`studio op list`).
+[[bin]]
+name = "studio"
+path = "src/bin/studio.rs"
+required-features = []
+
 [build-dependencies]
 tauri-build = { version = "2", features = [], optional = true }
 
