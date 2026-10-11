@@ -1989,7 +1989,7 @@
       "id": "layers-l5-export",
       "topic": "layers",
       "p": 3,
-      "status": "todo",
+      "status": "done",
       "role": "제품",
       "asked": "2026-10-11",
       "from": "ask:lab-layers",
@@ -2003,8 +2003,13 @@
       "unblocks": [],
       "then": [],
       "refs": [
-        "my-devops docs/plans/tinysolver/studio-layers.md"
-      ]
+        "my-devops docs/plans/tinysolver/studio-layers.md",
+        "model-pick feat/round-studio-style-find"
+      ],
+      "done": {
+        "date": "2026-10-11",
+        "note": "studio_export.rs — 부품 export_round(MCP studio_export_round · API · CLI · group 내보내기 · changes outside): runs/<flow>/<run>/run.json → model-pick rounds/<KST 날짜>-<flow>-<run>/round.json(model-pick-round/2) + media/. 결과 = generate_asset 결과(asset.source → models.json id) · 넣은 것 = 같은 프롬프트 · 이름 = each 바인딩(card.style) · 넣은 참고 그림 = 입력마다 refs(그래서 과제 기본 text+image-to-image) · 채점 scores · 고르기 답은 그림 경로로 잇는다. 늘 internal:true · 'AI 가 만든 것' · codex 줄 공개 안 함 메모 · 고르기는 '고르기 카드 답(사람)' + 답 메모(대표님이라 단정 안 함). 과제 · 모델이 명부에 없으면 멈춘다. check:true 면 publish.sh --dry-run · 실제 올리기는 model-pick repo 에서. 해 보기: L3 의 그림체 찾기 실행 20261011-151740-5778(그림체 4 × codex · qwen-refs · claude 채점) → model-pick.home.tinysolver.me/#/r/2026-10-12-style-find-151740-5778 (집 안 전용 · 버킷엔 없음). model-pick 쪽: qwen-image-2.1 에 text+image-to-image(workflow qwen-image-21-refs = 같은 모델에 참고 그림). behaviour tree 노드는 이번 범위 밖(필요한 흐름이 나오면 따로)"
+      }
     }
   ]
 }
