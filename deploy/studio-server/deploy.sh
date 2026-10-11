@@ -13,6 +13,16 @@
 # 길: studio.home.tinysolver.me → mac-mini-2 TLS → … → linux-1 Traefik(file 라우터) → :3180
 set -euo pipefail
 
+# pnpm · node 는 nvm 아래에 있다 — 비대화 셸은 그것을 안 읽는다 (nvm.sh 는 set -u 에서 깨진다)
+export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+if [ -s "$NVM_DIR/nvm.sh" ]; then
+  set +u
+  # shellcheck disable=SC1091
+  . "$NVM_DIR/nvm.sh" >/dev/null 2>&1 || true
+  set -u
+fi
+export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
+
 REPO="$(cd "$(dirname "$0")/../.." && pwd)"
 HOME_DIR="$HOME/.local/share/tinysolver-studio"
 CONF_DIR="$HOME/.config/tinysolver-studio"

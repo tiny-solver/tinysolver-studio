@@ -8,7 +8,7 @@
 | 주소 | <https://studio.home.tinysolver.me> (LAN · Tailscale) — mac-mini-2 TLS → linux-1 Traefik file 라우터 → `:3180` |
 | 토큰 | Vault `secret/tinysolver/studio/server` 의 `TOKEN` → `~/.config/tinysolver-studio/server.env` (600) |
 | 설치 자리 | `~/.local/share/tinysolver-studio/{bin,web,data,launch.sh,deployed.json}` |
-| 콘텐츠 프로젝트 | `STUDIO_PROJECTS_DIR` (기본 `~/tinysolver.me/studio-projects`) · 기본 프로젝트 `STUDIO_PROJECT`(server.env) |
+| 콘텐츠 프로젝트 | `STUDIO_PROJECTS_DIR` (기본 `~/tinysolver.me/studio-projects`) · 기본 프로젝트 `STUDIO_PROJECT`(기본 `style-hunt` · server.env 로 바꿈) |
 | 유닛 | `systemctl --user status studio-server` · `journalctl --user -u studio-server -f` |
 
 업스트림 codeg 플릿 서버(`:3080` · `~/.local/share/codeg`)와 포트 · 데이터 · 바이너리를 나눈다.
