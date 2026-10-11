@@ -1569,6 +1569,8 @@ impl Exec {
                 }
             }
         }
+        // Show the call while it runs — a generation takes minutes.
+        self.save(rec.clone());
         let outcome = self.parts.call(op, input).await;
         rec.cost_usd = outcome
             .get("cost_usd")
