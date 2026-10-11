@@ -2693,6 +2693,15 @@ pub fn parse_studio_op(tool: &str, arguments: &Value) -> Result<StudioOp, String
                 .map(StudioOp::RenderAsset)
                 .map_err(|e| format!("studio_render: {e} (needs `from`: a 3D model material id)"))
         }
+        "studio_model_once" => {
+            let mut args = arguments.clone();
+            if let Some(obj) = args.as_object_mut() {
+                obj.remove("project");
+            }
+            serde_json::from_value(args)
+                .map(StudioOp::ModelOnce)
+                .map_err(|e| format!("studio_model_once: {e} (needs `agent`: claude or codex, `prompt` and `schema`)"))
+        }
         "studio_list_sets" => Ok(StudioOp::ListSets),
         "studio_read_set" => Ok(StudioOp::ReadSet { set: studio_set_arg(tool, arguments)? }),
         "studio_create_set" => Ok(StudioOp::CreateSet {
@@ -3955,7 +3964,7 @@ mod tests {
         browser_eval: false,
     };
 
-    const STUDIO_TOOLS: [&str; 16] = [
+    const STUDIO_TOOLS: [&str; 17] = [
         "studio_list_scenes",
         "studio_read_scene",
         "studio_apply_scene_commands",
@@ -3972,6 +3981,7 @@ mod tests {
         "studio_create_set",
         "studio_apply_set_commands",
         "studio_render_set",
+        "studio_model_once",
     ];
 
     #[tokio::test]

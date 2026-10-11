@@ -129,6 +129,7 @@ pub fn op_name(op: &StudioOp) -> &'static str {
         StudioOp::CreateSet { .. } => "create_set",
         StudioOp::ApplySetCommands { .. } => "apply_set_commands",
         StudioOp::RenderSet(_) => "render_set",
+        StudioOp::ModelOnce(_) => "model_once",
     }
 }
 
