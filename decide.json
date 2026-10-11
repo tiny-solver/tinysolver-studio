@@ -1787,7 +1787,7 @@
       "id": "layers-where",
       "topic": "layers",
       "p": 1,
-      "status": "open",
+      "status": "decided",
       "role": "제품",
       "rule": "none",
       "asked": "2026-10-11",
@@ -1816,13 +1816,18 @@
       ],
       "refs": [
         "my-devops docs/plans/tinysolver/studio-layers.md"
-      ]
+      ],
+      "decided": {
+        "date": "2026-10-11",
+        "pick": "A",
+        "note": "대표님 '권장대로 가자'"
+      }
     },
     {
       "id": "layers-flow-format",
       "topic": "layers",
       "p": 1,
-      "status": "open",
+      "status": "decided",
       "role": "제품",
       "rule": "none",
       "asked": "2026-10-11",
@@ -1851,7 +1856,12 @@
       ],
       "refs": [
         "my-devops docs/plans/tinysolver/studio-layers.md"
-      ]
+      ],
+      "decided": {
+        "date": "2026-10-11",
+        "pick": "C",
+        "note": "대표님 '권장대로 가자'"
+      }
     },
     {
       "id": "layers-l0-registry",
