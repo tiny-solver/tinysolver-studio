@@ -1915,7 +1915,7 @@
       "id": "layers-l2-model-once",
       "topic": "layers",
       "p": 2,
-      "status": "todo",
+      "status": "done",
       "role": "제품",
       "asked": "2026-10-11",
       "from": "ask:lab-layers",
@@ -1932,7 +1932,11 @@
       "then": [],
       "refs": [
         "my-devops docs/plans/tinysolver/studio-layers.md"
-      ]
+      ],
+      "done": {
+        "date": "2026-10-11",
+        "note": "studio_model_once.rs — claude -p(--safe-mode · --json-schema) · codex exec(--ephemeral · --output-schema) 한 번 · 구독 CLI(API 키 X) · 답을 jsonschema 로 다시 검증, 어긋나면 ok:false note · 비용 · 토큰 · 시간 실음 · 서비스 PATH 밖 CLI 도 찾음(~/.local/bin · nvm · STUDIO_*_BIN) · 부품 목록 model_once · MCP studio_model_once — #52 + feat/studio-model-once-op. 해 보기(linux-1): 그림 한 장 → {style, colors[]} claude · codex 둘 다 스키마 통과"
+      }
     },
     {
       "id": "layers-l3-flow",
