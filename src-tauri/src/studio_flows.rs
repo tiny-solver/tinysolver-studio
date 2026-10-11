@@ -11,7 +11,8 @@
 //! | `model`    | one model call — a part too (`model_once` unless `op` says)   |
 //! | `human`    | stops the run and shows a card; the answer is the output      |
 //! | `flow`     | another flow, run inline as one node                          |
-//! | `set`      | a value built from earlier outputs (no call)                  |
+//! | `set`      | a value built from earlier outputs (no call), a list filtered |
+//! |            | by `keep`                                                     |
 //! | `agent`    | an agent loop over ACP — L4; refused until then               |
 //! | `seq`      | its steps in order                                            |
 //! | `parallel` | its branches at once                                          |
@@ -56,6 +57,10 @@ pub const FLOWS_DIR: &str = "flows";
 pub const RUNS_DIR: &str = "runs";
 const FLOW_SUFFIX: &str = ".flow.json";
 const RUN_FILE: &str = "run.json";
+/// The first flow (studio-layers ②): want → materials → styles × models →
+/// judge → the owner's pick → a bible card. Shipped as an example; a project
+/// gets it with `flow_put`.
+pub const STYLE_FIND_FLOW: &str = include_str!("studio_flows/style-find.flow.json");
 /// The part a `model` node calls unless it names another.
 pub const MODEL_OP: &str = "model_once";
 /// How many items of an `each` run at once unless it says.
@@ -139,6 +144,10 @@ pub enum NodeKind {
     },
     Set {
         value: Value,
+        /// When `value` is a list, keep only the items this holds for
+        /// (each in reach as `item`) — e.g. drop the pictures that failed.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        keep: Option<Cond>,
     },
     /// L4. The slot is here so a flow can name it; running one is refused.
     Agent {
@@ -644,6 +653,9 @@ pub struct NodeRecord {
     /// The leaf's definition, to tell a changed node from a changed input.
     #[serde(default, skip_serializing_if = "Value::is_null")]
     pub def: Value,
+    /// Taken from an earlier record in this execution rather than run.
+    #[serde(skip)]
+    reused: bool,
 }
 
 /// A `human` node's question, waiting for an answer.
@@ -1238,12 +1250,16 @@ impl Exec {
                 note: None,
                 reused_from: None,
                 def: Value::Null,
+                reused: false,
             };
             let result = self
                 .clone()
                 .node_body(&node, &key, scope, depth, &mut rec)
                 .await;
-            rec.ms = t.elapsed().as_millis() as u64;
+            // A reused leaf keeps the start and time it was recorded with.
+            if !rec.reused {
+                rec.ms = t.elapsed().as_millis() as u64;
+            }
             let result = match result {
                 Ok(v) => {
                     rec.status = Status::Done;
@@ -1266,9 +1282,6 @@ impl Exec {
                     }
                 }
             };
-            if rec.reused_from.is_some() {
-                rec.ms = self.prior.get(&key).map_or(0, |p| p.ms);
-            }
             self.save(rec);
             result
         }
@@ -1296,8 +1309,19 @@ impl Exec {
                 let who = who_for_model(op, &input);
                 self.call_part(node, key, op, input, rec, who).await
             }
-            NodeKind::Set { value } => {
-                let v = resolve(value, &scope).map_err(fail)?;
+            NodeKind::Set { value, keep } => {
+                let mut v = resolve(value, &scope).map_err(fail)?;
+                if let (Some(cond), Value::Array(items)) = (keep, &v) {
+                    let mut kept = Vec::new();
+                    for item in items {
+                        let mut inner = scope.child();
+                        inner.set("item", item.clone());
+                        if eval_cond(cond, &inner).map_err(fail)? {
+                            kept.push(item.clone());
+                        }
+                    }
+                    v = Value::Array(kept);
+                }
                 rec.input = v.clone();
                 Ok(v)
             }
@@ -1525,11 +1549,24 @@ impl Exec {
         rec.who = Some(who);
         rec.def = serde_json::to_value(&node.kind).unwrap_or_default();
         if let Some(p) = self.prior.get(key) {
-            if p.status == Status::Done && p.input == input && p.def == rec.def {
-                rec.reused_from = p.reused_from.clone();
-                rec.cost_usd = p.cost_usd;
-                rec.log = p.log.clone();
-                return Ok(p.output.clone());
+            if p.input == input && p.def == rec.def {
+                // A failure that was let through stays one while this run
+                // resumes, so a card already shown keeps its items; a new
+                // run (`from_run` carries only successes) tries again.
+                let kept_failure = p.status == Status::Failed && p.reused_from.is_none() && node.keep_going;
+                if p.status == Status::Done || kept_failure {
+                    rec.reused = true;
+                    rec.reused_from = p.reused_from.clone();
+                    rec.started_at = p.started_at.clone();
+                    rec.ms = p.ms;
+                    rec.cost_usd = p.cost_usd;
+                    rec.log = p.log.clone();
+                    rec.output = p.output.clone();
+                    if kept_failure {
+                        return Err(Stop::Failed(p.note.clone().unwrap_or_default()));
+                    }
+                    return Ok(p.output.clone());
+                }
             }
         }
         let outcome = self.parts.call(op, input).await;

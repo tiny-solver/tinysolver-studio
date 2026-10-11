@@ -558,3 +558,80 @@ fn style_card_goes_into_the_bible_with_its_pictures() {
     outside.images = vec!["../../etc/passwd".into()];
     assert_eq!(save_style_card(root, &outside)["ok"], json!(false));
 }
+
+/// The first flow, as shipped: parts that draw a file per call (one fails),
+/// a judge that scores in order, and the real bible writer.
+struct StyleFake {
+    root: PathBuf,
+    calls: Mutex<Vec<String>>,
+}
+
+#[async_trait]
+impl Parts for StyleFake {
+    async fn call(&self, op: &str, args: Value) -> Value {
+        self.calls.lock().unwrap().push(op.to_string());
+        match op {
+            "list_assets" => json!({ "ok": true, "assets": [] }),
+            "generate_asset" => {
+                let id = args["id"].as_str().unwrap().to_string();
+                if id.ends_with("nyam-pastel-lowpoly-qwen") {
+                    return json!({ "ok": false, "note": "generator busy" });
+                }
+                assert!(args["from"].as_str().unwrap().starts_with("ref-"));
+                let path = format!("assets/gen/{id}.png");
+                std::fs::create_dir_all(self.root.join("assets/gen")).unwrap();
+                std::fs::write(self.root.join(&path), b"png").unwrap();
+                json!({ "ok": true, "asset": { "id": id, "source": { "provider": args["provider"] } }, "path": path })
+            }
+            "model_once" => {
+                let images = args["images"].as_array().unwrap();
+                assert_eq!(args["agent"], json!("claude"));
+                let scores: Vec<Value> = images
+                    .iter()
+                    .enumerate()
+                    .map(|(i, p)| json!({ "index": i, "path": p, "score": i, "why": "ok" }))
+                    .collect();
+                json!({ "ok": true, "output": { "scores": scores, "best": images.len() - 1 }, "cost_usd": 0.05 })
+            }
+            "style_card_save" => {
+                let card: StyleCard = serde_json::from_value(args).unwrap();
+                save_style_card(&self.root, &card)
+            }
+            other => panic!("style-find called an unexpected part {other}"),
+        }
+    }
+}
+
+#[tokio::test]
+async fn style_find_runs_to_a_bible_card() {
+    let doc: Value = serde_json::from_str(STYLE_FIND_FLOW).unwrap();
+    let typed: FlowDoc = serde_json::from_value(doc.clone()).unwrap();
+    assert!(validate(&typed).is_empty(), "{:?}", validate(&typed));
+    let dir = project(&[doc]);
+    let fake = Arc::new(StyleFake { root: dir.path().to_path_buf(), calls: Mutex::new(vec![]) });
+    let run = run_flow(dir.path(), fake.clone(), &req("style-find")).await.unwrap();
+    assert_eq!(run.status, Status::Waiting, "{:?} {:?}", run.note, run.nodes.iter().map(|n| (&n.key, &n.note)).collect::<Vec<_>>());
+    // 4 styles × 2 models, one failed and filtered out.
+    let made = node(&run, "made").output.as_array().unwrap().clone();
+    assert_eq!(made.len(), 7);
+    assert_eq!(node(&run, "score").input["images"].as_array().unwrap().len(), 7);
+    let card = &run.waiting[0];
+    assert_eq!(card.key, "pick");
+    assert!(card.ask.contains("6번"), "{}", card.ask);
+    assert_eq!(card.show.as_array().unwrap().len(), 7);
+
+    let done = answer(dir.path(), fake.clone(), "style-find", &run.id, "pick", json!({ "index": 2, "note": "선이 살아 있다" }))
+        .await
+        .unwrap();
+    assert_eq!(done.status, Status::Done, "{:?}", done.note);
+    let picked = &made[2];
+    let slug = format!("{}-{}", picked["style_id"].as_str().unwrap(), picked["model_id"].as_str().unwrap());
+    let md = std::fs::read_to_string(dir.path().join(format!("bible/styles/{slug}.md"))).unwrap();
+    assert!(md.contains("선이 살아 있다"), "{md}");
+    assert!(md.contains(&format!("style-find/{}", run.id)));
+    assert_eq!(done.output["card"], json!(format!("bible/styles/{slug}.md")));
+    // Resuming did not draw again.
+    let calls = fake.calls.lock().unwrap();
+    assert_eq!(calls.iter().filter(|c| *c == "generate_asset").count(), 8);
+    assert_eq!(calls.iter().filter(|c| *c == "model_once").count(), 1);
+}
