@@ -80,8 +80,17 @@
 
 묻고 답한 것은 모두 `asks` 에 남는다.
 
-## L3 와 합치는 자리
+## 흐름 안에서 (L3 와 이음)
 
-- L3 `studio_flows.rs` 의 `NodeKind::Agent` 팔 → `run_agent_node(AgentNodeCtx::from_app_state(..), 프로젝트, spec, input, ask)` 로 바꾼다.
-- `ask` = L3 `Exec::ask_live(Card{ ask: title, show: 선택지 이름, pick: one })` 를 감싼 것.
-- 끝 보고 해 보기: 흐름 하나에서 agent 노드가 장면 하나를 목표대로 고치고 멈춘다 → 웹 실행 기록에 대화 · 결과.
+- `studio_flows.rs` `NodeKind::Agent` → `Exec::agent_node` — 노드 칸을 `${…}` 로 풀고 `run_installed` 를 부른다. 결과는 `NodeRecord.output` 에 통째로 · `cost_usd` 는 실행 비용에 더해진다 · `ok: false` 면 노드 실패(`keep_going` 이면 계속).
+- 같은 넣는 것으로 이미 끝난 노드는 다시 돌리지 않고 기록을 쓴다(실행 이어 가기 · 한 노드만 바꿔 다시 돌리기).
+- 권한 카드: `Exec::ask_live(Card{ key: "<노드>.perm<n>", ask: "에이전트가 묻는다 — …", show: 선택지 이름, pick: one })` — 웹 · `run_answer` 로 답하면 그 선택지로 답한다. 노드가 끝나면 답 없는 카드는 거둔다.
+- `validate` 가 노드를 미리 본다: agent · goal · 부품 이름(편집기 전용 부품은 안 됨) · 상한 · output 스키마.
+- ACP 세션에 닿는 손잡이는 부팅 때 `studio_agent_node::install` 로 꽂는다(`bin/codeg_server.rs` · `lib.rs` — 자동화 엔진 옆). 꽂지 않은 프로세스(CLI · 시험)는 `ok: false` "codeg-server 안에서".
+
+## 해 보기 (10-11 · linux-1 codeg-server)
+
+| 흐름 | 무엇 | 결과 |
+|---|---|---|
+| `night-scene` | agent 노드가 장면 `intro` 를 밤으로(bg `#101830` · 제목 '밤의 마을') — 부품 `list_scenes · read_scene · apply_commands` | done · 18초 · 4걸음 · $0.19 · output 스키마 통과 · 다음 `read_scene` 노드가 바뀐 장면을 읽음 |
+| `ask-try` | 부품 없이 `note.txt` 쓰기 — Write 권한이 카드로 | 카드 `note.perm1` → `Yes` → 파일 씀 · `asks: human:allow-once` |
