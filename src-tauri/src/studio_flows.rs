@@ -150,7 +150,8 @@ pub enum NodeKind {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         keep: Option<Cond>,
     },
-    /// L4. The slot is here so a flow can name it; running one is refused.
+    /// An agent loop on the project — goal, parts, stop rule, output shape
+    /// ([`crate::studio_agent_node::AgentNodeSpec`]; `input` is what it is fed).
     Agent {
         #[serde(flatten)]
         spec: Map<String, Value>,
@@ -291,10 +292,14 @@ pub fn validate(doc: &FlowDoc) -> Vec<String> {
             issues.push(format!("node id `{}` is used twice", node.id));
         }
         match &node.kind {
-            NodeKind::Agent { .. } => issues.push(format!(
-                "{}: agent nodes come with L4 (layers-l4-agent) — use op or model for now",
-                node.id
-            )),
+            NodeKind::Agent { spec } => match agent_spec(spec) {
+                Ok(spec) => issues.extend(
+                    crate::studio_agent_node::check_spec(&spec)
+                        .into_iter()
+                        .map(|i| format!("{}: {i}", node.id)),
+                ),
+                Err(e) => issues.push(format!("{}: {e}", node.id)),
+            },
             NodeKind::Repeat { max, .. } if *max == 0 || *max > MAX_REPEAT => {
                 issues.push(format!("{}: repeat max must be 1..={MAX_REPEAT}", node.id))
             }
@@ -1358,9 +1363,7 @@ impl Exec {
                 });
                 Err(Stop::Waiting)
             }
-            NodeKind::Agent { .. } => {
-                Err(fail("agent nodes come with L4 (layers-l4-agent)".into()))
-            }
+            NodeKind::Agent { spec } => self.clone().agent_node(node, key, spec, &scope, rec).await,
             NodeKind::Flow { flow, inputs } => {
                 if depth >= MAX_FLOW_DEPTH {
                     return Err(fail(format!("flows nest deeper than {MAX_FLOW_DEPTH}")));
@@ -1500,7 +1503,6 @@ impl Exec {
     /// node that cannot be replayed, such as an agent session asking for a
     /// permission. The card is in the run record like any other; [`answer`]
     /// hands the answer here while this process is alive.
-    #[allow(dead_code)] // the agent node (L4) is its first caller
     pub(crate) async fn ask_live(&self, card: Card) -> Result<Value, String> {
         let (flow, run) = {
             let st = self.state.lock().unwrap();
@@ -1535,6 +1537,117 @@ impl Exec {
         };
         let _ = write_json(&run_dir(&self.root, &flow, &run).join(RUN_FILE), &snapshot);
         answer
+    }
+
+    /// An `agent` node: one agent session to the end
+    /// ([`crate::studio_agent_node`]). A finished session is not replayed —
+    /// the same input in a resumed run takes the earlier answer. Permission
+    /// questions go up as live cards (`<key>.perm<n>`).
+    async fn agent_node(
+        self: Arc<Self>,
+        node: &Node,
+        key: &str,
+        spec: &Map<String, Value>,
+        scope: &Scope,
+        rec: &mut NodeRecord,
+    ) -> Step {
+        use crate::studio_agent_node::{run_installed, AskHuman, PermissionAsk};
+        let resolved = resolve(&Value::Object(spec.clone()), scope).map_err(Stop::Failed)?;
+        let input = resolved.get("input").cloned().unwrap_or(Value::Null);
+        let parsed = match &resolved {
+            Value::Object(m) => agent_spec(m).map_err(Stop::Failed)?,
+            _ => return Err(Stop::Failed("agent node is not an object".into())),
+        };
+        rec.input = resolved;
+        rec.who = Some(format!("agent:{}", parsed.agent));
+        rec.def = serde_json::to_value(&node.kind).unwrap_or_default();
+        if let Some(p) = self.prior.get(key) {
+            if p.status == Status::Done && p.input == rec.input && p.def == rec.def {
+                rec.reused = true;
+                rec.reused_from = p.reused_from.clone();
+                rec.started_at = p.started_at.clone();
+                rec.ms = p.ms;
+                rec.cost_usd = p.cost_usd;
+                rec.log = p.log.clone();
+                rec.output = p.output.clone();
+                return Ok(p.output.clone());
+            }
+        }
+        self.save(rec.clone());
+
+        let asked = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let exec = self.clone();
+        let card_key = key.to_string();
+        let ask: AskHuman = Arc::new(move |q: PermissionAsk| {
+            let exec = exec.clone();
+            let n = asked.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
+            let key = format!("{card_key}.perm{n}");
+            Box::pin(async move {
+                let names: Vec<String> = q.options.iter().map(|o| o.name.clone()).collect();
+                let card = Card {
+                    key,
+                    ask: format!("에이전트가 묻는다 — {}", if q.title.is_empty() { &q.tool } else { &q.title }),
+                    show: json!(names),
+                    pick: Pick::One,
+                    since: now(),
+                };
+                let answer = exec.ask_live(card).await.ok()?;
+                let index = answer.get("index").and_then(Value::as_u64).map(|i| i as usize);
+                let item = answer.get("item").and_then(Value::as_str);
+                q.options
+                    .iter()
+                    .enumerate()
+                    .find(|(i, o)| Some(*i) == index || Some(o.name.as_str()) == item)
+                    .map(|(_, o)| o.option_id.clone())
+            })
+        });
+
+        let outcome = run_installed(&self.root, &parsed, &input, Some(ask)).await;
+        // The session is gone: its unanswered questions are moot.
+        self.drop_live_cards(&format!("{key}.perm"));
+        rec.cost_usd = outcome.cost_usd;
+        rec.log = vec![format!(
+            "{} · {} steps · {}s · {}",
+            outcome.stop_reason,
+            outcome.steps,
+            outcome.duration_ms / 1000,
+            outcome
+                .conversation_id
+                .map_or("no conversation".to_string(), |c| format!("conversation {c}"))
+        )];
+        let ok = outcome.ok;
+        let note = outcome.note.clone();
+        let value = serde_json::to_value(outcome).unwrap_or_default();
+        rec.output = value.clone();
+        if !ok {
+            return Err(Stop::Failed(
+                note.unwrap_or_else(|| "the agent node failed without a note".into()),
+            ));
+        }
+        Ok(value)
+    }
+
+    /// Take back the live cards whose key starts with `prefix` — their
+    /// asker has stopped waiting. Dropping the sender ends each `ask_live`.
+    fn drop_live_cards(&self, prefix: &str) {
+        let snapshot = {
+            let mut st = self.state.lock().unwrap();
+            let slot = format!("{}/{}/{prefix}", st.flow, st.id);
+            live().lock().unwrap().retain(|k, _| !k.starts_with(&slot));
+            let before = st.waiting.len();
+            st.waiting.retain(|c| !c.key.starts_with(prefix));
+            if st.waiting.len() == before {
+                return;
+            }
+            if st.waiting.is_empty() && st.status == Status::Waiting {
+                st.status = Status::Running;
+            }
+            st.clone()
+        };
+        let _ = write_json(
+            &run_dir(&self.root, &snapshot.flow, &snapshot.id).join(RUN_FILE),
+            &snapshot,
+        );
     }
 
     async fn call_part(
@@ -1598,6 +1711,11 @@ impl Exec {
         }
         Ok(outcome)
     }
+}
+
+/// An agent node's fields as the agent node reads them.
+fn agent_spec(m: &Map<String, Value>) -> Result<crate::studio_agent_node::AgentNodeSpec, String> {
+    serde_json::from_value(Value::Object(m.clone())).map_err(|e| format!("agent node: {e}"))
 }
 
 fn who_for_model(op: &str, input: &Value) -> String {

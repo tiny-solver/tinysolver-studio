@@ -1968,7 +1968,7 @@
       "id": "layers-l4-agent",
       "topic": "layers",
       "p": 2,
-      "status": "todo",
+      "status": "done", "done": {"date": "2026-10-11", "note": "studio_agent_node.rs — 흐름 agent 노드: ACP 세션(claude · codex)을 사람 없이 · 목표 · 넣는 것 · 멈출 조건(도구 호출 수 · 시간 · 비용 · output 스키마 jsonschema, 안 맞으면 2번 다시) · 결과 · 대화 기록 · 걸음 · 시간 · 비용을 runs/ 노드 기록에. 허용 부품만 세 겹(노드 세션은 codeg-mcp studio 묶음만 · tools/list 는 목록만 · broker 가 목록 밖 거절). 권한: 목록 안 부품 자동 허용 · 그 밖은 흐름의 살아 있는 카드(ask_live · <노드>.perm<n>) · 노드가 끝나면 남은 카드 거둠. 업스트림 파일은 한 줄씩 — #55 + feat/studio-agent-node-wire. 해 보기(linux-1 codeg-server): 흐름 night-scene 의 agent 노드가 장면 intro 를 밤으로(bg #101830 · 제목 밤의 마을) 고치고 멈춤 — 18초 · 4걸음 · $0.19 · output 스키마 통과 · 대화 기록 실림. 카드 길: Write 권한 카드 Yes → 파일 씀 · asks 에 human:allow-once"},
       "role": "제품",
       "asked": "2026-10-11",
       "from": "ask:lab-layers",

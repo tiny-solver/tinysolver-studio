@@ -183,6 +183,108 @@ impl<'a> AgentNodeCtx<'a> {
     }
 }
 
+/// The app pieces a node needs, installed once at boot (both runtimes, next
+/// to the automation engine) so a flow — which runs off the project folder
+/// and the part registry — can reach the ACP sessions.
+pub struct AgentHost {
+    db: AppDatabase,
+    manager: ConnectionManager,
+    emitter: EventEmitter,
+    bus: Arc<InternalEventBus>,
+    data_dir: std::path::PathBuf,
+}
+
+static HOST: OnceLock<AgentHost> = OnceLock::new();
+
+/// Called at boot. A process that never calls it (the `studio` CLI, tests)
+/// answers agent nodes with `ok: false`.
+pub fn install(
+    db: AppDatabase,
+    manager: ConnectionManager,
+    emitter: EventEmitter,
+    bus: Arc<InternalEventBus>,
+    data_dir: std::path::PathBuf,
+) {
+    let _ = HOST.set(AgentHost {
+        db,
+        manager,
+        emitter,
+        bus,
+        data_dir,
+    });
+}
+
+/// [`run_agent_node`] on the installed host.
+pub async fn run_installed(
+    project: &Path,
+    spec: &AgentNodeSpec,
+    input: &Value,
+    ask: Option<AskHuman>,
+) -> AgentNodeOutcome {
+    match HOST.get() {
+        Some(h) => {
+            let ctx = AgentNodeCtx {
+                db: &h.db,
+                manager: &h.manager,
+                bus: &h.bus,
+                emitter: &h.emitter,
+                data_dir: &h.data_dir,
+            };
+            run_agent_node(&ctx, project, spec, input, ask).await
+        }
+        None => AgentNodeOutcome::failed(
+            "agent nodes run inside the Studio app or codeg-server — this process has no agent sessions",
+        ),
+    }
+}
+
+/// Problems with a node as written, each a readable line (for flow validate).
+pub fn check_spec(spec: &AgentNodeSpec) -> Vec<String> {
+    let mut issues = Vec::new();
+    if let Err(e) = parse_agent(&spec.agent) {
+        issues.push(e);
+    }
+    if spec.goal.trim().is_empty() {
+        issues.push("goal is empty — say what the agent should get done".into());
+    }
+    for t in &spec.tools {
+        let op = op_name(t);
+        match studio_ops::registry().find(&op) {
+            Some(s) if s.tool.is_some() => {}
+            Some(_) => issues.push(format!("tool `{t}` is an editor-only part — agents cannot call it")),
+            None => issues.push(format!("tool `{t}` is not a Studio part")),
+        }
+    }
+    if spec.stop.max_turns == 0 || spec.stop.max_seconds == 0 {
+        issues.push("stop.max_turns and stop.max_seconds must be above 0".into());
+    }
+    if let Some(schema) = &spec.output {
+        if let Err(e) = jsonschema::validator_for(schema) {
+            issues.push(format!("output is not a JSON Schema: {e}"));
+        }
+    }
+    issues
+}
+
+impl AgentNodeOutcome {
+    fn failed(note: &str) -> Self {
+        Self {
+            ok: false,
+            note: Some(note.to_string()),
+            output: Value::Null,
+            text: None,
+            stop_reason: "error".into(),
+            turns: 0,
+            steps: 0,
+            duration_ms: 0,
+            cost_usd: None,
+            conversation_id: None,
+            transcript: None,
+            asks: Vec::new(),
+        }
+    }
+}
+
 // ── scope: which parts a node session may call ───────────────────────────────
 
 #[derive(Default)]
@@ -531,20 +633,9 @@ pub async fn run_agent_node(
     ask: Option<AskHuman>,
 ) -> AgentNodeOutcome {
     let started = Instant::now();
-    let mut out = AgentNodeOutcome {
-        ok: false,
-        note: None,
-        output: Value::Null,
-        text: None,
-        stop_reason: String::new(),
-        turns: 0,
-        steps: 0,
-        duration_ms: 0,
-        cost_usd: None,
-        conversation_id: None,
-        transcript: None,
-        asks: Vec::new(),
-    };
+    let mut out = AgentNodeOutcome::failed("");
+    out.note = None;
+    out.stop_reason = String::new();
     if let Err(note) = run_inner(ctx, project, spec, input, ask, &mut out).await {
         out.ok = false;
         out.note = Some(note);
@@ -907,6 +998,30 @@ mod tests {
         assert!(settle_answer(&spec, Some("JSON 없음")).is_err());
         let free = AgentNodeSpec { output: None, ..spec };
         assert_eq!(settle_answer(&free, Some(" done ")).unwrap(), json!("done"));
+    }
+
+    #[test]
+    fn spec_check_names_the_problems() {
+        let ok: AgentNodeSpec = serde_json::from_value(json!({
+            "agent": "claude", "goal": "g", "tools": ["read_scene", "studio_apply_scene_commands"],
+            "output": { "type": "object" }
+        }))
+        .unwrap();
+        assert!(check_spec(&ok).is_empty(), "{:?}", check_spec(&ok));
+        let bad: AgentNodeSpec = serde_json::from_value(json!({
+            "agent": "gemini", "goal": " ", "tools": ["fly"], "stop": { "max_turns": 0 },
+            "output": { "type": 3 }
+        }))
+        .unwrap();
+        assert_eq!(check_spec(&bad).len(), 5, "{:?}", check_spec(&bad));
+    }
+
+    #[tokio::test]
+    async fn without_a_host_the_node_says_so() {
+        let spec: AgentNodeSpec = serde_json::from_value(json!({ "agent": "claude", "goal": "g" })).unwrap();
+        let out = run_installed(Path::new("/tmp"), &spec, &Value::Null, None).await;
+        assert!(!out.ok);
+        assert!(out.note.unwrap().contains("codeg-server"));
     }
 
     #[test]

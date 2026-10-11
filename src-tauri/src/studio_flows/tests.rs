@@ -142,7 +142,7 @@ fn validate_catches_problems() {
             { "id": "a", "kind": "op", "op": "echo" },
             { "id": "a", "kind": "set", "value": 1 },
             { "id": "r", "kind": "repeat", "max": 0, "steps": [] },
-            { "id": "ag", "kind": "agent", "agent": "claude", "goal": "fix it", "tools": ["read_scene"] },
+            { "id": "ag", "kind": "agent", "agent": "claude", "goal": "fix it", "tools": ["fly"] },
             { "id": "inputs", "kind": "set", "value": 1 }
         ]
     }))
@@ -153,7 +153,7 @@ fn validate_catches_problems() {
         "want.text",
         "`a` is used twice",
         "repeat max",
-        "L4",
+        "ag: tool `fly` is not a Studio part",
         "reserved",
     ] {
         assert!(issues.contains(needle), "{needle} missing in:\n{issues}");
@@ -176,6 +176,28 @@ fn agent_spec_keeps_its_fields_and_node_keeps_its_own() {
     assert_eq!(spec["stop"]["max_turns"], json!(3));
     let back: Node = serde_json::from_value(serde_json::to_value(&n).unwrap()).unwrap();
     assert_eq!(back, n);
+}
+
+#[tokio::test]
+async fn agent_node_without_agent_sessions_fails_with_a_note() {
+    // No host is installed in tests (the CLI is the same): the node says so
+    // instead of hanging, and its record carries the outcome.
+    let dir = project(&[flow(
+        "ag",
+        json!([
+            { "id": "fix", "kind": "agent", "agent": "claude", "goal": "fix ${inputs.scene}",
+              "tools": ["read_scene"], "input": { "scene": "${inputs.scene}" } }
+        ]),
+    )]);
+    let mut r = req("ag");
+    r.inputs.insert("scene".into(), json!("intro"));
+    let run = run_flow(dir.path(), Arc::new(Fake::default()), &r).await.unwrap();
+    assert_eq!(run.status, Status::Failed);
+    let n = node(&run, "fix");
+    assert_eq!(n.who.as_deref(), Some("agent:claude"));
+    assert_eq!(n.input["goal"], json!("fix intro"));
+    assert_eq!(n.output["ok"], json!(false));
+    assert!(n.note.as_deref().unwrap_or_default().contains("codeg-server"), "{:?}", n.note);
 }
 
 #[tokio::test]

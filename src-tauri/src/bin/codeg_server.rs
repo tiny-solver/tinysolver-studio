@@ -514,6 +514,16 @@ async fn async_main() -> ExitCode {
 
     // Automation engine (mirrors lib.rs setup): manual + scheduled fires,
     // event-bus completion, reconcile, boot recovery. One per process.
+    // tinysolver fork: a flow's agent node reaches the ACP sessions here.
+    codeg_lib::studio_agent_node::install(
+        codeg_lib::db::AppDatabase {
+            conn: state.db.conn.clone(),
+        },
+        state.connection_manager.clone_ref(),
+        state.emitter.clone(),
+        state.acp_event_bus.clone(),
+        state.data_dir.clone(),
+    );
     if let Some(engine) = codeg_lib::automation::build_engine(
         codeg_lib::db::AppDatabase {
             conn: state.db.conn.clone(),
