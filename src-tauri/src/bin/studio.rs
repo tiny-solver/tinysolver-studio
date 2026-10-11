@@ -5,14 +5,21 @@
 //!   studio op show <op|tool>  one op, with its schemas, as JSON
 //!
 //! Everything comes from the op registry ([`codeg_lib::studio_ops`]), the same
-//! list the `codeg-mcp` companion builds its `studio_*` tools from. Running an
-//! op goes through the server's API (next step), not this listing.
+//! list the `codeg-mcp` companion builds its `studio_*` tools from.
+//!
+//!   studio op run <op> ['{json args}'] [--project <name|path>]
+//!
+//! runs an op on the Studio server (`POST /api/studio/<op>`) — a thin client,
+//! the server owns the projects. `STUDIO_URL` (default
+//! https://studio.home.tinysolver.me) · `STUDIO_TOKEN`, else `CODEG_TOKEN` in
+//! `~/.config/tinysolver-studio/server.env` (the server host's own copy).
+//! Prints the outcome JSON; exits 1 when it is `ok: false`.
 
 use std::process::ExitCode;
 
 use codeg_lib::studio_ops::{input_with_project, registry, OpSpec, REGISTRY_JSON};
 
-const USAGE: &str = "usage: studio op list [--json] | studio op show <op|tool>";
+const USAGE: &str = "usage: studio op list [--json] | studio op show <op|tool> | studio op run <op> ['{json}'] [--project <name|path>]";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -39,6 +46,7 @@ fn main() -> ExitCode {
                 }
             }
         }
+        ["op", "run", op, rest @ ..] => run(op, rest),
         ["-h"] | ["--help"] | ["help"] => {
             println!("{USAGE}");
             ExitCode::SUCCESS
@@ -96,4 +104,80 @@ fn table() -> String {
         reg.schema
     ));
     out
+}
+
+const DEFAULT_URL: &str = "https://studio.home.tinysolver.me";
+
+fn token() -> Option<String> {
+    if let Some(t) = std::env::var("STUDIO_TOKEN").ok().filter(|t| !t.trim().is_empty()) {
+        return Some(t.trim().to_string());
+    }
+    let conf = dirs::home_dir()?.join(".config/tinysolver-studio/server.env");
+    std::fs::read_to_string(conf)
+        .ok()?
+        .lines()
+        .find_map(|l| l.strip_prefix("CODEG_TOKEN=").map(|t| t.trim().to_string()))
+        .filter(|t| !t.is_empty())
+}
+
+fn run(op: &str, rest: &[&str]) -> ExitCode {
+    let mut args = serde_json::Value::Object(Default::default());
+    let mut project = None;
+    let mut it = rest.iter();
+    while let Some(a) = it.next() {
+        match *a {
+            "--project" => project = it.next().map(|p| p.to_string()),
+            "--json" => {}
+            raw => match serde_json::from_str::<serde_json::Value>(raw) {
+                Ok(v @ serde_json::Value::Object(_)) => args = v,
+                _ => {
+                    eprintln!("studio: arguments must be one JSON object, got `{raw}`");
+                    return ExitCode::from(2);
+                }
+            },
+        }
+    }
+    if let Some(p) = project {
+        args["project"] = serde_json::Value::String(p);
+    }
+    let Some(token) = token() else {
+        eprintln!("studio: no token — set STUDIO_TOKEN (Vault secret/tinysolver/studio/server TOKEN)");
+        return ExitCode::from(2);
+    };
+    let base = std::env::var("STUDIO_URL").unwrap_or_else(|_| DEFAULT_URL.into());
+    let url = format!("{}/api/studio/{op}", base.trim_end_matches('/'));
+    let outcome = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(|e| e.to_string())
+        .and_then(|rt| {
+            rt.block_on(async {
+                let resp = reqwest::Client::new()
+                    .post(&url)
+                    .bearer_auth(&token)
+                    .json(&args)
+                    .send()
+                    .await
+                    .map_err(|e| format!("{url}: {e}"))?;
+                let status = resp.status();
+                if !status.is_success() {
+                    return Err(format!("{url}: HTTP {status}"));
+                }
+                resp.json::<serde_json::Value>().await.map_err(|e| format!("{url}: {e}"))
+            })
+        });
+    match outcome {
+        Ok(v) => {
+            println!("{}", serde_json::to_string_pretty(&v).unwrap_or_default());
+            if v["ok"] == serde_json::Value::Bool(false) {
+                ExitCode::FAILURE
+            } else {
+                ExitCode::SUCCESS
+            }
+        }
+        Err(e) => {
+            eprintln!("studio: {e}");
+            ExitCode::FAILURE
+        }
+    }
 }

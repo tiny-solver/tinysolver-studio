@@ -37,6 +37,8 @@ pub mod studio_scene;
 pub mod studio_set;
 pub mod studio_ops;
 pub mod studio_tools;
+// tinysolver fork: the Studio's server doors — HTTP API + HTTP MCP over the op registry.
+pub mod studio_doors;
 pub mod db;
 pub mod deep_link;
 pub mod folder_links;
