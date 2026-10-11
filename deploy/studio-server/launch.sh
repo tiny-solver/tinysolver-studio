@@ -35,6 +35,8 @@ set -a
 . "$CONF"
 set +a
 [ -n "${CODEG_TOKEN:-}" ] || { echo "studio-server: CODEG_TOKEN 비어 있음" >&2; exit 1; }
+# 이름을 안 준 호출이 가는 곳 — 첫 흐름 '그림체 찾기'의 프로젝트 (server.env 로 바꿀 수 있다)
+export STUDIO_PROJECT="${STUDIO_PROJECT:-style-hunt}"
 
 mkdir -p "$CODEG_DATA_DIR" "$STUDIO_PROJECTS_DIR"
 cd "$HOME" || exit 1
