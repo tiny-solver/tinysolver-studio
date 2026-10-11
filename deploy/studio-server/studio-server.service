@@ -1,0 +1,25 @@
+# tinysolver-studio — 대표님이 쓰는 Studio 서버 모드 (linux-1 · :3180)
+#
+# 설치 · 갱신: deploy/studio-server/deploy.sh (이 파일을 ~/.config/systemd/user/ 로 복사한다)
+# 로그: journalctl --user -u studio-server -f
+#
+# user unit 인 이유는 codeg-server.service(my-devops scripts/systemd) 와 같다 —
+# 부품이 대표님의 ~/.claude · ~/.codex 자격증명과 콘텐츠 프로젝트 폴더를 그대로 쓴다.
+
+[Unit]
+Description=tinysolver-studio server (studio.home.tinysolver.me :3180)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# PATH · nvm · 토큰 · 데이터 자리는 런처가 세운다
+ExecStart=/bin/bash %h/.local/share/tinysolver-studio/launch.sh
+Restart=always
+RestartSec=5
+# 서버를 다시 띄울 때 그 아래 claude · codex 세션까지 죽이지 않는다 (codeg-server.service 와 같은 이유)
+KillMode=process
+TimeoutStopSec=20
+
+[Install]
+WantedBy=default.target

@@ -30,6 +30,7 @@ pub fn build_router(
         .allow_headers(Any);
 
     let token_for_ws = token.clone();
+    let token_for_mcp = token.clone();
 
     let api = Router::new()
         .route("/health", post(health_check))
@@ -1812,6 +1813,8 @@ pub fn build_router(
         )
         .route("/terminal_kill", post(handlers::terminal::terminal_kill))
         .route("/terminal_list", post(handlers::terminal::terminal_list))
+        // tinysolver fork: Studio ops by registry id (`/api/studio/...`).
+        .merge(crate::studio_doors::api_routes())
         // Catch-all
         .fallback(api_not_found)
         .layer(middleware::from_fn(move |req, next| {
@@ -1926,6 +1929,8 @@ pub fn build_router(
     Router::new()
         .nest("/api", api)
         .merge(ws_route)
+        // tinysolver fork: HTTP MCP for Claude Desktop (token-protected).
+        .merge(crate::studio_doors::mcp_routes(token_for_mcp))
         // Published games: `/play/<slug>/`, public by design (a release), and
         // limited to build directories the user explicitly published.
         .merge(crate::content_publish::routes())
