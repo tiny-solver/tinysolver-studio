@@ -114,6 +114,9 @@ pub enum StudioOp {
     CardList,
     /// Write a picked style into the bible.
     StyleCardSave(crate::studio_flows::StyleCard),
+    /// One flow run as a model-pick comparison round, written into a
+    /// model-pick checkout (always dev-only) ([`crate::studio_export`]).
+    ExportRound(crate::studio_export::ExportRequest),
 }
 
 fn local_target() -> String {
@@ -286,6 +289,7 @@ pub async fn run(root: PathBuf, op: StudioOp) -> Value {
         StudioOp::RunCompare { flow, a, b } => studio_flows::door_run_compare(&root, &flow, &a, &b).await,
         StudioOp::CardList => studio_flows::door_card_list(&root).await,
         StudioOp::StyleCardSave(card) => studio_flows::save_style_card(&root, &card),
+        StudioOp::ExportRound(req) => crate::studio_export::export_round(&root, req).await,
         StudioOp::WriteFlow { flow } => {
             if !flow.is_object() {
                 return fail("flow must be an object");

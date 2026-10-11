@@ -1,5 +1,5 @@
 {
-  "$comment": "Studio 부품(op) 목록 — 정본. 입구(codeg-mcp 의 studio_* 도구 · studio CLI · 이후 HTTP API · HTTP MCP)는 모두 이 목록에서 만든다. op = StudioOp 의 serde 태그 · tool = MCP 도구 이름(null 이면 편집기 전용) · input/output = JSON Schema(project 는 입구가 붙인다) · changes = 바꾸는 것(files 프로젝트 문서 · assets 재료 · build 빌드 · release 밖으로 올림 · 빈 목록 = 읽기만) · uses = 밖으로 닿는 것(genai · blender · model(claude · codex CLI) · network · shell). 계획: my-devops docs/plans/tinysolver/studio-layers.md ①.",
+  "$comment": "Studio 부품(op) 목록 — 정본. 입구(codeg-mcp 의 studio_* 도구 · studio CLI · 이후 HTTP API · HTTP MCP)는 모두 이 목록에서 만든다. op = StudioOp 의 serde 태그 · tool = MCP 도구 이름(null 이면 편집기 전용) · input/output = JSON Schema(project 는 입구가 붙인다) · changes = 바꾸는 것(files 프로젝트 문서 · assets 재료 · build 빌드 · release 밖으로 올림 · outside 프로젝트 밖에 씀(model-pick 체크아웃 …) · 빈 목록 = 읽기만) · uses = 밖으로 닿는 것(genai · blender · model(claude · codex CLI) · network · shell). 계획: my-devops docs/plans/tinysolver/studio-layers.md ①.",
   "schema": 1,
   "groups": {
     "file": "파일",
@@ -8,7 +8,8 @@
     "render": "렌더",
     "build": "빌드",
     "model": "모델 1번",
-    "flow": "흐름"
+    "flow": "흐름",
+    "export": "내보내기"
   },
   "project": {
     "type": "string",
@@ -2162,6 +2163,118 @@
         "assets"
       ],
       "uses": []
+    },
+    {
+      "op": "export_round",
+      "tool": "studio_export_round",
+      "group": "export",
+      "title": "model-pick 판으로 내보내기",
+      "description": "Export one finished flow run (runs/<flow>/<run>/run.json) as a model-pick comparison round: rounds/<KST date>-<id>/round.json (shape model-pick-round/2) plus media/ in the model-pick checkout. Results are the run's generated pictures (model from each material's source, mapped to model-pick models.json ids), one input per prompt labelled by its condition, the scoring node's scores and the owner's pick. The round is always internal (dev only — the owner decides on making anything public) and says every output is AI-made; a codex line is the owner's personal subscription and is flagged never to go public. A task not in model-pick tasks.json or a model not in models.json stops the export with a note — add it there first (in the model-pick repo), or map a name with `models`. With check: true it runs model-pick tool/publish.sh --dry-run. It does not publish: the caller commits the round in the model-pick repo and runs tool/publish.sh on the LAN (Vault). Refuses a run that is still running.",
+      "input": {
+        "type": "object",
+        "required": [
+          "flow",
+          "run"
+        ],
+        "properties": {
+          "flow": {
+            "type": "string",
+            "description": "Flow id — runs/<flow>/ (letters, digits, - and _)."
+          },
+          "run": {
+            "type": "string",
+            "description": "Run id — runs/<flow>/<run>/."
+          },
+          "model_pick": {
+            "type": "string",
+            "description": "The model-pick checkout. Default $MODEL_PICK_DIR, else ~/tinysolver.me/model-pick."
+          },
+          "id": {
+            "type": "string",
+            "description": "Round id after the date. Default <flow>-<run without its date>."
+          },
+          "title": {
+            "type": "string"
+          },
+          "task": {
+            "type": "string",
+            "description": "model-pick task id. Default the flow's task, else text-to-image."
+          },
+          "models": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Run model names → model-pick models.json ids, for names that differ."
+          },
+          "overwrite": {
+            "type": "boolean",
+            "description": "Replace an existing round folder of the same id."
+          },
+          "check": {
+            "type": "boolean",
+            "description": "Run model-pick tool/publish.sh --dry-run after writing."
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "required": [
+          "ok",
+          "round",
+          "dir"
+        ],
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "round": {
+            "type": "string"
+          },
+          "dir": {
+            "type": "string"
+          },
+          "internal": {
+            "const": true
+          },
+          "inputs": {
+            "type": "integer"
+          },
+          "outputs": {
+            "type": "integer"
+          },
+          "models": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "personal_subscription": {
+            "type": "boolean",
+            "description": "A codex (owner's personal subscription) line is in the round."
+          },
+          "dry_run": {
+            "type": "object",
+            "properties": {
+              "ok": {
+                "type": "boolean"
+              },
+              "tail": {
+                "type": "string"
+              }
+            }
+          },
+          "next": {
+            "type": "string"
+          }
+        }
+      },
+      "changes": [
+        "outside"
+      ],
+      "uses": [
+        "shell"
+      ]
     }
   ]
 }
