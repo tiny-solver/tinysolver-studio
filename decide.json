@@ -144,13 +144,13 @@
       "id": "deco-game",
       "date": "2026-10-11",
       "from": "오너",
-      "status": "taken",
+      "status": "done",
       "text": "요즘 '○꾸'(다꾸 · 폰꾸 · 볼꾸 · 팔찌 · 키링) 유행을 디지털 게임으로 — 어디까지 꾸미기가 되나 · 어느 트렌드를 잡나 · 하나 골라 웹게임 시제품 → afterplay 에 올릴 zip. 다꾸 앱(별조각)과는 별개",
       "items": [
         "deco-game-src",
         "deco-game-try"
       ],
-      "note": "10-11 받음 — 리포트 http://research.home.codepoet.me/#field/deco-game-trends-172c : 권장 '참 꿰기'(키링 → 백꾸 → 볼꾸 → 디꾸 — 대상만 바뀌고 동작은 같다 · 비즈 · 키링 게임은 빈자리). 시제품 「참참 공방」 zip 은 linux-1 ~/workspaces/tinysolver-studio-contents/charm-studio.zip(afterplay bundle 검사 · sandbox SDK 통과). 다꾸는 일부러 뺐다 — 별조각에 넘길 요청 없음"
+      "note": "10-11 받음 — 리포트 http://research.home.codepoet.me/#field/deco-game-trends-172c : 권장 '참 꿰기'(키링 → 백꾸 → 볼꾸 → 디꾸 — 대상만 바뀌고 동작은 같다 · 비즈 · 키링 게임은 빈자리). 시제품 「참참 공방」 zip 은 linux-1 ~/workspaces/tinysolver-studio-contents/charm-studio.zip(afterplay bundle 검사 · sandbox SDK 통과). 다꾸는 일부러 뺐다 — 별조각에 넘길 요청 없음 · 10-11 끝 — 오너 한 판: 노잼, 따로 만든다(deco-game-try done)"
     }
   ],
   "topics": [
@@ -1737,7 +1737,7 @@
       "id": "deco-game-try",
       "topic": "afterplay",
       "p": 2,
-      "status": "todo",
+      "status": "done",
       "role": "제품",
       "asked": "2026-10-11",
       "goal": "안 적음",
@@ -1748,7 +1748,7 @@
       "learn": [],
       "q": "참참 공방을 afterplay qa #make 에 올려 폰으로 한 판",
       "want": "폰 세로 · 터치로 손님 3명 한 판(1~3분)이 돌고 '채널에 쓰기' 띠가 뜬다 · 손맛(구슬 크기 · 딸깍 소리 · 45초)을 보고 v2(받침 팩 · 해금 참 · 투표)를 정한다",
-      "now": "10-11 qa 에 올림(publish.sh · 심사 대기) — qa 백오피스 › 커뮤니티 › 게임 심사 에서 '공개' 하면 afterplay-qa 에서 폰으로 한 판. 소스 tiny-solver/games games/charm-studio",
+      "now": "10-11 오너 확인 — 참참 공방 공개 · 한 판 해 봄. 판정 '노잼' → v2 는 안 만들고 오너가 따로 만든다. 에이전트 올리기 길(afterplay #116 · #117 — 백오피스 API · MCP, 판은 늘 심사 대기)은 남는다",
       "action": "qa 백오피스 게임 심사 › 참참 공방 '공개' → afterplay-qa.tinysolver.me '게임' 에서 폰으로 한 판",
       "needs": [],
       "unblocks": [],
