@@ -106,7 +106,7 @@ pub struct SheetResult {
     pub score: Option<f64>,
     #[serde(default)]
     pub why: Option<String>,
-    /// The owner picked this one (a `human` node).
+    /// Picked on a `human` node's card.
     #[serde(default)]
     pub picked: bool,
     /// What was actually sent to the model.
@@ -139,6 +139,10 @@ pub struct Sheet {
     /// The judging model, when results carry scores.
     #[serde(default)]
     pub judge: Option<String>,
+    /// The notes left with the picks — shown with the verdict, so a test
+    /// answer reads as one.
+    #[serde(default)]
+    pub pick_notes: Vec<String>,
     #[serde(default)]
     pub notes: Vec<String>,
 }
@@ -428,8 +432,8 @@ pub fn write_round(sheet: &Sheet, base: &Path, req: &ExportRequest, mp: &Path) -
     }
     if picked_any {
         checks.push(
-            json!({ "id": "picked", "by": "human", "name": "대표님 고름",
-            "short": "고름", "desc": "흐름의 고르기 노드에서 대표님이 고른 것", "pass": 1 }),
+            json!({ "id": "picked", "by": "human", "name": "고르기 카드에서 고름",
+            "short": "고름", "desc": "흐름의 고르기 카드에서 사람이 고른 것(답한 사람은 실행 기록에 없다 — 메모를 함께 본다)", "pass": 1 }),
         );
     }
 
@@ -498,7 +502,12 @@ pub fn write_round(sheet: &Sheet, base: &Path, req: &ExportRequest, mp: &Path) -
             .filter(|r| r.picked)
             .map(|r| format!("{} × {}", kind(&r.input), map_model(&r.model)))
             .collect::<Vec<_>>();
-        format!("대표님이 고른 것: {}", p.join(" · "))
+        let note = if sheet.pick_notes.is_empty() {
+            String::new()
+        } else {
+            format!(" — 메모: {}", sheet.pick_notes.join(" · "))
+        };
+        format!("고르기 카드에서 고른 것: {}{note}", p.join(" · "))
     } else if let Some(p) = &pick {
         format!("채점 AI 평균 점수가 가장 높은 모델: {p} (운영자 확인 전)")
     } else {
@@ -550,7 +559,7 @@ pub fn write_round(sheet: &Sheet, base: &Path, req: &ExportRequest, mp: &Path) -
     round.insert(
         "verdict_by".into(),
         json!(if picked_any {
-            "대표님 고름"
+            "고르기 카드 답(사람)"
         } else {
             "AI 보조 판정 · 운영자 확인 전"
         }),
@@ -835,13 +844,15 @@ pub fn sheet_from_run(run: &Value) -> Result<Sheet, String> {
     }
     for (i, p) in prompts.iter().enumerate() {
         let same: Vec<&Found> = found.iter().filter(|f| &f.prompt == p).collect();
-        let shared: Vec<String> = same[0]
-            .labels
-            .iter()
-            .filter(|l| same.iter().all(|f| f.labels.contains(l)))
-            .filter(|l| !same.iter().any(|f| &&f.result.model == l))
-            .cloned()
-            .collect();
+        let mut shared: Vec<String> = Vec::new();
+        for l in &same[0].labels {
+            if same.iter().all(|f| f.labels.contains(l))
+                && !same.iter().any(|f| &f.result.model == l)
+                && !shared.contains(l)
+            {
+                shared.push(l.clone());
+            }
+        }
         let kind = if shared.is_empty() {
             format!("넣은 것 {}", i + 1)
         } else {
@@ -898,6 +909,7 @@ pub fn sheet_from_run(run: &Value) -> Result<Sheet, String> {
     }
 
     // picks — the answers to human cards
+    let mut pick_notes = Vec::new();
     if let Some(answers) = run["answers"].as_object() {
         for a in answers.values() {
             let mut picks: Vec<(Value, Option<u64>)> = Vec::new();
@@ -913,6 +925,9 @@ pub fn sheet_from_run(run: &Value) -> Result<Sheet, String> {
                     let item = items.and_then(|v| v.get(k)).cloned().unwrap_or(Value::Null);
                     picks.push((item, i.as_u64()));
                 }
+            }
+            if let Some(n) = s(a, "note").filter(|n| !n.trim().is_empty()) {
+                pick_notes.push(n);
             }
             for (item, index) in picks {
                 if let Some(t) = target(&item, &results, index) {
@@ -984,12 +999,19 @@ pub fn sheet_from_run(run: &Value) -> Result<Sheet, String> {
         run: run_id,
         date: kst_date(run["started_at"].as_str()),
         want: want_line,
-        task: s(flow_doc, "task"),
+        // a picture drawn from a reference is Image-to-Image in model-pick
+        task: s(flow_doc, "task").or_else(|| {
+            inputs
+                .iter()
+                .any(|i| !i.refs.is_empty())
+                .then(|| "text+image-to-image".to_string())
+        }),
         conditions,
         refs,
         inputs,
         results,
         judge,
+        pick_notes,
         notes,
     })
 }
@@ -1095,13 +1117,13 @@ mod tests {
         std::fs::write(dir.join("tool/publish.sh"), "echo ok\n").unwrap();
         std::fs::write(
             dir.join("tasks.json"),
-            r#"{"tasks":[{"id":"text-to-image"},{"id":"text-to-text"}]}"#,
+            r#"{"tasks":[{"id":"text-to-image"},{"id":"text+image-to-image"},{"id":"text-to-text"}]}"#,
         )
         .unwrap();
         std::fs::write(
             dir.join("models.json"),
-            r#"{"models":[{"id":"qwen-image-2.1","tasks":["text-to-image"]},
-                {"id":"codex-imagegen","tasks":["text-to-image"]},
+            r#"{"models":[{"id":"qwen-image-2.1","tasks":["text-to-image","text+image-to-image"]},
+                {"id":"codex-imagegen","tasks":["text-to-image","text+image-to-image"]},
                 {"id":"claude-opus","tasks":["text-to-text"]}]}"#,
         )
         .unwrap();
@@ -1134,7 +1156,7 @@ mod tests {
         std::fs::write(dir.join("assets/refs/crayon.jpg"), b"img").unwrap();
         let q = json!({ "provider": "comfyui", "workflow": "qwen-image-21-rgba" });
         let c = json!({ "provider": "codex" });
-        let item = |cond: &str, model: &str, i: u64| json!({ "cond": { "name": cond }, "model": model, "index": i, "make": { "ok": true } });
+        let item = |cond: &str, model: &str, i: u64| json!({ "cond": { "name": cond }, "card": { "style": cond, "model": model }, "model": model, "index": i, "make": { "ok": true } });
         let run = json!({
             "schema": 1, "id": RUN, "flow": "style-find", "status": "done",
             "want": { "text": "꿀꿀이 그림체를 찾는다", "good": ["손맛"], "bad": [] },
@@ -1160,7 +1182,7 @@ mod tests {
                 { "key": "pick", "node": "pick", "kind": "human", "status": "done", "who": "human",
                   "started_at": "2026-10-11T16:02:00Z", "output": null }
             ],
-            "answers": { "pick": { "index": 0, "item": { "path": "assets/generated/images/b-c.png" } } }
+            "answers": { "pick": { "index": 0, "item": { "path": "assets/generated/images/b-c.png" }, "note": "결이 좋다" } }
         });
         std::fs::write(
             run_dir.join("run.json"),
@@ -1197,7 +1219,8 @@ mod tests {
         assert!(r["internal_note"].as_str().unwrap().contains(AI_MADE));
         assert!(r["internal_note"].as_str().unwrap().contains("codex"));
         assert!(r["summary"].as_str().unwrap().contains(AI_MADE));
-        assert_eq!(r["workflow"]["task"], "text-to-image");
+        // a reference picture went in → Image-to-Image
+        assert_eq!(r["workflow"]["task"], "text+image-to-image");
         assert_eq!(r["workflow"]["name"], "그림체 찾기");
         assert_eq!(r["workflow"]["desc"], "꿀꿀이 그림체를 찾는다");
         assert_eq!(r["workflow"]["conditions"], json!(["연필", "크레용"]));
@@ -1210,8 +1233,11 @@ mod tests {
         );
         assert!(dir.join("media/i2-ref-1.jpg").is_file());
         assert_eq!(r["pick"], "codex-imagegen");
-        assert_eq!(r["verdict_by"], "대표님 고름");
-        assert_eq!(r["verdict"], "대표님이 고른 것: 크레용 × codex-imagegen");
+        assert_eq!(r["verdict_by"], "고르기 카드 답(사람)");
+        assert_eq!(
+            r["verdict"],
+            "고르기 카드에서 고른 것: 크레용 × codex-imagegen — 메모: 결이 좋다"
+        );
         let outs = r["outputs"].as_array().unwrap();
         assert_eq!(outs.len(), 4);
         // each order: gen[0] qwen · gen[1] codex · …
