@@ -283,6 +283,7 @@ async fn parallel_if_and_repeat() {
     assert!(run.nodes.iter().all(|n| n.key != "pick.no"));
     assert_eq!(node(&run, "loop").output["rounds"], json!(3));
     assert_eq!(node(&run, "loop#2.step").input, json!({ "round": 2 }));
+    assert!(run.cost_usd.is_sign_positive(), "a run with no cost records 0, not -0");
 }
 
 #[tokio::test]

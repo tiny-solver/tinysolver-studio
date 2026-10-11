@@ -724,7 +724,8 @@ impl RunRecord {
             .iter()
             .filter(|n| n.reused_from.is_none())
             .filter_map(|n| n.cost_usd)
-            .sum()
+            // An empty f64 sum is -0.0; a run that cost nothing records 0.
+            .fold(0.0, |a, c| a + c)
     }
 }
 
