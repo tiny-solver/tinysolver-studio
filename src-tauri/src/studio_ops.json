@@ -1599,6 +1599,569 @@
       "uses": [
         "model"
       ]
+    },
+    {
+      "op": "flow_list",
+      "tool": "studio_flow_list",
+      "group": "flow",
+      "title": "흐름 목록",
+      "description": "List the flows of the Tinysolver Studio content project: flows/<id>.flow.json — documents that wire Studio parts (ops), model calls and human checks into one job (sequence, parallel, each-item fan-out, if, repeat). Each with its id, title, the `want` line, its input names, node count and `issues` (a flow with issues can't run). Read-only.",
+      "input": {
+        "type": "object",
+        "properties": {}
+      },
+      "output": {
+        "type": "object",
+        "required": [
+          "ok",
+          "flows"
+        ],
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "flows": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "description": "{ id, title, want, inputs[], nodes, issues[] }"
+            }
+          },
+          "dir": {
+            "type": "string"
+          }
+        }
+      },
+      "changes": [],
+      "uses": []
+    },
+    {
+      "op": "flow_get",
+      "tool": "studio_flow_get",
+      "group": "flow",
+      "title": "흐름 읽기",
+      "description": "Read one flow document with its problems (`issues`). Read it before changing a flow or starting a run so you use its real input names. Read-only.",
+      "input": {
+        "type": "object",
+        "required": [
+          "flow"
+        ],
+        "properties": {
+          "flow": {
+            "type": "string",
+            "description": "Flow id — the file flows/<id>.flow.json."
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "required": [
+          "ok",
+          "flow",
+          "issues"
+        ],
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "flow": {
+            "type": "object",
+            "description": "A flow document: { schema: 1, id, title?, want: { text, good[], bad[] }, inputs: { name: default }, steps: [node], output? }. Node: { id, kind, note?, keep_going? } plus by kind — op: { op, args } · model: { op? (default model_once), args } · human: { ask, show (items on the card), pick: one|many|text|ok } · flow: { flow, inputs } · set: { value } · seq: { steps } · parallel: { branches: [[node]] } · each: { over: list or { name: list } (their product), as?, steps, limit? } · if: { when, then, else } · repeat: { max, until?, steps } · agent (L4, not yet). Arguments reach earlier results with ${...}: ${inputs.x}, ${node.output.field}, ${each_node.*.inner.path}; inside each the bound names and ${index}; inside repeat ${round} and ${prev}. A condition is { left, op: eq|ne|gt|gte|lt|lte|exists|truthy|falsy|in, right } or { all: [..] } · { any: [..] } · { not: .. }."
+          },
+          "issues": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "path": {
+            "type": "string"
+          }
+        }
+      },
+      "changes": [],
+      "uses": []
+    },
+    {
+      "op": "flow_put",
+      "tool": "studio_flow_put",
+      "group": "flow",
+      "title": "흐름 쓰기",
+      "description": "Write a flow document to flows/<id>.flow.json (creates or replaces it). It is checked first and refused with its `issues` if it could not run (unique node ids, a `want` line, known kinds). Start every flow with `want`: what is wanted in one line, with good and bad examples — runs are judged against it.",
+      "input": {
+        "type": "object",
+        "required": [
+          "flow"
+        ],
+        "properties": {
+          "flow": {
+            "type": "object",
+            "description": "A flow document: { schema: 1, id, title?, want: { text, good[], bad[] }, inputs: { name: default }, steps: [node], output? }. Node: { id, kind, note?, keep_going? } plus by kind — op: { op, args } · model: { op? (default model_once), args } · human: { ask, show (items on the card), pick: one|many|text|ok } · flow: { flow, inputs } · set: { value } · seq: { steps } · parallel: { branches: [[node]] } · each: { over: list or { name: list } (their product), as?, steps, limit? } · if: { when, then, else } · repeat: { max, until?, steps } · agent (L4, not yet). Arguments reach earlier results with ${...}: ${inputs.x}, ${node.output.field}, ${each_node.*.inner.path}; inside each the bound names and ${index}; inside repeat ${round} and ${prev}. A condition is { left, op: eq|ne|gt|gte|lt|lte|exists|truthy|falsy|in, right } or { all: [..] } · { any: [..] } · { not: .. }."
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "required": [
+          "ok",
+          "path",
+          "flow"
+        ],
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "path": {
+            "type": "string"
+          },
+          "flow": {
+            "type": "string"
+          }
+        }
+      },
+      "changes": [
+        "files"
+      ],
+      "uses": []
+    },
+    {
+      "op": "flow_run",
+      "tool": "studio_flow_run",
+      "group": "flow",
+      "title": "흐름 돌리기",
+      "description": "Run a flow. Every node's input, output, who answered, time and cost are recorded in runs/<flow>/<run>/run.json. A `human` node stops the run with a card (card_list, run_answer). Without `wait` it runs in the background — follow it with run_get. Generation and model nodes cost time and money: say what the run will do before starting a big one.",
+      "input": {
+        "type": "object",
+        "required": [
+          "flow"
+        ],
+        "properties": {
+          "flow": {
+            "type": "string",
+            "description": "Flow id — the file flows/<id>.flow.json."
+          },
+          "inputs": {
+            "type": "object",
+            "description": "Overrides of the flow's inputs."
+          },
+          "from_run": {
+            "type": "string",
+            "description": "An earlier run of this flow to start from: every node whose definition and input are unchanged reuses that run's output (no new call, no new cost), and its answered cards stay answered while they ask the same. Change one node, run from the last run, then run_compare the two."
+          },
+          "label": {
+            "type": "string",
+            "description": "A line on what this run tries differently."
+          },
+          "wait": {
+            "type": "boolean",
+            "description": "Wait until it finishes or stops at a human card. Default false: answer at once with the run id and run in the background."
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "required": [
+          "ok",
+          "flow",
+          "run",
+          "status"
+        ],
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "flow": {
+            "type": "string"
+          },
+          "run": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "output": {},
+          "waiting": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "description": "{ key, ask, show, pick: one|many|text|ok, since }"
+            }
+          },
+          "cost_usd": {
+            "type": "number"
+          },
+          "ms": {
+            "type": "integer"
+          },
+          "note": {
+            "type": "string"
+          }
+        }
+      },
+      "changes": [
+        "files",
+        "assets"
+      ],
+      "uses": [
+        "genai",
+        "shell",
+        "network"
+      ]
+    },
+    {
+      "op": "run_list",
+      "tool": "studio_run_list",
+      "group": "flow",
+      "title": "실행 목록",
+      "description": "List flow runs, newest first, with status (running · waiting · done · failed), cost, time and any card they wait on. Read-only.",
+      "input": {
+        "type": "object",
+        "properties": {
+          "flow": {
+            "type": "string",
+            "description": "Only this flow's runs. Omit for all."
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "required": [
+          "ok",
+          "runs"
+        ],
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "runs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "description": "{ flow, run, status, label, want, from_run, started_at, ended_at, ms, cost_usd, nodes, waiting: [{ key, ask }], note }"
+            }
+          }
+        }
+      },
+      "changes": [],
+      "uses": []
+    },
+    {
+      "op": "run_get",
+      "tool": "studio_run_get",
+      "group": "flow",
+      "title": "실행 기록 읽기",
+      "description": "Read one run's record: the flow as it was, the inputs, and per node what went in, what came out, who answered (op, claude/model, human), how long and what it cost, plus the cards it waits on. Read-only.",
+      "input": {
+        "type": "object",
+        "required": [
+          "flow",
+          "run"
+        ],
+        "properties": {
+          "flow": {
+            "type": "string",
+            "description": "Flow id — the file flows/<id>.flow.json."
+          },
+          "run": {
+            "type": "string",
+            "description": "Run id, e.g. 20261011-231500-ab12 (run_list shows them)."
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "required": [
+          "ok",
+          "run"
+        ],
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "run": {
+            "type": "object",
+            "description": "runs/<flow>/<run>/run.json: { id, flow, status: running|waiting|done|failed, want, inputs, flow_doc, from_run?, label?, started_at, ended_at?, ms, cost_usd, nodes: [{ key, node, kind, status, input, output, who, started_at, ms, cost_usd?, log[], note?, reused_from? }], waiting: [card], answers, output, note? }. A node key tells copies apart: gens[2].img (third item of each `gens`), loop#1.x (second round), sub>x (inside flow node `sub`)."
+          }
+        }
+      },
+      "changes": [],
+      "uses": []
+    },
+    {
+      "op": "run_answer",
+      "tool": "studio_run_answer",
+      "group": "flow",
+      "title": "카드에 답하기",
+      "description": "Answer a card a run is waiting on — the person's pick, never your own guess: ask the user, show them the card's items, and pass what they chose. The run then goes on from where it stopped; finished nodes are not called again.",
+      "input": {
+        "type": "object",
+        "required": [
+          "flow",
+          "run",
+          "key",
+          "answer"
+        ],
+        "properties": {
+          "flow": {
+            "type": "string",
+            "description": "Flow id — the file flows/<id>.flow.json."
+          },
+          "run": {
+            "type": "string",
+            "description": "Run id, e.g. 20261011-231500-ab12 (run_list shows them)."
+          },
+          "key": {
+            "type": "string",
+            "description": "The card's key (card_list · run_get waiting[].key)."
+          },
+          "answer": {
+            "description": "pick one: the item's index (0-based) or { index, note } · many: [indexes] or { indexes, note } · text: \"…\" or { text } · ok: true/false or { ok, note }. `note` (why) is kept with the answer."
+          },
+          "wait": {
+            "type": "boolean",
+            "description": "Wait until the run finishes or stops again. Default false."
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "required": [
+          "ok",
+          "flow",
+          "run",
+          "status"
+        ],
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "flow": {
+            "type": "string"
+          },
+          "run": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "output": {},
+          "waiting": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "description": "{ key, ask, show, pick: one|many|text|ok, since }"
+            }
+          },
+          "cost_usd": {
+            "type": "number"
+          },
+          "ms": {
+            "type": "integer"
+          },
+          "note": {
+            "type": "string"
+          }
+        }
+      },
+      "changes": [
+        "files",
+        "assets"
+      ],
+      "uses": [
+        "genai",
+        "shell",
+        "network"
+      ]
+    },
+    {
+      "op": "run_compare",
+      "tool": "studio_run_compare",
+      "group": "flow",
+      "title": "실행 둘 나란히",
+      "description": "Two runs of one flow side by side, node by node: which nodes the flow changed between them, which inputs changed, and both outputs — the 'want → try → what changed → result' trail. Read-only.",
+      "input": {
+        "type": "object",
+        "required": [
+          "flow",
+          "a",
+          "b"
+        ],
+        "properties": {
+          "flow": {
+            "type": "string",
+            "description": "Flow id — the file flows/<id>.flow.json."
+          },
+          "a": {
+            "type": "string",
+            "description": "Run id, e.g. 20261011-231500-ab12 (run_list shows them)."
+          },
+          "b": {
+            "type": "string",
+            "description": "Run id, e.g. 20261011-231500-ab12 (run_list shows them)."
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "required": [
+          "ok",
+          "rows"
+        ],
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "a": {
+            "type": "object"
+          },
+          "b": {
+            "type": "object"
+          },
+          "want_changed": {
+            "type": "boolean"
+          },
+          "inputs_changed": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "nodes_changed": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "rows": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "description": "{ key, node, flow_changed, input_changed, output_changed, a: side?, b: side? } — side = { status, input, output, who, ms, cost_usd, note, reused_from }"
+            }
+          }
+        }
+      },
+      "changes": [],
+      "uses": []
+    },
+    {
+      "op": "card_list",
+      "tool": "studio_card_list",
+      "group": "flow",
+      "title": "기다리는 카드",
+      "description": "Every human card a run is waiting on in this project — what to ask the user. Show `ask` and the `show` items (pictures are project-relative paths), then pass their pick to run_answer. Read-only.",
+      "input": {
+        "type": "object",
+        "properties": {}
+      },
+      "output": {
+        "type": "object",
+        "required": [
+          "ok",
+          "cards"
+        ],
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "cards": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "description": "{ flow, run, want, card: { key, ask, show, pick, since } }"
+            }
+          }
+        }
+      },
+      "changes": [],
+      "uses": []
+    },
+    {
+      "op": "style_card_save",
+      "tool": "studio_style_card_save",
+      "group": "flow",
+      "title": "그림체 카드 저장",
+      "description": "Write a picked picture style into the project's bible as a card (bible/styles/<slug>.md, pictures copied under assets/styles/<slug>/): name, pictures, prompt, model, why it was picked, the materials and scores, and the run it came from. A card written by hand is never overwritten.",
+      "input": {
+        "type": "object",
+        "required": [
+          "slug",
+          "name"
+        ],
+        "properties": {
+          "slug": {
+            "type": "string",
+            "description": "bible/styles/<slug>.md — a-z, 0-9, -, _."
+          },
+          "name": {
+            "type": "string",
+            "description": "The style's name for people."
+          },
+          "prompt": {
+            "type": "string",
+            "description": "The prompt or condition that made it."
+          },
+          "negative": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string",
+            "description": "Model or workflow that made it."
+          },
+          "images": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Pictures, project-relative; copied to assets/styles/<slug>/."
+          },
+          "why": {
+            "type": "string",
+            "description": "Why it was picked, in the picker's words."
+          },
+          "refs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Materials it was drawn from."
+          },
+          "score": {
+            "description": "Scores and notes from judging."
+          },
+          "run": {
+            "type": "string",
+            "description": "<flow>/<run> it came from."
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "required": [
+          "ok",
+          "card",
+          "images"
+        ],
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "card": {
+            "type": "string"
+          },
+          "images": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "changes": [
+        "files",
+        "assets"
+      ],
+      "uses": []
     }
   ]
 }

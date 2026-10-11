@@ -130,6 +130,16 @@ pub fn op_name(op: &StudioOp) -> &'static str {
         StudioOp::ApplySetCommands { .. } => "apply_set_commands",
         StudioOp::RenderSet(_) => "render_set",
         StudioOp::ModelOnce(_) => "model_once",
+        StudioOp::FlowList => "flow_list",
+        StudioOp::FlowGet { .. } => "flow_get",
+        StudioOp::FlowPut { .. } => "flow_put",
+        StudioOp::FlowRun(_) => "flow_run",
+        StudioOp::RunList { .. } => "run_list",
+        StudioOp::RunGet { .. } => "run_get",
+        StudioOp::RunAnswer(_) => "run_answer",
+        StudioOp::RunCompare { .. } => "run_compare",
+        StudioOp::CardList => "card_list",
+        StudioOp::StyleCardSave(_) => "style_card_save",
     }
 }
 

@@ -1,0 +1,162 @@
+{
+  "schema": 1,
+  "id": "style-find",
+  "title": "그림체 찾기",
+  "want": {
+    "text": "우리 콘텐츠에 쓸 그림체 하나 — 같은 대상을 그림체 n개 × 모델로 그려 보고, 채점과 대표님 눈으로 하나를 골라 bible 에 남긴다",
+    "good": [
+      "참고 그림의 그리는 법(선 · 칠 · 색 · 질감)이 그대로 산다",
+      "대상(subject)이 한눈에 읽힌다 — 귀엽고 따뜻하다",
+      "여러 장면에 다시 써도 같은 그림체로 나올 것 같다"
+    ],
+    "bad": [
+      "참고 그림의 인물 · 내용을 베낀다",
+      "글자 · 말풍선 · 워터마크가 들어간다",
+      "그림체가 섞여 어느 쪽도 아니다"
+    ]
+  },
+  "inputs": {
+    "subject": "A small round puppy character waving one paw and smiling, full body, plain light background",
+    "styles": [
+      {
+        "id": "ggul-crayon",
+        "name": "꿀꿀 연필 · 크레용",
+        "ref": "ref-ggul-crayon",
+        "prompt": "Picture-book illustration in colored pencil and wax crayon on warm cream paper: visible hatched crayon strokes, soft pencil outlines, gentle muted colors, cozy and hand-made."
+      },
+      {
+        "id": "hb-flat-sticker",
+        "name": "현생배틀 B 플랫 스티커",
+        "ref": "ref-hb-flat-sticker",
+        "prompt": "Flat sticker art: thick black outlines, white sticker border, flat fills in coral, yellow and navy on a cream background, no gradients."
+      },
+      {
+        "id": "nyam-pastel-lowpoly",
+        "name": "냠냠 구멍 파스텔 로우폴리",
+        "ref": "ref-nyam-pastel-lowpoly",
+        "prompt": "Cute pastel low-poly 3D toy, faceted flat-shaded surfaces with vertex colors, soft sky-blue light, like a tiny toy-town figure."
+      },
+      {
+        "id": "bb-round-rough",
+        "name": "brand-booster 동글동글 러프",
+        "ref": "ref-bb-round-rough",
+        "prompt": "Rough storyboard sketch, loose pencil lines on white paper, grayscale with one small teal accent, round head and dot eyes, cute and soft."
+      }
+    ],
+    "models": [
+      { "id": "codex", "label": "gpt-image-2 (codex)", "provider": "codex" },
+      {
+        "id": "qwen",
+        "label": "qwen-image refs (comfyui)",
+        "provider": "comfyui",
+        "workflow": "qwen-image-21-refs"
+      }
+    ],
+    "judge": "claude"
+  },
+  "steps": [
+    {
+      "id": "materials",
+      "kind": "op",
+      "op": "list_assets",
+      "note": "재료 — 참고 그림(ref-*)이 재료 목록에 있어야 한다"
+    },
+    {
+      "id": "gens",
+      "kind": "each",
+      "over": { "style": "${inputs.styles}", "model": "${inputs.models}" },
+      "limit": 4,
+      "note": "조건 n × 모델 — 같은 대상, 그림체 한 줄과 참고 그림만 바꾼다",
+      "steps": [
+        {
+          "id": "img",
+          "kind": "model",
+          "op": "generate_asset",
+          "keep_going": true,
+          "args": {
+            "kind": "image",
+            "provider": "${model.provider}",
+            "workflow": "${model.workflow}",
+            "model": "${model.model}",
+            "from": "${style.ref}",
+            "id": "style-${style.id}-${model.id}",
+            "prompt": "${style.prompt} Subject: ${inputs.subject} Draw it in the art style of the reference picture <image1> — take only its way of drawing (line, fill, colour, texture), not its characters, objects, layout or content. No text, no letters, no watermark."
+          }
+        },
+        {
+          "id": "card",
+          "kind": "set",
+          "value": {
+            "path": "${img.path}",
+            "style_id": "${style.id}",
+            "style": "${style.name}",
+            "model_id": "${model.id}",
+            "model": "${model.label}",
+            "prompt": "${style.prompt}",
+            "ref": "${style.ref}"
+          }
+        }
+      ]
+    },
+    {
+      "id": "made",
+      "kind": "set",
+      "note": "그려진 것만 — 실패한 칸은 빼고 채점 · 고르기에 넘긴다",
+      "value": "${gens.*.card}",
+      "keep": { "left": "${item.path}", "op": "exists" }
+    },
+    {
+      "id": "score",
+      "kind": "model",
+      "args": {
+        "agent": "${inputs.judge}",
+        "prompt": "You judge picture styles. Wanted: ${want.text}\nGood: ${want.good}\nBad: ${want.bad}\nThe attached pictures are, in order (index: style · model): ${made}\nScore each 0-10 against the wanted, in that order, with one short reason (Korean). Give the path you were given for each. `best` is the index of the best one.",
+        "images": "${made.*.path}",
+        "schema": {
+          "type": "object",
+          "required": ["scores", "best"],
+          "properties": {
+            "scores": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["index", "path", "score", "why"],
+                "properties": {
+                  "index": { "type": "integer" },
+                  "path": { "type": "string" },
+                  "score": { "type": "number" },
+                  "why": { "type": "string" }
+                }
+              }
+            },
+            "best": { "type": "integer" }
+          }
+        }
+      }
+    },
+    {
+      "id": "pick",
+      "kind": "human",
+      "ask": "그림체 하나를 골라 주세요 — 채점 1등은 ${score.output.best}번. 왜 골랐는지 한 줄 적어 주시면 bible 카드에 남습니다.",
+      "show": "${made}",
+      "pick": "one"
+    },
+    {
+      "id": "save",
+      "kind": "op",
+      "op": "style_card_save",
+      "args": {
+        "slug": "${pick.item.style_id}-${pick.item.model_id}",
+        "name": "${pick.item.style}",
+        "prompt": "${pick.item.prompt}",
+        "model": "${pick.item.model}",
+        "images": ["${pick.item.path}"],
+        "why": "${pick.note}",
+        "refs": ["${pick.item.ref}"],
+        "score": "${score.output}",
+        "run": "${run.flow}/${run.id}"
+      }
+    }
+  ],
+  "output": { "picked": "${pick.item}", "card": "${save.card}" }
+}
