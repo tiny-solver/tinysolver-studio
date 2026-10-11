@@ -852,6 +852,13 @@ impl DelegationListener {
         let Some(entry) = self.tokens.lookup(&req.token).await else {
             return serde_json::json!({ "ok": false, "note": "invalid token" });
         };
+        // tinysolver fork: a flow's agent node may call its listed parts only.
+        if !crate::studio_agent_node::token_allows(&req.token, &req.op) {
+            return serde_json::json!({
+                "ok": false,
+                "note": "이 흐름 노드에 주어지지 않은 부품이다 — 노드의 tools 목록 안의 부품만 쓴다",
+            });
+        }
         let root = req
             .project
             .map(std::path::PathBuf::from)

@@ -259,7 +259,10 @@ impl CompanionFeatures {
             // cannot leave the strongest tool as the only one present.
             "browser_eval" => self.browser && self.browser_eval,
             // The `studio_*` tools come from the Studio's op registry.
-            name if crate::studio_ops::is_mcp_tool(name) => self.studio,
+            // tinysolver fork: a flow's agent node lists its own parts only.
+            name if crate::studio_ops::is_mcp_tool(name) => {
+                self.studio && crate::studio_agent_node::companion_lists_tool(name)
+            }
             "delegate_to_agent" | "get_delegation_status" | "cancel_delegation"
             | "resume_delegation" => self.delegation,
             _ => false,
