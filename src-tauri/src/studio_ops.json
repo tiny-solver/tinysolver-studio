@@ -1,0 +1,1498 @@
+{
+  "$comment": "Studio 부품(op) 목록 — 정본. 입구(codeg-mcp 의 studio_* 도구 · studio CLI · 이후 HTTP API · HTTP MCP)는 모두 이 목록에서 만든다. op = StudioOp 의 serde 태그 · tool = MCP 도구 이름(null 이면 편집기 전용) · input/output = JSON Schema(project 는 입구가 붙인다) · changes = 바꾸는 것(files 프로젝트 문서 · assets 재료 · build 빌드 · release 밖으로 올림 · 빈 목록 = 읽기만) · uses = 밖으로 닿는 것(genai · blender · model(claude · codex CLI) · network · shell). 계획: my-devops docs/plans/tinysolver/studio-layers.md ①.",
+  "schema": 1,
+  "groups": {
+    "file": "파일",
+    "asset": "재료",
+    "generate": "생성",
+    "render": "렌더",
+    "build": "빌드",
+    "model": "모델 1번",
+    "flow": "흐름"
+  },
+  "project": {
+    "type": "string",
+    "description": "Absolute path of the content project root. Omit it: the default is this session's working directory, which is the project when you were opened in one."
+  },
+  "failure": {
+    "type": "object",
+    "required": [
+      "ok",
+      "note"
+    ],
+    "properties": {
+      "ok": {
+        "const": false
+      },
+      "note": {
+        "type": "string",
+        "description": "What went wrong, written for the caller to read and adjust."
+      }
+    }
+  },
+  "ops": [
+    {
+      "op": "list_scenes",
+      "tool": "studio_list_scenes",
+      "group": "file",
+      "title": "장면 목록",
+      "description": "List the game scenes of the Tinysolver Studio content project you are working in: the project name, its engine (id, version, entry html), the content directory, and every scene id/name/path under outputs/game/content/*.studio.json. Call this first whenever the user talks about the game, a scene, an object on screen, placement, or the Studio editor, so you address scenes by their real ids. Read-only.",
+      "input": {
+        "type": "object",
+        "properties": {}
+      },
+      "output": {
+        "type": "object",
+        "required": [
+          "ok",
+          "scenes"
+        ],
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "project": {
+            "type": "string"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "is_content_project": {
+            "type": "boolean"
+          },
+          "engine": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "version": {
+                "type": "string"
+              },
+              "entry": {
+                "type": "string"
+              }
+            }
+          },
+          "content_dir": {
+            "type": "string"
+          },
+          "scenes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "note": {
+            "type": "string",
+            "description": "A hint for the caller; empty when there is nothing to say."
+          }
+        }
+      },
+      "changes": [],
+      "uses": []
+    },
+    {
+      "op": "read_scene",
+      "tool": "studio_read_scene",
+      "group": "file",
+      "title": "장면 읽기",
+      "description": "Return one scene file as JSON: `document.container` (width/height in pixels, origin top-left, y down), `document.assets` (id, file relative to assets/, width, height, missing), `document.nodes` (id, parent, type sprite|rect|text|model, transform {x,y,w,h,anchor,z}, props such as asset/text/size/color/visible/interactive/onClick) and the engine-owned `logic` (actions the engine runs on click). Read it before changing a scene so your commands use existing ids and coordinates.",
+      "input": {
+        "type": "object",
+        "required": [
+          "scene"
+        ],
+        "properties": {
+          "scene": {
+            "type": "string",
+            "description": "Scene id — the file stem of outputs/game/content/<id>.studio.json (letters, digits, - and _). Get the ids from studio_list_scenes."
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "required": [
+          "ok",
+          "scene",
+          "path",
+          "file"
+        ],
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "scene": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "file": {
+            "type": "object",
+            "description": "The scene file: document {container, assets, nodes} and the engine-owned logic."
+          },
+          "note": {
+            "type": "string",
+            "description": "A hint for the caller; empty when there is nothing to say."
+          }
+        }
+      },
+      "changes": [],
+      "uses": []
+    },
+    {
+      "op": "apply_commands",
+      "tool": "studio_apply_scene_commands",
+      "group": "file",
+      "title": "장면 고치기(명령 배치)",
+      "description": "Edit a scene with a validated command batch and write it to disk — the same validator the Studio editor uses, applied atomically (one invalid command rejects the whole batch and nothing is written). The editor and the running game preview reload from disk on their own, so the user sees the result immediately. PREFER THIS over rewriting the .studio.json by hand for placement, visibility, text, color, add/remove/reorder: it keeps ids, bounds and anchors valid and preserves every field it does not know (logic, engine props). Edit files directly only for things the commands cannot express (new script or op code in outputs/game/src/, assets). Commands: {type:'node.update', id, transform?:{x?,y?,w?,h?,anchor?,z?}, props?:{...shallow merge}} · {type:'node.add', node:{id, parent?:'root'|<node id>, type:'sprite'|'rect'|'text'|'model', transform:{x,y,w,h,anchor?,z?}, props?}} · {type:'node.remove', id} (children go too) · {type:'node.reorder', id, direction:'forward'|'backward'} (to the very front/back) · {type:'scene.update', name} · {type:'action.set', name, steps:[{op, ...args, if?:{key, equals|atLeast|not}}]} (sets logic.actions[name]; built-in ops: toggle, setVisible, say, swapAsset, setText, move, set, add, goto, run, plus the project's own from src/main.js) · {type:'action.remove', name} · {type:'asset.set', asset:{id, file (relative to assets/), width, height}} (declare a material in document.assets, same id replaces — then a sprite can name it in props.asset; studio_list_assets has the files and sizes) · {type:'asset.remove', id} (refused while a node uses it). Behaviors: set props.script to a registered script name, {name, ...config}, or a list of them (built-ins: float, spin, pulse, blink, frames, mover; project scripts live in outputs/game/src/scripts/index.js); null removes it. Drawing props: visible, opacity, rotation (degrees), scale, flipX, tint. Coordinates are container pixels; anchor is top-left (default), center or bottom-center; a node with a parent is positioned relative to that parent's top-left. A sprite's props.asset names an entry of document.assets; a 'model' node draws a GLB asset (declare it with asset.set, file ending .glb) fitted into its box, turned by props.yaw / props.pitch (degrees) — the built-in behavior turntable {speed} spins it; props.onClick names a key of logic.actions.",
+      "input": {
+        "type": "object",
+        "required": [
+          "scene",
+          "commands"
+        ],
+        "properties": {
+          "scene": {
+            "type": "string",
+            "description": "Scene id — the file stem of outputs/game/content/<id>.studio.json (letters, digits, - and _). Get the ids from studio_list_scenes."
+          },
+          "commands": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 200,
+            "description": "The command batch, applied in order.",
+            "items": {
+              "type": "object"
+            }
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "required": [
+          "ok",
+          "scene",
+          "path",
+          "changed"
+        ],
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "scene": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "nodes": {
+            "type": "integer",
+            "description": "Nodes in the scene after the batch."
+          },
+          "changed": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Ids the batch touched."
+          },
+          "note": {
+            "type": "string",
+            "description": "A hint for the caller; empty when there is nothing to say."
+          }
+        }
+      },
+      "changes": [
+        "files"
+      ],
+      "uses": []
+    },
+    {
+      "op": "build",
+      "tool": "studio_build",
+      "group": "build",
+      "title": "게임 빌드",
+      "description": "Package the game as a deployable static build: runs the manifest's engine.build (when set), copies outputs/game and assets into build/game/v<N>-<timestamp>/ with a top-level index.html and build-info.json, and writes a zip next to it. Use it when the user asks to build, package, export, release or publish the game, after the changes they asked for are in place. Returns the version, directory and zip path.",
+      "input": {
+        "type": "object",
+        "properties": {}
+      },
+      "output": {
+        "type": "object",
+        "required": [
+          "ok",
+          "build"
+        ],
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "build": {
+            "type": "object",
+            "description": "build-info.json of the build.",
+            "properties": {
+              "version": {
+                "type": "string"
+              },
+              "built_at": {
+                "type": "string"
+              },
+              "engine": {
+                "type": "string"
+              },
+              "engine_version": {
+                "type": "string"
+              },
+              "entry": {
+                "type": "string"
+              },
+              "dir": {
+                "type": "string"
+              },
+              "zip": {
+                "type": "string"
+              },
+              "size_bytes": {
+                "type": "integer"
+              },
+              "log": {
+                "type": "string"
+              },
+              "target": {
+                "type": "string"
+              },
+              "published": {
+                "type": "array",
+                "items": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "note": {
+            "type": "string",
+            "description": "A hint for the caller; empty when there is nothing to say."
+          }
+        }
+      },
+      "changes": [
+        "build"
+      ],
+      "uses": [
+        "shell"
+      ]
+    },
+    {
+      "op": "publish",
+      "tool": "studio_publish",
+      "group": "build",
+      "title": "빌드 올리기",
+      "description": "Release a build of the game. `target: \"local\"` (default) publishes it on this Tinysolver Studio's own web address at /play/<project-slug>/ — no setup, the link stays the same across versions, and it is as public as the Studio's server is. `target: \"command\"` runs the project's `publish.command` from codeg-project.json (e.g. `npx wrangler pages deploy $CODEG_BUILD_DIR --project-name my-game`, `netlify deploy --prod --dir $CODEG_BUILD_DIR`, `butler push $CODEG_BUILD_ZIP user/game:html5`) and returns the URL that command printed; if the manifest has no publish.command the result says so — add one to the manifest (ask the user which host and account) rather than guessing. Publishes the newest build unless `version` is given; call studio_build first when the game changed since the last build. Use when the user asks to publish, release, deploy, ship or share the game.",
+      "input": {
+        "type": "object",
+        "properties": {
+          "target": {
+            "type": "string",
+            "enum": [
+              "local",
+              "command"
+            ],
+            "description": "Where to release. Defaults to local."
+          },
+          "version": {
+            "type": "string",
+            "description": "Build version such as v3-20260920-0101. Omit for the newest build."
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "required": [
+          "ok",
+          "version"
+        ],
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "published": {
+            "type": "object",
+            "properties": {
+              "target": {
+                "type": "string"
+              },
+              "url": {
+                "type": "string"
+              },
+              "at": {
+                "type": "string"
+              },
+              "log": {
+                "type": "string"
+              }
+            }
+          },
+          "version": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string",
+            "description": "A hint for the caller; empty when there is nothing to say."
+          }
+        }
+      },
+      "changes": [
+        "release"
+      ],
+      "uses": [
+        "shell"
+      ]
+    },
+    {
+      "op": "list_assets",
+      "tool": "studio_list_assets",
+      "group": "asset",
+      "title": "재료 목록",
+      "description": "List the materials of the Tinysolver Studio content project: every entry of assets/manifest.json (id, file relative to assets/, kind image|model, bytes, width/height for images, and `source` — where it came from: workflow, prompt, seed, the `from` material it was made from, the original url) plus whether the file is on disk, model numbers (triangles, vertices, textures [w,h], texture_max — read from the GLB), `unregistered` image/model files under assets/ that no entry names (register them with studio_import_asset `file`), and the project's connected generator (codeg-project.json `generate.url`, or null). Call it before generating or placing a material so you use real ids. Each entry also has `check`: findings against its `use` preset ({level: over|warn|info, code, value, limit, message} — e.g. too many triangles, texture or file too big, a transparent-workflow image that came back opaque); the result carries the preset table as `presets`. Read-only.",
+      "input": {
+        "type": "object",
+        "properties": {}
+      },
+      "output": {
+        "type": "object",
+        "required": [
+          "ok",
+          "assets"
+        ],
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "assets_dir": {
+            "type": "string"
+          },
+          "generator": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "assets": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "description": "One entry of assets/manifest.json: id, file (relative to assets/), kind, bytes, width/height, source (provenance), use, bones?"
+            }
+          },
+          "unregistered": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Files under assets/ no entry names."
+          },
+          "presets": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "description": "The use presets table."
+          },
+          "note": {
+            "type": "string",
+            "description": "A hint for the caller; empty when there is nothing to say."
+          }
+        }
+      },
+      "changes": [],
+      "uses": []
+    },
+    {
+      "op": "import_asset",
+      "tool": "studio_import_asset",
+      "group": "asset",
+      "title": "재료 가져오기",
+      "description": "Bring a generated or downloaded file into the project as a material: fetches `url` (http(s) or a base64 data: URL; png/jpg/webp/gif images, glb/gltf models), writes it under assets/ (default assets/generated/images or assets/generated/models), and registers it in assets/manifest.json with `source` — pass what made it (workflow, prompt, seed, from: the material id it was made from) so the material can be traced and remade. When the url is an output of the project's connected generator, the generator's copy is deleted after the import (the project keeps the file). Give `file` instead of `url` to register a file that is already under assets/. Use this after generating with your own image/3D tools (e.g. a genai generate_image / generate_3d result url). The Studio's material panel shows the new material at once.",
+      "input": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "The file to fetch: http(s) URL or base64 data: URL. Give this or `file`."
+          },
+          "id": {
+            "type": "string",
+            "description": "Material id (letters, digits, - and _). Default: from the file name; a taken id gets a -2 suffix."
+          },
+          "dir": {
+            "type": "string",
+            "description": "Folder under assets/ (e.g. characters/mina). Default by kind: generated/images or generated/models."
+          },
+          "source": {
+            "type": "object",
+            "description": "Provenance kept on the entry: workflow, prompt, seed, from (material id), params (target_faces, texture_size, …)."
+          },
+          "file": {
+            "type": "string",
+            "description": "A file already under assets/ (e.g. props/chest.glb) to register in place instead of fetching — for files you or the user put there. studio_list_assets lists these as `unregistered`."
+          },
+          "use": {
+            "type": "string",
+            "enum": [
+              "mobile-prop",
+              "mobile-character",
+              "roblox-meshpart",
+              "web-ar",
+              "pc-hero",
+              "print-3d"
+            ],
+            "description": "Where it will be used — one of mobile-prop (300–1.5k tris), mobile-character (3k–10k), roblox-meshpart (≤10k recommended, 21k cap), web-ar (30k–50k, texture ≤2048, ≤5MB), pc-hero (20k–100k), print-3d (100k+, closed mesh). studio_list_assets returns the full table as `presets` and judges each material against its `use` in `check`."
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "required": [
+          "ok",
+          "asset",
+          "path"
+        ],
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "asset": {
+            "type": "object",
+            "description": "One entry of assets/manifest.json: id, file (relative to assets/), kind, bytes, width/height, source (provenance), use, bones?"
+          },
+          "path": {
+            "type": "string",
+            "description": "Project-relative path of the file."
+          },
+          "remote_deleted": {
+            "type": "boolean",
+            "description": "The generator's copy was deleted after the import."
+          },
+          "check": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "level": {
+                  "type": "string",
+                  "enum": [
+                    "over",
+                    "warn",
+                    "info"
+                  ]
+                },
+                "code": {
+                  "type": "string"
+                },
+                "value": {},
+                "limit": {},
+                "message": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Findings against the material's `use` preset."
+          },
+          "note": {
+            "type": "string",
+            "description": "A hint for the caller; empty when there is nothing to say."
+          }
+        }
+      },
+      "changes": [
+        "assets"
+      ],
+      "uses": [
+        "network"
+      ]
+    },
+    {
+      "op": "generate_asset",
+      "tool": "studio_generate_asset",
+      "group": "generate",
+      "title": "재료 생성(genai)",
+      "description": "Make a new material with the project's connected generator (codeg-project.json `generate.url`, the genai API) and import it with its provenance — the same operations as the Studio material drawer's buttons. Kinds: `image` draws from `prompt` (default workflow qwen-image-21-rgba on the generator's GPU: a transparent PNG; with `from`, that image is the img2img source; `provider` + `model` draw it in the cloud instead — studio_generator_options lists the choices). `edit` redraws the image material `from` by `prompt` (qwen-image-21-edit; background cut away unless `transparent: false`) — e.g. restyle a render keyframe. `tpose` redraws a character image `from` standing in a T-pose (same outfit) — do this BEFORE `3d` for any character that will be rigged: a T-pose rigs cleanly far more often (5/6 vs 1/6 measured). `3d` lifts the image material `from` into a textured GLB (TRELLIS.2; `target_faces` 1000–2000000; `texture_size` 1024|2048|4096). `rig` puts a skeleton and skin weights into the model material `from` (one standing character, SkinTokens) → a rigged GLB; then studio_render `mode: walk` makes it walk. `video` animates the image material `from` as the first frame (MiniMax H3 i2v, ~1.5 min): `prompt` = the motion, the camera move, and a final `Audio: …` line; `duration` seconds (default 5), `width`/`height` (default 768). The shape and colours stay; the motion is drawn by the video model. Usual video path: image → (tpose) → 3d → (rig) → studio_render (turntable or walk) → video from a keyframe still. Takes a minute or more (3D ~2–10 min with a busy queue); the generator machine can be switched off — the result then says so. If no generator is connected the result says how to connect one; ask the user for the address.",
+      "input": {
+        "type": "object",
+        "required": [
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "image",
+              "edit",
+              "tpose",
+              "3d",
+              "rig",
+              "video"
+            ]
+          },
+          "from": {
+            "type": "string",
+            "description": "Id of the material fed in: an image (edit · tpose · 3d · video, optional for image) or a 3D model (rig)."
+          },
+          "prompt": {
+            "type": "string",
+            "description": "image: what to draw · edit: what to change · tpose: an optional note (e.g. 'keep the cape') · video: motion + camera + 'Audio: …'."
+          },
+          "workflow": {
+            "type": "string",
+            "description": "Generator workflow name (comfyui — the generator's own GPU). Defaults: qwen-image-21-rgba (image), qwen-image-21-edit (edit · tpose), trellis2 (3d), minimax-h3-i2v (video). studio_generator_options lists what the generator has."
+          },
+          "provider": {
+            "type": "string",
+            "enum": [
+              "comfyui",
+              "codex",
+              "openrouter",
+              "openai"
+            ],
+            "description": "image only — who draws it. comfyui (default): the generator's own GPU, free, pick a `workflow`. codex: gpt-image-2 on the generator owner's ChatGPT subscription (~2 min a picture, one at a time). openrouter / openai: metered cloud, pick a `model` (e.g. openrouter google/gemini-nano-banana-2.1 ≈ $0.034 · ~11 s). Cloud pictures come back opaque — fine for a 3D lift, which cuts its own background."
+          },
+          "model": {
+            "type": "string",
+            "description": "Cloud model id for provider openrouter / openai (codex needs none), e.g. google/gemini-nano-banana-2.1, google/gemini-3-pro-image. studio_generator_options lists the offered ones with time and price."
+          },
+          "seed": {
+            "type": "integer",
+            "description": "Default: random, recorded on the material."
+          },
+          "target_faces": {
+            "type": "integer",
+            "minimum": 1000,
+            "maximum": 2000000
+          },
+          "texture_size": {
+            "type": "integer",
+            "enum": [
+              1024,
+              2048,
+              4096
+            ]
+          },
+          "compress_textures": {
+            "type": "boolean",
+            "description": "3d: compress the GLB's textures (smaller file)."
+          },
+          "duration": {
+            "type": "number",
+            "minimum": 0.2,
+            "maximum": 15,
+            "description": "video: seconds. Default 5."
+          },
+          "width": {
+            "type": "integer",
+            "description": "video: canvas width. Default 768 (reshaped to the image's aspect)."
+          },
+          "height": {
+            "type": "integer",
+            "description": "video: canvas height. Default 768."
+          },
+          "transparent": {
+            "type": "boolean",
+            "description": "edit · tpose: cut the background away. Default true."
+          },
+          "id": {
+            "type": "string",
+            "description": "Id for the new material."
+          },
+          "use": {
+            "type": "string",
+            "enum": [
+              "mobile-prop",
+              "mobile-character",
+              "roblox-meshpart",
+              "web-ar",
+              "pc-hero",
+              "print-3d"
+            ],
+            "description": "Where it will be used — one of mobile-prop (300–1.5k tris), mobile-character (3k–10k), roblox-meshpart (≤10k recommended, 21k cap), web-ar (30k–50k, texture ≤2048, ≤5MB), pc-hero (20k–100k), print-3d (100k+, closed mesh). studio_list_assets returns the full table as `presets` and judges each material against its `use` in `check`. For 3d it sets target_faces and texture_size unless you give them, and is recorded on the material."
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "required": [
+          "ok",
+          "asset",
+          "path"
+        ],
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "asset": {
+            "type": "object",
+            "description": "One entry of assets/manifest.json: id, file (relative to assets/), kind, bytes, width/height, source (provenance), use, bones?"
+          },
+          "path": {
+            "type": "string",
+            "description": "Project-relative path of the file."
+          },
+          "remote_deleted": {
+            "type": "boolean",
+            "description": "The generator's copy was deleted after the import."
+          },
+          "check": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "level": {
+                  "type": "string",
+                  "enum": [
+                    "over",
+                    "warn",
+                    "info"
+                  ]
+                },
+                "code": {
+                  "type": "string"
+                },
+                "value": {},
+                "limit": {},
+                "message": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Findings against the material's `use` preset."
+          },
+          "note": {
+            "type": "string",
+            "description": "A hint for the caller; empty when there is nothing to say."
+          }
+        }
+      },
+      "changes": [
+        "assets"
+      ],
+      "uses": [
+        "genai"
+      ]
+    },
+    {
+      "op": "update_asset",
+      "tool": "studio_update_asset",
+      "group": "asset",
+      "title": "재료 쓰임 표시",
+      "description": "Set where a material will be used (`use`, a preset id), or clear it with `use` omitted/null. The material is then judged against that preset's budget (triangles, texture size, file size) — studio_list_assets shows the findings in `check`, and the Studio's material drawer shows them as warnings. Use it when the user says what a model or image is for (a mobile game prop, a Roblox part, an AR viewer, a print).",
+      "input": {
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Material id from studio_list_assets."
+          },
+          "use": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "mobile-prop",
+              "mobile-character",
+              "roblox-meshpart",
+              "web-ar",
+              "pc-hero",
+              "print-3d",
+              null
+            ],
+            "description": "Where it will be used — one of mobile-prop (300–1.5k tris), mobile-character (3k–10k), roblox-meshpart (≤10k recommended, 21k cap), web-ar (30k–50k, texture ≤2048, ≤5MB), pc-hero (20k–100k), print-3d (100k+, closed mesh). studio_list_assets returns the full table as `presets` and judges each material against its `use` in `check`."
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "required": [
+          "ok",
+          "asset"
+        ],
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "asset": {
+            "type": "object",
+            "description": "One entry of assets/manifest.json: id, file (relative to assets/), kind, bytes, width/height, source (provenance), use, bones?"
+          },
+          "check": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "level": {
+                  "type": "string",
+                  "enum": [
+                    "over",
+                    "warn",
+                    "info"
+                  ]
+                },
+                "code": {
+                  "type": "string"
+                },
+                "value": {},
+                "limit": {},
+                "message": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Findings against the material's `use` preset."
+          },
+          "note": {
+            "type": "string",
+            "description": "A hint for the caller; empty when there is nothing to say."
+          }
+        }
+      },
+      "changes": [
+        "assets"
+      ],
+      "uses": []
+    },
+    {
+      "op": "connect_generator",
+      "tool": null,
+      "group": "asset",
+      "title": "생성기 주소 잇기",
+      "description": "Set (or clear, with `url` omitted/null) the project's generator address, codeg-project.json `generate.url` — the Studio's Connect button.",
+      "input": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "http(s) address of the genai API. Omit or null to disconnect."
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "required": [
+          "ok"
+        ],
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "generator": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "note": {
+            "type": "string",
+            "description": "A hint for the caller; empty when there is nothing to say."
+          }
+        }
+      },
+      "changes": [
+        "files"
+      ],
+      "uses": []
+    },
+    {
+      "op": "render_asset",
+      "tool": "studio_render",
+      "group": "render",
+      "title": "모델 렌더(Blender)",
+      "description": "Render a 3D model material with Blender on the user's computer (headless, no window) — the same operation as the Render button on a model in the Studio's material drawer. `mode: \"turntable\"` (default) circles the camera once around the model and saves a video (H.264 mp4, 24 fps) plus stills at `keyframes`; `mode: \"still\"` saves one picture. `mode: \"walk\"` makes a rigged model (one with `bones` in studio_list_assets — rig it with studio_generate_asset kind rig) take a procedural in-place stride, three-quarter view, video + stills. The model is scaled to height 2 and stood on a light ground plate with soft studio lights. Results are registered as materials under assets/generated/renders/ (the video `kind: video`, each still `kind: image`) with their provenance. A still is the usual first frame for a generated video. Takes ~10 s–2 min. If Blender is not installed the result says how to install it or point codeg-project.json `render.blender` at it — tell the user; do not install it yourself.",
+      "input": {
+        "type": "object",
+        "required": [
+          "from"
+        ],
+        "properties": {
+          "from": {
+            "type": "string",
+            "description": "Id of a 3D model material (GLB) from studio_list_assets."
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "turntable",
+              "still",
+              "walk"
+            ]
+          },
+          "frames": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 720,
+            "description": "Clip length at 24 fps. Default 72 (turntable) · 48 (walk)."
+          },
+          "width": {
+            "type": "integer",
+            "minimum": 64,
+            "maximum": 2048,
+            "description": "Default 720."
+          },
+          "height": {
+            "type": "integer",
+            "minimum": 64,
+            "maximum": 2048,
+            "description": "Default 720."
+          },
+          "cam_dist": {
+            "type": "number",
+            "description": "Camera distance; the model is 2 tall. Default 6.2 (whole body with margin); ~4 frames it tighter."
+          },
+          "yaw": {
+            "type": "number",
+            "description": "Where the camera starts, degrees around the model (0 = front)."
+          },
+          "pitch": {
+            "type": "number",
+            "description": "Camera height angle, degrees. Default 8."
+          },
+          "keyframes": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            },
+            "description": "Frames saved as stills. Default [1]."
+          },
+          "id": {
+            "type": "string",
+            "description": "Id for the new materials (stills get -fNNN)."
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "required": [
+          "ok",
+          "video",
+          "keyframes"
+        ],
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "video": {
+            "type": "object",
+            "description": "One entry of assets/manifest.json: id, file (relative to assets/), kind, bytes, width/height, source (provenance), use, bones?"
+          },
+          "keyframes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "description": "One entry of assets/manifest.json: id, file (relative to assets/), kind, bytes, width/height, source (provenance), use, bones?"
+            },
+            "description": "Still materials."
+          },
+          "blender": {
+            "type": "string",
+            "description": "The Blender that ran."
+          },
+          "blender_version": {
+            "type": "string"
+          },
+          "seconds": {
+            "type": "number"
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "note": {
+            "type": "string",
+            "description": "A hint for the caller; empty when there is nothing to say."
+          }
+        }
+      },
+      "changes": [
+        "assets"
+      ],
+      "uses": [
+        "blender"
+      ]
+    },
+    {
+      "op": "generator_options",
+      "tool": "studio_generator_options",
+      "group": "generate",
+      "title": "생성 고를 거리",
+      "description": "What each making step can be asked for, the same list the Studio's step cards offer: `image` — the generator's own text-to-image workflows (provider comfyui, free) and cloud picture models (codex = subscription, openrouter = metered) with measured seconds and USD per picture; `video` — image-to-video workflows (with audio or not, minimum length); `model` — 3D texture sizes, face range and the use presets; `defaults`. Pass a choice to studio_generate_asset as `provider` + `workflow` or `model`, `target_faces` / `texture_size` / `compress_textures`, `workflow` + `duration`. If the generator is switched off only the cloud pictures are listed and `note` says so.",
+      "input": {
+        "type": "object",
+        "properties": {}
+      },
+      "output": {
+        "type": "object",
+        "required": [
+          "ok",
+          "image"
+        ],
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "image": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "video": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "model": {
+            "type": "object"
+          },
+          "duration": {
+            "type": "object"
+          },
+          "defaults": {
+            "type": "object"
+          },
+          "generator": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "note_code": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string",
+            "description": "A hint for the caller; empty when there is nothing to say."
+          }
+        }
+      },
+      "changes": [],
+      "uses": [
+        "genai"
+      ]
+    },
+    {
+      "op": "read_flow",
+      "tool": null,
+      "group": "file",
+      "title": "첫 화면 단계 기록 읽기",
+      "description": "The first screen's step record, <project>/studio-flow.json: what was asked, which steps ran, which material each made. `flow` is null when there is none yet. Read-only.",
+      "input": {
+        "type": "object",
+        "properties": {}
+      },
+      "output": {
+        "type": "object",
+        "required": [
+          "ok",
+          "flow"
+        ],
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "flow": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "note": {
+            "type": "string",
+            "description": "A hint for the caller; empty when there is nothing to say."
+          }
+        }
+      },
+      "changes": [],
+      "uses": []
+    },
+    {
+      "op": "write_flow",
+      "tool": null,
+      "group": "file",
+      "title": "첫 화면 단계 기록 쓰기",
+      "description": "Replace the first screen's step record (<project>/studio-flow.json). The editor owns its shape; this only checks that it is an object and writes it atomically.",
+      "input": {
+        "type": "object",
+        "required": [
+          "flow"
+        ],
+        "properties": {
+          "flow": {
+            "type": "object",
+            "description": "The whole step record."
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "required": [
+          "ok",
+          "path"
+        ],
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "path": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string",
+            "description": "A hint for the caller; empty when there is nothing to say."
+          }
+        }
+      },
+      "changes": [
+        "files"
+      ],
+      "uses": []
+    },
+    {
+      "op": "list_sets",
+      "tool": "studio_list_sets",
+      "group": "file",
+      "title": "촬영장 목록",
+      "description": "List the film sets of this content project (outputs/film/sets/*.set.json): id, name, duration, how many props and actors, camera ids. A film set is the 3D stage a shot is filmed on — floor, lights, props, actors (rigged models with motion), cameras with paths — that the Studio's 3D set view, these tools and the Blender render share.",
+      "input": {
+        "type": "object",
+        "properties": {}
+      },
+      "output": {
+        "type": "object",
+        "required": [
+          "ok",
+          "sets"
+        ],
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "dir": {
+            "type": "string"
+          },
+          "sets": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "duration": {
+                  "type": "number"
+                },
+                "props": {
+                  "type": "integer"
+                },
+                "actors": {
+                  "type": "integer"
+                },
+                "cameras": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "error": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "note": {
+            "type": "string",
+            "description": "A hint for the caller; empty when there is nothing to say."
+          }
+        }
+      },
+      "changes": [],
+      "uses": []
+    },
+    {
+      "op": "read_set",
+      "tool": "studio_read_set",
+      "group": "file",
+      "title": "촬영장 읽기",
+      "description": "Return one film set as JSON plus `issues` (things that do not break the file but would spoil a render: missing materials, a walking actor without bones, keys after the duration, no camera) and `models` (material id → file under assets/). Fields: fps, duration, frame {width,height} (output size — 720×1280 is a 9:16 short), stage {floor {size,color}|null, background, ambient}, props [{id, asset, position, rotation, height?, scale?}], actors [{id, asset, position, rotation, height?, motion: still|walk, ease, keys?: [{t, position, yaw?}]}], lights [{id, type: sun|point|spot|area, position, target, color, power (sun ≈1–5, others watts), size?}], cameras [{id, name?, lens (mm on a 36 mm sensor, long side), ease, keys: [{t, position, target, roll?}]}]. Space: metres, Y up, right-handed (the glTF convention), front is +Z; rotation is XYZ Euler degrees; a model stands with the middle of its footprint at `position`, `height` scales it to that many metres tall. Time: seconds 0–duration; cameras and moving actors carry `keys`, blended per segment with `ease` (smooth = u²(3−2u), default · linear), the first key holds before it and the last after it. Read it before changing a set so your commands use existing ids.",
+      "input": {
+        "type": "object",
+        "required": [
+          "set"
+        ],
+        "properties": {
+          "set": {
+            "type": "string",
+            "description": "Set id — the file stem of outputs/film/sets/<id>.set.json (letters, digits, - and _). Get the ids from studio_list_sets."
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "required": [
+          "ok",
+          "set",
+          "file",
+          "issues"
+        ],
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "set": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string",
+            "description": "Project-relative path of the set file."
+          },
+          "file": {
+            "type": "object",
+            "description": "The set document, normalized."
+          },
+          "issues": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "What would spoil a render."
+          },
+          "models": {
+            "type": "object",
+            "description": "Material id → model file under assets/.",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "assets_dir": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string",
+            "description": "A hint for the caller; empty when there is nothing to say."
+          }
+        }
+      },
+      "changes": [],
+      "uses": []
+    },
+    {
+      "op": "create_set",
+      "tool": "studio_create_set",
+      "group": "file",
+      "title": "촬영장 만들기",
+      "description": "Create a film set outputs/film/sets/<set>.set.json with a starter stage: a 30 m floor, three area lights (key, fill, rim), one camera `cam_a` 6 m in front looking at the middle, 15 s at 24 fps, 720×1280 (writes outputs/film/sets/README.md with the schema the first time). Refuses an existing id. Then add props and actors (3D model materials from studio_list_assets) and cameras with studio_apply_set_commands.",
+      "input": {
+        "type": "object",
+        "required": [
+          "set"
+        ],
+        "properties": {
+          "set": {
+            "type": "string",
+            "description": "New set id (letters, digits, - and _)."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name, e.g. 카페."
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "required": [
+          "ok",
+          "set",
+          "file",
+          "issues"
+        ],
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "set": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string",
+            "description": "Project-relative path of the set file."
+          },
+          "file": {
+            "type": "object",
+            "description": "The set document, normalized."
+          },
+          "issues": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "What would spoil a render."
+          },
+          "models": {
+            "type": "object",
+            "description": "Material id → model file under assets/.",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "assets_dir": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string",
+            "description": "A hint for the caller; empty when there is nothing to say."
+          }
+        }
+      },
+      "changes": [
+        "files"
+      ],
+      "uses": []
+    },
+    {
+      "op": "apply_set_commands",
+      "tool": "studio_apply_set_commands",
+      "group": "file",
+      "title": "촬영장 고치기(명령 배치)",
+      "description": "Edit a film set with a validated command batch and write it to disk — the same operation the Studio's 3D set view runs when the user drags something, applied atomically (one invalid command rejects the whole batch and nothing is written). The view reloads from disk on its own. PREFER THIS over rewriting the .set.json by hand: it keeps ids unique, numbers in range, keys sorted, and preserves every field it does not know. The result carries the new file and its `issues` — fix them. Commands: {type:'set.update', name?, fps?, duration?, frame?:{width,height}, stage?:{floor?, background?, ambient?}} (frame and stage merge) · {type:'add', kind:'prop'|'actor'|'light'|'camera', item:{id, ...}} (ids are unique across all four kinds; a camera needs keys:[{t, position, target}]) · {type:'update', id, patch:{...}} (shallow merge; null clears a field such as height) · {type:'remove', id} · {type:'key.set', id, key:{t, position?, target?, yaw?, roll?}} (a camera's or actor's key at t — merged into the key already at that time, else added; a new camera key needs position and target) · {type:'key.remove', id, t}. Space: metres, Y up, right-handed (the glTF convention), front is +Z; rotation is XYZ Euler degrees; a model stands with the middle of its footprint at `position`, `height` scales it to that many metres tall. Time: seconds 0–duration; cameras and moving actors carry `keys`, blended per segment with `ease` (smooth = u²(3−2u), default · linear), the first key holds before it and the last after it.",
+      "input": {
+        "type": "object",
+        "required": [
+          "set",
+          "commands"
+        ],
+        "properties": {
+          "set": {
+            "type": "string",
+            "description": "Set id — the file stem of outputs/film/sets/<id>.set.json (letters, digits, - and _). Get the ids from studio_list_sets."
+          },
+          "commands": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 200,
+            "items": {
+              "type": "object",
+              "required": [
+                "type"
+              ],
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "set.update",
+                    "add",
+                    "update",
+                    "remove",
+                    "key.set",
+                    "key.remove"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "required": [
+          "ok",
+          "set",
+          "file",
+          "issues"
+        ],
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "set": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string",
+            "description": "Project-relative path of the set file."
+          },
+          "file": {
+            "type": "object",
+            "description": "The set document, normalized."
+          },
+          "issues": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "What would spoil a render."
+          },
+          "models": {
+            "type": "object",
+            "description": "Material id → model file under assets/.",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "assets_dir": {
+            "type": "string"
+          },
+          "changed": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "note": {
+            "type": "string",
+            "description": "A hint for the caller; empty when there is nothing to say."
+          }
+        }
+      },
+      "changes": [
+        "files"
+      ],
+      "uses": []
+    },
+    {
+      "op": "render_set",
+      "tool": "studio_render_set",
+      "group": "render",
+      "title": "촬영장 찍기(Blender)",
+      "description": "Film one camera of a film set with Blender on the user's computer (headless): the set document becomes a Blender scene as written — floor, lights, each prop and actor model placed and sized, walking actors taking a procedural stride while their keys move them, the camera following its keys — and the span from..to is rendered as a video (H.264 mp4 at the set's fps) plus stills at `stills` (seconds). Results are registered as materials under assets/generated/renders/ (`<set>-<camera>` by default; stills get -fNNN) with their provenance (source.from `set:<id>`, camera, span). Missing model files draw as boxes and come back in `warnings`. A still is the usual first frame for a generated video (studio_generate_asset kind video). Takes ~10 s–a few minutes. If Blender is not installed the result says how to install it — tell the user; do not install it yourself.",
+      "input": {
+        "type": "object",
+        "required": [
+          "set",
+          "camera"
+        ],
+        "properties": {
+          "set": {
+            "type": "string",
+            "description": "Set id — the file stem of outputs/film/sets/<id>.set.json (letters, digits, - and _). Get the ids from studio_list_sets."
+          },
+          "camera": {
+            "type": "string",
+            "description": "Camera id in the set."
+          },
+          "from": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Start, seconds. Default 0."
+          },
+          "to": {
+            "type": "number",
+            "minimum": 0,
+            "description": "End, seconds. Default the set's duration; from == to renders one still."
+          },
+          "width": {
+            "type": "integer",
+            "minimum": 64,
+            "maximum": 4096,
+            "description": "Default the set's frame.width."
+          },
+          "height": {
+            "type": "integer",
+            "minimum": 64,
+            "maximum": 4096,
+            "description": "Default the set's frame.height."
+          },
+          "stills": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "description": "Times (seconds, within from..to) saved as stills. Default [from]."
+          },
+          "id": {
+            "type": "string",
+            "description": "Id for the new materials."
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "required": [
+          "ok",
+          "video",
+          "keyframes"
+        ],
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "video": {
+            "type": "object",
+            "description": "One entry of assets/manifest.json: id, file (relative to assets/), kind, bytes, width/height, source (provenance), use, bones?"
+          },
+          "keyframes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "description": "One entry of assets/manifest.json: id, file (relative to assets/), kind, bytes, width/height, source (provenance), use, bones?"
+            },
+            "description": "Still materials."
+          },
+          "blender": {
+            "type": "string",
+            "description": "The Blender that ran."
+          },
+          "blender_version": {
+            "type": "string"
+          },
+          "seconds": {
+            "type": "number"
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "note": {
+            "type": "string",
+            "description": "A hint for the caller; empty when there is nothing to say."
+          }
+        }
+      },
+      "changes": [
+        "assets"
+      ],
+      "uses": [
+        "blender"
+      ]
+    }
+  ]
+}
