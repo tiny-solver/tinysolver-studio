@@ -139,6 +139,18 @@
         "ad-conti"
       ],
       "note": "10-10 받음 — 초안 docs/studio/action-direction-guide.md(F1–F6 · F7 보류). 자리는 둘로(ad-place): 여러 컷 원리는 콘티 글 단계, 한 컷 원리는 그림 카드에서 켜고 끄기. 문구 확정은 model-pick action-direction-bench 뒤."
+    },
+    {
+      "id": "deco-game",
+      "date": "2026-10-11",
+      "from": "오너",
+      "status": "taken",
+      "text": "요즘 '○꾸'(다꾸 · 폰꾸 · 볼꾸 · 팔찌 · 키링) 유행을 디지털 게임으로 — 어디까지 꾸미기가 되나 · 어느 트렌드를 잡나 · 하나 골라 웹게임 시제품 → afterplay 에 올릴 zip. 다꾸 앱(별조각)과는 별개",
+      "items": [
+        "deco-game-src",
+        "deco-game-try"
+      ],
+      "note": "10-11 받음 — 리포트 http://research.home.codepoet.me/#field/deco-game-trends-172c : 권장 '참 꿰기'(키링 → 백꾸 → 볼꾸 → 디꾸 — 대상만 바뀌고 동작은 같다 · 비즈 · 키링 게임은 빈자리). 시제품 「참참 공방」 zip 은 linux-1 ~/workspaces/tinysolver-studio-contents/charm-studio.zip(afterplay bundle 검사 · sandbox SDK 통과). 다꾸는 일부러 뺐다 — 별조각에 넘길 요청 없음"
     }
   ],
   "topics": [
@@ -1662,6 +1674,85 @@
         "docs/studio/action-direction-guide.md"
       ],
       "from": "ask:action-direction-guide"
+    },
+    {
+      "id": "deco-game-src",
+      "rule": "none",
+      "topic": "afterplay",
+      "p": 3,
+      "status": "open",
+      "role": "제품",
+      "asked": "2026-10-11",
+      "q": "afterplay 에 올릴 작은 웹게임(참참 공방 · 냠냠 구멍)의 소스를 어디 두나",
+      "now": "소스가 머신마다 ~/workspaces/tinysolver-studio-contents/<게임>/ 에 있다(git 아님) — 참참 공방은 linux-1, 냠냠 구멍은 맥북. 머신을 잃으면 zip 만 남는다",
+      "facets": [
+        "자리",
+        "판 기록",
+        "비용"
+      ],
+      "options": [
+        {
+          "key": "A",
+          "title": "repo 하나에 게임 폴더(예: tiny-solver/studio-games)",
+          "facets": {
+            "자리": "games/<게임>/ · zip 은 스크립트가 만든다",
+            "판 기록": "git 이력 · PR",
+            "비용": "repo 하나 · 게임이 늘어도 그대로"
+          }
+        },
+        {
+          "key": "B",
+          "title": "게임마다 repo",
+          "facets": {
+            "자리": "tiny-solver/<게임>",
+            "판 기록": "게임별 이력 · 릴리스",
+            "비용": "게임 수만큼 repo"
+          }
+        },
+        {
+          "key": "C",
+          "title": "지금처럼 머신 폴더(git 아님)",
+          "facets": {
+            "자리": "~/workspaces/tinysolver-studio-contents/<게임>/",
+            "판 기록": "없음 — zip 이 판",
+            "비용": "없음 · 머신을 잃으면 소스도 잃는다"
+          }
+        }
+      ],
+      "pick": "A",
+      "reason": "시제품은 파일 몇 개라 게임마다 repo 는 이르다. 한 곳에 모으면 같은 검사(afterplay bundle) · zip 스크립트를 같이 쓰고, 커진 게임은 그때 B 로 뺀다",
+      "needs": [],
+      "unblocks": [],
+      "then": [],
+      "refs": [
+        "http://research.home.codepoet.me/#field/deco-game-trends-172c"
+      ]
+    },
+    {
+      "id": "deco-game-try",
+      "topic": "afterplay",
+      "p": 2,
+      "status": "todo",
+      "role": "제품",
+      "asked": "2026-10-11",
+      "goal": "안 적음",
+      "prep": [],
+      "who": [
+        "오너"
+      ],
+      "learn": [],
+      "q": "참참 공방을 afterplay qa #make 에 올려 폰으로 한 판",
+      "want": "폰 세로 · 터치로 손님 3명 한 판(1~3분)이 돌고 '채널에 쓰기' 띠가 뜬다 · 손맛(구슬 크기 · 딸깍 소리 · 45초)을 보고 v2(받침 팩 · 해금 참 · 투표)를 정한다",
+      "now": "zip 준비됨 — afterplay bundle 검사 통과 · CSP sandbox + SDK 다리로 ready · load · save · score · leaderboard · share 확인. 올리기는 Google 로그인이 필요해 사람이 한다",
+      "action": "#make(내 게임 올리기) → 새 게임 · 세로 → charm-studio.zip 올리기",
+      "needs": [],
+      "unblocks": [],
+      "then": [],
+      "refs": [
+        "linux-1 ~/workspaces/tinysolver-studio-contents/charm-studio.zip",
+        "http://research.home.codepoet.me/#field/deco-game-trends-172c"
+      ],
+      "from": "ask:deco-game"
     }
   ]
 }
