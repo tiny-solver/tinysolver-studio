@@ -87,6 +87,9 @@ pub enum StudioOp {
     ApplySetCommands { set: String, commands: Value },
     /// Render one camera of a set with the user's Blender.
     RenderSet(crate::studio_render::SetRenderRequest),
+    /// One call to the machine's `claude` or `codex`, answer shaped by a
+    /// JSON Schema ([`crate::studio_model_once`]).
+    ModelOnce(crate::studio_model_once::ModelOnceRequest),
 }
 
 fn local_target() -> String {
@@ -241,6 +244,7 @@ pub async fn run(root: PathBuf, op: StudioOp) -> Value {
             out["note"] = json!("Written. The Studio's 3D set view picks the change up from disk.");
             out
         }
+        StudioOp::ModelOnce(req) => crate::studio_model_once::run(&root, req).await,
         StudioOp::RenderSet(req) => {
             let (_, file) = match read_set(&root, &req.set).await {
                 Ok(v) => v,

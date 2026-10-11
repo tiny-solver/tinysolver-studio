@@ -175,6 +175,13 @@ AI 생성물을 프로젝트의 재료로 받고, 재료를 다시 생성 입력
 - 모델의 `bones`(가장 큰 skin 의 joint 수) · `animations`는 GLB 를 읽어 재료에 남긴다. 서랍은 뼈가 있으면 **걷기**, 없으면 **뼈 넣기**를 보인다.
 - 영상 재료의 출처에는 생성기가 돌려준 실제 `width`·`height`·`frames`·`fps`와 `audio`가 남는다.
 
+### 모델 1번 — `model_once` (studio-layers ① · L2)
+
+- 그 머신의 `claude`(`claude -p`) · `codex`(`codex exec`) 를 구독 로그인 그대로 한 번 부른다(API 키 X). 넣는 것: `agent` · `prompt` · `images`(그림 경로) · `schema`(JSON Schema) · `model`(선택).
+- 깨끗한 한 번 — 세션 안 남김 · 사용자 hook · MCP 안 읽음 · 도구는 첨부 그림 읽기만. 답은 `schema` 로 다시 검증, 어긋나면 `ok: false` note.
+- 서비스 PATH 에 CLI 가 없으면 `~/.local/bin` · nvm 최신 node 에서 찾는다. 직접 정하려면 `STUDIO_CLAUDE_BIN` · `STUDIO_CODEX_BIN`.
+- MCP `studio_model_once` · 코드 `src-tauri/src/studio_model_once.rs`.
+
 ## 3D 촬영장 (film-set · fs3-set · fs3-truth A)
 
 쇼츠 · 뮤비 · 영화 · 웹툰을 찍는 3D 무대. 정본은 `outputs/film/sets/<id>.set.json` 하나다 — 세트(바닥 · 배경 · 조명) · 소품(GLB 재료) · 배우(리깅된 GLB + 동작 + 키) · 카메라 여러 대(렌즈 · 경로 키). 스키마는 처음 만들 때 같은 폴더에 쓰이는 `README.md`(원본 `src-tauri/src/studio_set_readme.md`).

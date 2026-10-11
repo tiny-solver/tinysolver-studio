@@ -1493,6 +1493,112 @@
       "uses": [
         "blender"
       ]
+    },
+    {
+      "op": "model_once",
+      "tool": "studio_model_once",
+      "group": "model",
+      "title": "모델 1번 호출(claude · codex)",
+      "description": "Ask a model once and get JSON back in the shape you give. Runs the machine's own `claude` (`claude -p`) or `codex` (`codex exec`) CLI on the owner's subscription — no API key — with no tools except reading the attached pictures, no session kept, and the user's hooks and MCP servers left out. `schema` is the JSON Schema the answer must have (an object schema; for codex keep it strict: every property in `required`, `additionalProperties: false`). The answer is checked against it again here: `ok: false` with a note (and the answer it got as `output`) when it does not fit. Use it for one-shot judgements — describe or score a picture, pull fields out of text — not for work that needs tools or several turns. Takes ~10 s–2 min. If a CLI is missing or logged out the note says so — tell the user; do not log in yourself.",
+      "input": {
+        "type": "object",
+        "required": [
+          "agent",
+          "prompt",
+          "schema"
+        ],
+        "properties": {
+          "agent": {
+            "type": "string",
+            "enum": [
+              "claude",
+              "codex"
+            ],
+            "description": "Which CLI answers."
+          },
+          "prompt": {
+            "type": "string",
+            "description": "What to ask. The attached pictures are listed after it."
+          },
+          "images": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Picture files to attach — absolute, or relative to the project (e.g. assets/generated/x.png)."
+          },
+          "schema": {
+            "type": "object",
+            "description": "JSON Schema of the answer, with \"type\": \"object\"."
+          },
+          "model": {
+            "type": "string",
+            "description": "The CLI's model name (claude: sonnet · opus · haiku …; codex: gpt-5.5 …). Default: the CLI's own."
+          },
+          "timeout_secs": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1800,
+            "description": "Seconds before the call is stopped. Default 300."
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "required": [
+          "ok",
+          "agent",
+          "output"
+        ],
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "agent": {
+            "type": "string",
+            "enum": [
+              "claude",
+              "codex"
+            ]
+          },
+          "model": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The model that answered (claude reports it; codex: the one asked for, else null)."
+          },
+          "output": {
+            "type": "object",
+            "description": "The answer, valid against `schema`."
+          },
+          "duration_ms": {
+            "type": "integer"
+          },
+          "cost_usd": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "claude's reported cost; null for codex."
+          },
+          "usage": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "Token counts as the CLI reports them: claude's usage object, codex's { total_tokens }."
+          },
+          "cli": {
+            "type": "string",
+            "description": "The CLI binary that ran."
+          }
+        }
+      },
+      "changes": [],
+      "uses": [
+        "model"
+      ]
     }
   ]
 }
