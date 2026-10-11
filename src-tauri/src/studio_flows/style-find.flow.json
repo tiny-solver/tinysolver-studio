@@ -79,7 +79,7 @@
             "workflow": "${model.workflow}",
             "model": "${model.model}",
             "from": "${style.ref}",
-            "id": "style-${run.id}-${style.id}-${model.id}",
+            "id": "style-${style.id}-${model.id}",
             "prompt": "${style.prompt} Subject: ${inputs.subject} Draw it in the art style of the reference picture <image1> — take only its way of drawing (line, fill, colour, texture), not its characters, objects, layout or content. No text, no letters, no watermark."
           }
         },

@@ -574,6 +574,7 @@ impl Parts for StyleFake {
             "list_assets" => json!({ "ok": true, "assets": [] }),
             "generate_asset" => {
                 let id = args["id"].as_str().unwrap().to_string();
+                assert!(!id.contains("2026"), "a run id in the args defeats reuse: {id}");
                 if id.ends_with("nyam-pastel-lowpoly-qwen") {
                     return json!({ "ok": false, "note": "generator busy" });
                 }

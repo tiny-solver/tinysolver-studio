@@ -34,7 +34,8 @@
 //! record, so nothing is called twice. The same replay lets a new run start
 //! from an earlier one (`from_run`): change one node, and only that node and
 //! what follows from it is called again; the two runs then sit side by side
-//! ([`compare`]).
+//! ([`compare`]). Reuse compares resolved inputs, so a leaf that puts
+//! `${run.id}` in its arguments is called again by every run.
 //!
 //! The executor does not know the parts. It calls them through [`Parts`] —
 //! the server gives it the registry, tests give it fakes — and follows the
