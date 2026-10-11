@@ -678,16 +678,20 @@ fn each_path(key: &str) -> Vec<(String, usize)> {
 }
 
 /// Short words for a binding value: a string, a number, or an object's
-/// `name` · `label` · `title` · `id`. Results (objects with `ok`) are none.
+/// `name` · `label` · `title` · `style` · `id`. Results (objects with `ok`)
+/// are none.
 fn label_of(v: &Value) -> Option<String> {
-    match v {
+    let l = match v {
         Value::String(t) if !t.is_empty() && t.chars().count() <= 60 => Some(t.clone()),
         Value::Number(n) => Some(n.to_string()),
         Value::Object(o) if !o.contains_key("ok") => ["name", "label", "title", "style", "id"]
             .iter()
             .find_map(|k| o.get(*k).and_then(Value::as_str).map(String::from)),
         _ => None,
-    }
+    };
+    // model-pick reads `a · b` in an input's kind as group · branch — a
+    // single name keeps its dot as a slash
+    l.map(|l| l.replace(" · ", " / "))
 }
 
 /// Every string inside a value.
@@ -1316,6 +1320,10 @@ mod tests {
             vec![("gen".into(), 2), ("gen[2].inner".into(), 0)]
         );
         assert_eq!(short_run("20261011-163000-ab12"), "163000-ab12");
+        assert_eq!(
+            label_of(&json!({ "style": "꿀꿀 연필 · 크레용" })).unwrap(),
+            "꿀꿀 연필 / 크레용"
+        );
     }
 
     #[tokio::test]
