@@ -1680,11 +1680,11 @@
       "rule": "none",
       "topic": "afterplay",
       "p": 3,
-      "status": "open",
+      "status": "decided",
       "role": "제품",
       "asked": "2026-10-11",
       "q": "afterplay 에 올릴 작은 웹게임(참참 공방 · 냠냠 구멍)의 소스를 어디 두나",
-      "now": "소스가 머신마다 ~/workspaces/tinysolver-studio-contents/<게임>/ 에 있다(git 아님) — 참참 공방은 linux-1, 냠냠 구멍은 맥북. 머신을 잃으면 zip 만 남는다",
+      "now": "tiny-solver/games 에 두 게임이 있다 — 머신 폴더(tinysolver-studio-contents)는 비웠다",
       "facets": [
         "자리",
         "판 기록",
@@ -1726,7 +1726,12 @@
       "then": [],
       "refs": [
         "http://research.home.codepoet.me/#field/deco-game-trends-172c"
-      ]
+      ],
+      "decided": {
+        "date": "2026-10-11",
+        "pick": "A",
+        "note": "대표님 10-11 — GitHub private tiny-solver/games(~/tinysolver.me/games). games/<게임>/ · games.json(afterplay 게임 id) · scripts/pack.sh · cover.sh · publish.sh(백오피스 에이전트 올리기 API → 심사 대기). 냠냠 구멍 · 참참 공방 옮김"
+      }
     },
     {
       "id": "deco-game-try",
@@ -1743,13 +1748,13 @@
       "learn": [],
       "q": "참참 공방을 afterplay qa #make 에 올려 폰으로 한 판",
       "want": "폰 세로 · 터치로 손님 3명 한 판(1~3분)이 돌고 '채널에 쓰기' 띠가 뜬다 · 손맛(구슬 크기 · 딸깍 소리 · 45초)을 보고 v2(받침 팩 · 해금 참 · 투표)를 정한다",
-      "now": "zip 준비됨 — afterplay bundle 검사 통과 · CSP sandbox + SDK 다리로 ready · load · save · score · leaderboard · share 확인. 올리기는 Google 로그인이 필요해 사람이 한다",
-      "action": "#make(내 게임 올리기) → 새 게임 · 세로 → charm-studio.zip 올리기",
+      "now": "10-11 qa 에 올림(publish.sh · 심사 대기) — qa 백오피스 › 커뮤니티 › 게임 심사 에서 '공개' 하면 afterplay-qa 에서 폰으로 한 판. 소스 tiny-solver/games games/charm-studio",
+      "action": "qa 백오피스 게임 심사 › 참참 공방 '공개' → afterplay-qa.tinysolver.me '게임' 에서 폰으로 한 판",
       "needs": [],
       "unblocks": [],
       "then": [],
       "refs": [
-        "linux-1 ~/workspaces/tinysolver-studio-contents/charm-studio.zip",
+        "tiny-solver/games games/charm-studio",
         "http://research.home.codepoet.me/#field/deco-game-trends-172c"
       ],
       "from": "ask:deco-game"
