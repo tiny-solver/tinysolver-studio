@@ -3969,7 +3969,7 @@ mod tests {
         browser_eval: false,
     };
 
-    const STUDIO_TOOLS: [&str; 27] = [
+    const STUDIO_TOOLS: [&str; 28] = [
         "studio_list_scenes",
         "studio_read_scene",
         "studio_apply_scene_commands",
@@ -3997,6 +3997,7 @@ mod tests {
         "studio_run_compare",
         "studio_card_list",
         "studio_style_card_save",
+        "studio_export_round",
     ];
 
     #[tokio::test]

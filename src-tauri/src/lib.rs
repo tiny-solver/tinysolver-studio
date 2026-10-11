@@ -31,6 +31,7 @@ pub mod content_publish;
 pub mod studio_agent_cli;
 pub mod studio_agent_node;
 pub mod studio_assets;
+pub mod studio_export;
 pub mod studio_flows;
 pub mod studio_model_once;
 pub mod studio_presets;

@@ -39,7 +39,8 @@ pub struct OpSpec {
     /// JSON Schema of a successful outcome; a failure is [`Registry::failure`].
     pub output: Value,
     /// What it writes: `files` (project documents) · `assets` (the material
-    /// register and its files) · `build` · `release`. Empty — read-only.
+    /// register and its files) · `build` · `release` · `outside` (files
+    /// outside the project, e.g. a model-pick checkout). Empty — read-only.
     pub changes: Vec<String>,
     /// What it reaches outside the project: `genai` · `blender` · `model`
     /// (the claude · codex CLIs) · `network` · `shell`.
@@ -140,6 +141,7 @@ pub fn op_name(op: &StudioOp) -> &'static str {
         StudioOp::RunCompare { .. } => "run_compare",
         StudioOp::CardList => "card_list",
         StudioOp::StyleCardSave(_) => "style_card_save",
+        StudioOp::ExportRound(_) => "export_round",
     }
 }
 
@@ -216,7 +218,7 @@ mod tests {
             assert!(spec.input["properties"].get("project").is_none(), "{}: project is the door's", spec.op);
             assert_eq!(spec.output["properties"]["ok"]["const"], true, "{}", spec.op);
             for c in &spec.changes {
-                assert!(["files", "assets", "build", "release"].contains(&c.as_str()), "{}: {c}", spec.op);
+                assert!(["files", "assets", "build", "release", "outside"].contains(&c.as_str()), "{}: {c}", spec.op);
             }
             for u in &spec.uses {
                 assert!(["genai", "blender", "model", "network", "shell"].contains(&u.as_str()), "{}: {u}", spec.op);
