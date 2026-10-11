@@ -19,6 +19,7 @@ use serde_json::{json, Value};
 
 use crate::commands::content_project as cp;
 use crate::studio_assets;
+use crate::studio_flows;
 use crate::studio_scene;
 use crate::studio_set;
 
@@ -90,6 +91,29 @@ pub enum StudioOp {
     /// One call to the machine's `claude` or `codex`, answer shaped by a
     /// JSON Schema ([`crate::studio_model_once`]).
     ModelOnce(crate::studio_model_once::ModelOnceRequest),
+    /// The flows, `flows/*.flow.json` ([`crate::studio_flows`]).
+    FlowList,
+    /// One flow document with its problems.
+    FlowGet { flow: String },
+    /// Write a flow document (checked first).
+    FlowPut { flow: Value },
+    /// Start a run of a flow.
+    FlowRun(crate::studio_flows::RunStart),
+    /// The runs, newest first — of one flow, or all.
+    RunList {
+        #[serde(default)]
+        flow: Option<String>,
+    },
+    /// One run's record.
+    RunGet { flow: String, run: String },
+    /// Answer a run's waiting card; the run goes on.
+    RunAnswer(crate::studio_flows::AnswerRequest),
+    /// Two runs of a flow, node by node.
+    RunCompare { flow: String, a: String, b: String },
+    /// Every card waiting for an answer.
+    CardList,
+    /// Write a picked style into the bible.
+    StyleCardSave(crate::studio_flows::StyleCard),
 }
 
 fn local_target() -> String {
@@ -252,6 +276,16 @@ pub async fn run(root: PathBuf, op: StudioOp) -> Value {
             };
             crate::studio_render::render_set(&root, &file, req).await
         }
+        StudioOp::FlowList => studio_flows::door_flow_list(&root).await,
+        StudioOp::FlowGet { flow } => studio_flows::door_flow_get(&root, &flow).await,
+        StudioOp::FlowPut { flow } => studio_flows::door_flow_put(&root, flow).await,
+        StudioOp::FlowRun(start) => studio_flows::door_flow_run(&root, start).await,
+        StudioOp::RunList { flow } => studio_flows::door_run_list(&root, flow).await,
+        StudioOp::RunGet { flow, run } => studio_flows::door_run_get(&root, &flow, &run).await,
+        StudioOp::RunAnswer(req) => studio_flows::door_run_answer(&root, req).await,
+        StudioOp::RunCompare { flow, a, b } => studio_flows::door_run_compare(&root, &flow, &a, &b).await,
+        StudioOp::CardList => studio_flows::door_card_list(&root).await,
+        StudioOp::StyleCardSave(card) => studio_flows::save_style_card(&root, &card),
         StudioOp::WriteFlow { flow } => {
             if !flow.is_object() {
                 return fail("flow must be an object");

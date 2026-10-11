@@ -2769,7 +2769,12 @@ pub fn parse_studio_op(tool: &str, arguments: &Value) -> Result<StudioOp, String
                 })?;
             Ok(StudioOp::ApplyCommands { scene, commands })
         }
-        other => Err(format!("unknown tool: {other}")),
+        // Parts without a hand-written case above take their arguments as
+        // the registry's input schema says.
+        other => match crate::studio_ops::registry().find_tool(other) {
+            Some(spec) => crate::studio_ops::parse(&spec.op, arguments),
+            None => Err(format!("unknown tool: {other}")),
+        },
     }
 }
 
@@ -3964,7 +3969,7 @@ mod tests {
         browser_eval: false,
     };
 
-    const STUDIO_TOOLS: [&str; 17] = [
+    const STUDIO_TOOLS: [&str; 27] = [
         "studio_list_scenes",
         "studio_read_scene",
         "studio_apply_scene_commands",
@@ -3982,6 +3987,16 @@ mod tests {
         "studio_apply_set_commands",
         "studio_render_set",
         "studio_model_once",
+        "studio_flow_list",
+        "studio_flow_get",
+        "studio_flow_put",
+        "studio_flow_run",
+        "studio_run_list",
+        "studio_run_get",
+        "studio_run_answer",
+        "studio_run_compare",
+        "studio_card_list",
+        "studio_style_card_save",
     ];
 
     #[tokio::test]
