@@ -493,7 +493,8 @@ fn opening_prompt(spec: &AgentNodeSpec, input: &Value) -> String {
     if spec.tools.is_empty() {
         p.push_str("\nStudio 부품은 쓰지 않는다.\n");
     } else {
-        let names: Vec<String> = spec.tools.iter().map(|t| format!("studio_{}", op_name(t))).collect();
+        let ops: HashSet<String> = spec.tools.iter().map(|t| op_name(t)).collect();
+        let names = tool_names(&ops);
         p.push_str(&format!(
             "\n쓸 수 있는 Studio 부품(codeg-mcp 도구): {}. 다른 부품은 거절된다.\n",
             names.join(", ")
@@ -1022,6 +1023,17 @@ mod tests {
         let out = run_installed(Path::new("/tmp"), &spec, &Value::Null, None).await;
         assert!(!out.ok);
         assert!(out.note.unwrap().contains("codeg-server"));
+    }
+
+    #[test]
+    fn opening_prompt_names_the_real_tools() {
+        let spec: AgentNodeSpec = serde_json::from_value(json!({
+            "agent": "claude", "goal": "g", "tools": ["apply_commands", "render_asset"]
+        }))
+        .unwrap();
+        let p = opening_prompt(&spec, &Value::Null);
+        assert!(p.contains("studio_apply_scene_commands, studio_render"), "{p}");
+        assert!(!p.contains("studio_apply_commands"));
     }
 
     #[test]
