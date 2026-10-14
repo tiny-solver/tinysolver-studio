@@ -95,6 +95,13 @@ static FILES: &[EngineFile] = &[
         bytes: include_bytes!("../engines/viewer/model.html"),
         content_type: HTML,
     },
+    // The 3D library's side-by-side viewer and thumbnail maker
+    // (`?src=<glb>&src=<glb>`, `&thumb=1`). Never in a build.
+    EngineFile {
+        path: "__codeg/viewer/compare.html",
+        bytes: include_bytes!("../engines/viewer/compare.html"),
+        content_type: HTML,
+    },
     // The 3D set view (`outputs/film/sets/*.set.json`, driven by the editor
     // over postMessage). Never in a build.
     EngineFile {

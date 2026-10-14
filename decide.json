@@ -192,9 +192,11 @@
       "date": "2026-10-14",
       "from": "오너",
       "text": "만든 3D 씬 · 캐릭터 · 프랍을 한곳에서 보고, 서로 나란히 비교하고, 하나를 누르면 그게 어떻게 만들어졌는지 제작 과정을 노드 그래프(단계마다 입력 · 설정 · 출력)로 보고 싶다. Studio 웹 안에(대표님 10-14)",
-      "status": "new",
-      "items": [],
-      "note": "본보기: 10-14 손으로 만든 두 장 — 미리보기 artifact 5Df8YioCHQa8XUadM4TVko(GLB · 동작 버튼 · 뼈 보기) · 제작 그래프 artifact 1CbvxAUSZ4vmvbJNXReWGa(ComfyUI 처럼 노드 8개 · 포트 색 = 데이터 종류 · 실패한 판도 같이). 대표님이 'Studio 안 화면'을 고름(새 사이트 아님) — 재료 서랍 · GLB 뷰어 · 흐름 실행 기록(runs/) · 실행 나란히 보기가 이미 있다. 모델끼리 겨루는 판은 지금처럼 model-pick 으로 내보낸다."
+      "status": "done",
+      "items": [
+        "lib-3d"
+      ],
+      "note": "본보기: 10-14 손으로 만든 두 장 — 미리보기 artifact 5Df8YioCHQa8XUadM4TVko(GLB · 동작 버튼 · 뼈 보기) · 제작 그래프 artifact 1CbvxAUSZ4vmvbJNXReWGa(ComfyUI 처럼 노드 8개 · 포트 색 = 데이터 종류 · 실패한 판도 같이). 대표님이 'Studio 안 화면'을 고름(새 사이트 아님) — 재료 서랍 · GLB 뷰어 · 흐름 실행 기록(runs/) · 실행 나란히 보기가 이미 있다. 모델끼리 겨루는 판은 지금처럼 model-pick 으로 내보낸다. · 10-14 done: studio.home.tinysolver.me/studio/library — ① 모아 보기: 서버의 모든 프로젝트 재료 중 GLB 를 격자로(썸네일 = 숨은 뷰어가 한 번씩 찍음 · 종류(등록부 role, 없으면 뼈 있으면 캐릭터) · 면 · 뼈 · 동작 클립(이름 · 초) · 용량 · 만든 날). ② 나란히: 둘 이상 고르면 새 뷰어 engines/vie… (items lib-3d)"
     }
   ],
   "topics": [
@@ -2040,6 +2042,32 @@
       "done": {
         "date": "2026-10-11",
         "note": "studio_export.rs — 부품 export_round(MCP studio_export_round · API · CLI · group 내보내기 · changes outside): runs/<flow>/<run>/run.json → model-pick rounds/<KST 날짜>-<flow>-<run>/round.json(model-pick-round/2) + media/. 결과 = generate_asset 결과(asset.source → models.json id) · 넣은 것 = 같은 프롬프트 · 이름 = each 바인딩(card.style) · 넣은 참고 그림 = 입력마다 refs(그래서 과제 기본 text+image-to-image) · 채점 scores · 고르기 답은 그림 경로로 잇는다. 늘 internal:true · 'AI 가 만든 것' · codex 줄 공개 안 함 메모 · 고르기는 '고르기 카드 답(사람)' + 답 메모(대표님이라 단정 안 함). 과제 · 모델이 명부에 없으면 멈춘다. check:true 면 publish.sh --dry-run · 실제 올리기는 model-pick repo 에서. 해 보기: L3 의 그림체 찾기 실행 20261011-151740-5778(그림체 4 × codex · qwen-refs · claude 채점) → model-pick.home.tinysolver.me/#/r/2026-10-12-style-find-151740-5778 (집 안 전용 · 버킷엔 없음). model-pick 쪽: qwen-image-2.1 에 text+image-to-image(workflow qwen-image-21-refs = 같은 모델에 참고 그림). behaviour tree 노드는 이번 범위 밖(필요한 흐름이 나오면 따로)"
+      }
+    },
+    {
+      "id": "lib-3d",
+      "topic": "layers",
+      "p": 1,
+      "status": "done",
+      "role": "제품",
+      "asked": "2026-10-14",
+      "from": "ask:3d-gallery-graph",
+      "q": "3D 재료 화면 — 모아 보기 · 나란히 비교 · 제작 그래프",
+      "want": "대표님이 studio.home 에서 만든 3D 를 한곳에서 보고, 나란히 보고, 하나가 어떻게 만들어졌는지 노드 그래프로 본다",
+      "now": "재료 서랍(한 프로젝트 · 한 개씩) · /studio/flows 실행 목록뿐",
+      "action": "/studio/library 화면 + compare.html 뷰어 + source.from · runs/ 를 읽어 그래프로",
+      "needs": [
+        "layers-l3-flow"
+      ],
+      "unblocks": [],
+      "then": [],
+      "refs": [
+        "본보기 artifact 5Df8YioCHQa8XUadM4TVko · 1CbvxAUSZ4vmvbJNXReWGa",
+        "linux-1 ~/handoff/char3d-1014/"
+      ],
+      "done": {
+        "date": "2026-10-14",
+        "note": "studio.home.tinysolver.me/studio/library — ① 모아 보기: 서버의 모든 프로젝트 재료 중 GLB 를 격자로(썸네일 = 숨은 뷰어가 한 번씩 찍음 · 종류(등록부 role, 없으면 뼈 있으면 캐릭터) · 면 · 뼈 · 동작 클립(이름 · 초) · 용량 · 만든 날). ② 나란히: 둘 이상 고르면 새 뷰어 engines/viewer/compare.html 하나에 칸을 나눠 같은 카메라(하나 돌리면 다 돈다) · 동작 버튼은 그 클립이 있는 모델 모두에서 같이 재생 · 뼈 보기 · 아래 숫자 표(다른 값은 칠함). ③ 제작 그래프: @xyflow/react 노드 — 원천은 runs/ 실행 기록(파일 이름이 출력에 나온 실행; 끝난 것 먼저)과 같은 흐름의 실패한 실행(흐리게), 실행이 없으면 등록부 source.from 사슬. 입력은 포트(키 · 값으로 TEXT · IMAGE · MESH · RIGGED(뼈) · ANIM(클립) · LIMBS · REPORT …)와 설정 표로 나누고, 같은 값을 가진 앞 노드 출력과 선을 잇는다. 새 기록 형식 없음. 백엔드: GLB 통계에 clips[{name,seconds}] 추가(list 가 예전 항목도 채움). 해 보기: 새 프로젝트 char3d — 10-14 모험가 재료 6개(그림 · genai 에 남아 있던 실제 2만 면 메시 · 뼈 34 · animated2 = adventurer.glb, 첫 판 8천 면 메시 · 뼈 28) · 실행 기록 둘(runs/char3d-adventurer/2026-10-14-grey-20k 노드 8 · 2026-10-14-alpha-8k 실패). 남은 것: 썸네일은 탭마다 다시 찍는다(파일로 남기지 않음) · Studio 화면 안 들어가는 버튼은 아직 없다(주소로 연다)."
       }
     }
   ]

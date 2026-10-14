@@ -520,6 +520,29 @@ fn model_stats(bytes: &[u8]) -> Option<Map<String, Value>> {
     }
     if let Some(a) = json["animations"].as_array().filter(|a| !a.is_empty()) {
         out.insert("animations".into(), json!(a.len()));
+        // Each clip's name and length — the latest key of its samplers (glTF
+        // requires `max` on a sampler's input accessor).
+        let clips: Vec<Value> = a
+            .iter()
+            .enumerate()
+            .map(|(i, anim)| {
+                let seconds = anim["samplers"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|s| {
+                        let acc = accessors.get(s["input"].as_u64()? as usize)?;
+                        acc["max"].get(0)?.as_f64()
+                    })
+                    .fold(0.0_f64, f64::max);
+                let name = anim["name"]
+                    .as_str()
+                    .map(str::to_string)
+                    .unwrap_or_else(|| format!("clip {i}"));
+                json!({ "name": name, "seconds": (seconds * 100.0).round() / 100.0 })
+            })
+            .collect();
+        out.insert("clips".into(), Value::Array(clips));
     }
     let views = json["bufferViews"].as_array().cloned().unwrap_or_default();
     let mut textures = Vec::new();
@@ -607,7 +630,10 @@ pub async fn list(root: &Path) -> Value {
         // drawer shows; read them from the file (not written back — listing
         // never changes the register).
         let lacks = match kind_of(&file) {
-            "model" => entry.get("triangles").is_none(),
+            "model" => {
+                entry.get("triangles").is_none()
+                    || (entry.get("animations").is_some() && entry.get("clips").is_none())
+            }
             "image" => entry.get("width").is_none() || entry.get("opaque").is_none(),
             _ => false,
         };
@@ -1624,12 +1650,20 @@ mod tests {
         let rigged = serde_json::to_vec(&json!({
             "asset": { "version": "2.0" },
             "skins": [{ "joints": [0, 1, 2] }, { "joints": [0] }],
-            "animations": [{ "name": "walk" }],
+            "accessors": [{ "count": 25, "max": [1.04] }, { "count": 49, "max": [2.0] }],
+            "animations": [
+                { "name": "walk", "samplers": [{ "input": 0 }, { "input": 1 }] },
+                { "samplers": [{ "input": 0 }] },
+            ],
         }))
         .unwrap();
         let st = stats("x.gltf", &rigged);
         assert_eq!(st["bones"], 3);
-        assert_eq!(st["animations"], 1);
+        assert_eq!(st["animations"], 2);
+        assert_eq!(
+            st["clips"],
+            json!([{ "name": "walk", "seconds": 2.0 }, { "name": "clip 1", "seconds": 1.04 }])
+        );
     }
 
     #[tokio::test]

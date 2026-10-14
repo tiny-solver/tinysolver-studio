@@ -3979,7 +3979,7 @@ export interface ContentProjectManifest {
 
 /** Where a material came from — kept on its `assets/manifest.json` entry. */
 export interface StudioAssetSource {
-  kind?: "image" | "edit" | "tpose" | "3d" | "rig" | "video" | "render"
+  kind?: "image" | "edit" | "tpose" | "3d" | "rig" | "video" | "render" | "bake"
   workflow?: string
   prompt?: string
   seed?: number
@@ -4048,6 +4048,10 @@ export interface StudioAsset {
   /** Rigged models: joints of the largest skin. */
   bones?: number
   animations?: number
+  /** Animated models: each clip's name and length in seconds. */
+  clips?: { name: string; seconds: number }[]
+  /** Hand-set in the register: what the model is in the 3D library. */
+  role?: "scene" | "character" | "prop"
   /** Where it will be used — a preset id (`StudioPreset.id`). */
   use?: string
   /** Images: no transparent pixel. */
