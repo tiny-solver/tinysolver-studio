@@ -177,6 +177,15 @@
       "status": "new",
       "items": [],
       "note": "10-12 한 번 손으로 끝까지 돌림(맥북 ~/TinysolverStudio/oz-duo-mv · 결과 artifact Vp47sEkvNBJCusQALZ2ED8): 노래 6곡(genai minimax-music-3 · acestep) → Blender MCP 세트 소품 10개 → import_asset → 촬영장 ybr(샷 카메라 4대) → render_set 프리비즈 → GPT Image 2.5 키프레임(프리비즈 스틸 + 캐릭터 시트) → minimax-h3 · ltx-2.5 i2v → ffmpeg 편집, 판 셋. Studio 에 없어서 밖에서 한 것: 노래 생성 · 키프레임(레퍼런스 여러 장 그림 편집) · 여러 샷 이어 붙이기 + 노래 구간(fs3-film) · 샷 목록(fs3-shots). 맥북 데스크톱 앱 0.31.2 에는 촬영장 명령이 없어 main 을 빌드한 서버를 로컬로 띄웠다. Higgsfield(CLI · MCP · Blender 애드온)는 깔렸지만 크레딧(무료 10)이 들어 이번 판에는 안 씀 — 설치 · 쓰는 길 my-devops docs/guides/previz-tools.md. 10-13 대표님 '진짜 무료로': 키프레임을 집 GPU 로 — qwen-image-edit-2511 img2img denoise 0.88(프리비즈 스틸에서 출발해 구도 고정 · 프롬프트엔 그 샷에 보이는 것만). 캐릭터 시트 레퍼런스 편집(qwen 2.1 edit-3ref)은 구도를 시트 쪽으로 바꿔서 뺐다. 두 번째 MV midnight-groove-mv(80년대 팝 펑크 여자 솔로 · 실사 · 117.5 BPM 6박 컷)도 같은 길로 끝까지. Studio 밖 스크립트는 맥북 ~/TinysolverStudio/_pipeline(genai_image · genai_video · assemble · make_page · README) — Studio 부품으로 옮길 후보: 노래 생성 · 키프레임 img2img · 박자 컷 편집 · 메이킹 렌더."
+    },
+    {
+      "id": "char-anim-game",
+      "date": "2026-10-14",
+      "from": "오너",
+      "text": "그림 한 장을 주면 3D 캐릭터 모델을 뽑고 애니메이션까지 붙어서 게임에서 바로 쓸 수 있으면 좋겠다. 우선은 모델을 만들어 미리보기만 돼도 좋다(대표님 10-14)",
+      "status": "new",
+      "items": [],
+      "note": "10-14 맥북에서 한 번 손으로 끝까지 돌림(결과 artifact 5Df8YioCHQa8XUadM4TVko — 초록 망토 모험가): 그림 qwen-image-21-rgba T포즈 → genai trellis2 → rig_3d(SkinTokens 34뼈) → Blender 로 studio_render.py walk() 의 팔다리 찾기 · 걸음을 Idle(2초) · Walk(1초) 루프 클립으로 구워 GLB 내보내기(NLA 트랙 = glTF 애니메이션 둘) → three.js 미리보기. 실측: ① 투명 PNG 그대로 · 8천 면은 팔 · 다리가 사라지고 텍스처가 깨짐 → 밝은 회색(0.86) 배경에 얹고 2만 면 · 텍스처 2048 로 다시 뽑으니 팔 · 다리 · 후드 · 가방 다 살아남(3.6MB). ② 팔이 없는 모델에선 모양 기반 팔 찾기가 척추를 팔로 잡아 상체가 접힘 — 굽기 뒤 '머리(위 1/5) 위치 · 키가 그대로인가' 점검으로 실패를 잡음. Studio 에 없는 것: 동작을 GLB 클립으로 굽기(지금 walk 는 렌더 영상만) · 굽기 뒤 점검 · 캐릭터 3D 의 회색 배경 · 면 수 기본값. 영상 → 동작 리타깃은 Motion2MixamoRig 검토 세션 몫(GVHMR · SMPL-X 비상업 라이선스)."
     }
   ],
   "topics": [
