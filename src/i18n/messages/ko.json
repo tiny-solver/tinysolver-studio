@@ -6956,5 +6956,44 @@
       "failed": "실패",
       "skipped": "건너뜀"
     }
+  },
+  "StudioLibrary": {
+    "title": "3D 재료",
+    "hint": "칸을 누르면 어떻게 만들었는지 제작 그래프 — 둘 이상 고르면 나란히 본다",
+    "refresh": "새로 읽기",
+    "compare": "나란히 보기 ({n})",
+    "pick": "나란히 볼 것으로 고르기",
+    "openGraph": "제작 그래프 보기",
+    "empty": "3D 재료가 아직 없다 — 재료 서랍에서 3D 만들기 · GLB 올리기",
+    "missing": "파일이 없다",
+    "tris": "면",
+    "vertices": "정점",
+    "bones": "뼈",
+    "clips": "동작",
+    "size": "용량",
+    "made": "만든 날",
+    "texture": "텍스처",
+    "project": "프로젝트",
+    "kind": "종류",
+    "how": "만든 법",
+    "back": "모아 보기로",
+    "compareTitle": "나란히 {n}개",
+    "compareHint": "하나를 돌리면 다 같이 돈다 · 동작 버튼은 그 클립이 있는 모델 모두에서 같이 재생",
+    "noPreview": "미리보기 서버에 닿지 않는다",
+    "graphTitle": "{id} — 제작 그래프",
+    "loading": "읽는 중…",
+    "nodeFailed": "실패",
+    "steps": "단계",
+    "time": "걸린 시간",
+    "cost": "비용",
+    "from": "출처",
+    "fromChain": "등록부 source.from 사슬",
+    "failedTries": "실패한 시도",
+    "role": {
+      "all": "전체",
+      "character": "캐릭터",
+      "prop": "프랍",
+      "scene": "씬"
+    }
   }
 }

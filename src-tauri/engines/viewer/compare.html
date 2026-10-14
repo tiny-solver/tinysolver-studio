@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Models side by side</title>
+<!-- Tinysolver Studio 3D library viewer: one or more GLBs side by side under
+     one camera (orbit one, all turn), the same clip played on every model
+     that has it, bones on/off.
+     Served by the preview server at
+       __codeg/viewer/compare.html?src=<url>&label=<name>[&src=…&label=…]
+     `&thumb=1` renders each model once instead and posts
+       { type: "codeg-thumb", src, url: <jpeg data URL> }
+     to the parent, one message per model, then { type: "codeg-thumb-done" }.
+     Editor-only — builds do not carry it. -->
+<style>
+  html, body { margin: 0; height: 100%; background: #20232a; color: #c9ced8;
+    font: 12px system-ui, sans-serif; overflow: hidden; }
+  canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+  #bar { position: fixed; left: 8px; top: 8px; right: 8px; display: flex; flex-wrap: wrap;
+    gap: 4px; pointer-events: none; }
+  #bar button { pointer-events: auto; border: 1px solid #3a3f48; background: #2a2e36cc;
+    color: #e6e4df; padding: 4px 9px; border-radius: 6px; font: inherit; cursor: pointer; }
+  #bar button.on { background: #2f7d5b; border-color: #2f7d5b; color: #fff; }
+  #bar .gap { width: 10px; }
+  .label { position: fixed; pointer-events: none; padding: 4px 6px; line-height: 1.4;
+    text-shadow: 0 1px 2px #000; }
+  .label b { color: #e6e4df; }
+  .label .miss { color: #f3a6a6; }
+  #err { position: fixed; inset: 0; display: none; place-items: center; padding: 20px;
+    text-align: center; color: #f3a6a6; }
+</style>
+<script type="importmap">
+  { "imports": { "three": "../vendor/three.module.min.js" } }
+</script>
+</head>
+<body>
+<div id="bar"></div>
+<div id="labels"></div>
+<div id="err"></div>
+<script type="module">
+import * as THREE from "three"
+import { GLTFLoader } from "../vendor/addons/loaders/GLTFLoader.js"
+import { OrbitControls } from "../vendor/addons/controls/OrbitControls.js"
+
+const q = new URLSearchParams(location.search)
+const srcs = q.getAll("src").slice(0, 6)
+const labels = q.getAll("label")
+const thumb = q.get("thumb") === "1"
+const err = document.getElementById("err")
+const fail = (m) => { err.textContent = m; err.style.display = "grid"; console.error(m) }
+const BG = 0x20232a
+const HEIGHT = 1.6 // every model is scaled to this height, feet on the floor
+
+function stage() {
+  const scene = new THREE.Scene()
+  scene.background = new THREE.Color(BG)
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x444455, 2.2))
+  const key = new THREE.DirectionalLight(0xffffff, 2.4)
+  key.position.set(3, 5, 4)
+  scene.add(key)
+  const rim = new THREE.DirectionalLight(0xbfd4ff, 1.2)
+  rim.position.set(-4, 2, -3)
+  scene.add(rim)
+  const grid = new THREE.GridHelper(4, 16, 0x888888, 0x888888)
+  grid.material.opacity = 0.18
+  grid.material.transparent = true
+  scene.add(grid)
+  return scene
+}
+
+/** Scale to HEIGHT, centre on x/z, stand on y = 0. */
+function standUp(root) {
+  const box = new THREE.Box3().setFromObject(root)
+  const size = box.getSize(new THREE.Vector3())
+  const c = box.getCenter(new THREE.Vector3())
+  const s = HEIGHT / (Math.max(size.y, size.x * 0.5, size.z * 0.5) || 1)
+  root.scale.setScalar(s)
+  root.position.set(-c.x * s, -box.min.y * s, -c.z * s)
+  return { size, s }
+}
+
+function countTris(root) {
+  let tris = 0, bones = 0
+  root.traverse((o) => {
+    if (o.isMesh) {
+      const g = o.geometry
+      tris += (g.index ? g.index.count : g.attributes.position.count) / 3
+    }
+    if (o.isBone) bones++
+  })
+  return { tris: Math.round(tris), bones }
+}
+
+const load = (src) => new Promise((resolve, reject) =>
+  new GLTFLoader().load(src, resolve, undefined, reject))
+
+if (srcs.length === 0) fail("No model (?src=)")
+else if (thumb) thumbs()
+else compare()
+
+// ─── Thumbnails: one small renderer, each model once ───
+async function thumbs() {
+  const W = 320
+  const renderer = new THREE.WebGLRenderer({ antialias: true })
+  renderer.setPixelRatio(1)
+  renderer.setSize(W, W, false)
+  renderer.outputColorSpace = THREE.SRGBColorSpace
+  renderer.toneMapping = THREE.ACESFilmicToneMapping
+  const camera = new THREE.PerspectiveCamera(35, 1, 0.01, 100)
+  camera.position.set(1.7, 1.25, 3.1)
+  camera.lookAt(0, HEIGHT / 2, 0)
+  for (const src of srcs) {
+    let url = null
+    try {
+      const gltf = await load(src)
+      const scene = stage()
+      scene.add(gltf.scene)
+      standUp(gltf.scene)
+      renderer.render(scene, camera)
+      url = renderer.domElement.toDataURL("image/jpeg", 0.85)
+    } catch (e) {
+      console.error(src, e)
+    }
+    parent.postMessage({ type: "codeg-thumb", src, url }, "*")
+  }
+  parent.postMessage({ type: "codeg-thumb-done" }, "*")
+  renderer.dispose()
+}
+
+// ─── Side by side ───
+async function compare() {
+  const renderer = new THREE.WebGLRenderer({ antialias: true })
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2))
+  renderer.outputColorSpace = THREE.SRGBColorSpace
+  renderer.toneMapping = THREE.ACESFilmicToneMapping
+  renderer.setScissorTest(true)
+  document.body.prepend(renderer.domElement)
+  const camera = new THREE.PerspectiveCamera(35, 1, 0.01, 100)
+  camera.position.set(1.7, 1.25, 3.1)
+  const controls = new OrbitControls(camera, renderer.domElement)
+  controls.enableDamping = true
+  controls.target.set(0, HEIGHT / 2, 0)
+  controls.autoRotateSpeed = 1.6
+  controls.update()
+
+  const slots = srcs.map((src, i) => ({ src, label: labels[i] || src.split("/").pop(),
+    scene: stage(), mixer: null, actions: {}, helper: null, info: "", missing: false }))
+  const labelBox = document.getElementById("labels")
+  for (const s of slots) {
+    s.el = document.createElement("div")
+    s.el.className = "label"
+    labelBox.appendChild(s.el)
+  }
+  const paint = () => slots.forEach((s) => {
+    s.el.innerHTML = `<b></b><br><span></span>`
+    s.el.querySelector("b").textContent = s.label
+    const span = s.el.querySelector("span")
+    span.textContent = s.info
+    if (s.missing) span.className = "miss"
+  })
+
+  await Promise.all(slots.map(async (s) => {
+    try {
+      const gltf = await load(s.src)
+      s.scene.add(gltf.scene)
+      standUp(gltf.scene)
+      s.helper = new THREE.SkeletonHelper(gltf.scene)
+      s.helper.visible = false
+      s.scene.add(s.helper)
+      s.mixer = new THREE.AnimationMixer(gltf.scene)
+      for (const a of gltf.animations) s.actions[a.name] = s.mixer.clipAction(a)
+      const { tris, bones } = countTris(gltf.scene)
+      s.clips = gltf.animations.map((a) => `${a.name} ${a.duration.toFixed(1)}s`)
+      s.info = [`${tris.toLocaleString()} tris`, bones ? `${bones} bones` : "", ...s.clips]
+        .filter(Boolean).join(" · ")
+    } catch (e) {
+      s.info = `could not load: ${e?.message ?? e}`
+      s.missing = true
+    }
+  }))
+  paint()
+
+  // The clip bar: every clip name any model has; one press plays it on all
+  // the models that have it, from the same instant.
+  const names = [...new Set(slots.flatMap((s) => Object.keys(s.actions)))]
+  const bar = document.getElementById("bar")
+  const button = (text, on) => {
+    const b = document.createElement("button")
+    b.textContent = text
+    b.onclick = on
+    bar.appendChild(b)
+    return b
+  }
+  const clipButtons = []
+  const play = (name) => {
+    for (const s of slots) {
+      if (!s.mixer) continue
+      s.mixer.stopAllAction()
+      const a = s.actions[name]
+      if (a) a.reset().play()
+    }
+    clipButtons.forEach((b) => b.classList.toggle("on", b.dataset.clip === name))
+    parent.postMessage({ type: "codeg-clip", clip: name }, "*")
+  }
+  if (names.length) {
+    for (const name of ["", ...names]) {
+      const b = button(name || "Rest", () => play(name))
+      b.dataset.clip = name
+      clipButtons.push(b)
+    }
+    bar.appendChild(Object.assign(document.createElement("span"), { className: "gap" }))
+  }
+  const bones = button("Bones", () => {
+    const on = !bones.classList.contains("on")
+    bones.classList.toggle("on", on)
+    slots.forEach((s) => s.helper && (s.helper.visible = on))
+  })
+  const spin = button("Spin", () => {
+    controls.autoRotate = !controls.autoRotate
+    spin.classList.toggle("on", controls.autoRotate)
+  })
+  const wanted = q.get("clip")
+  play(wanted !== null ? wanted : names.includes("Walk") ? "Walk" : names[0] ?? "")
+
+  // The parent may drive the clip (`{ type: "codeg-play", clip }`).
+  addEventListener("message", (e) => {
+    if (e.data?.type === "codeg-play" && typeof e.data.clip === "string") play(e.data.clip)
+  })
+
+  let cells = []
+  function layout() {
+    const w = innerWidth, h = innerHeight, n = slots.length
+    const cols = Math.max(1, Math.min(n, Math.floor(w / 220)))
+    const rows = Math.ceil(n / cols)
+    const cw = w / cols, ch = h / rows
+    renderer.setSize(w, h, false)
+    camera.aspect = cw / ch
+    camera.updateProjectionMatrix()
+    cells = slots.map((s, i) => {
+      const x = (i % cols) * cw, y = Math.floor(i / cols) * ch
+      s.el.style.left = `${x}px`
+      s.el.style.top = `${y + (i < cols ? 34 : 0)}px` // under the button bar
+      s.el.style.maxWidth = `${cw - 8}px`
+      return { x, y: h - y - ch, w: cw, h: ch }
+    })
+  }
+  addEventListener("resize", layout)
+  layout()
+
+  const clock = new THREE.Clock()
+  renderer.setAnimationLoop(() => {
+    const dt = clock.getDelta()
+    controls.update()
+    slots.forEach((s, i) => {
+      s.mixer?.update(dt)
+      const c = cells[i]
+      renderer.setViewport(c.x, c.y, c.w, c.h)
+      renderer.setScissor(c.x, c.y, c.w, c.h)
+      renderer.render(s.scene, camera)
+    })
+  })
+}
+</script>
+</body>
+</html>

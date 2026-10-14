@@ -6956,5 +6956,44 @@
       "failed": "failed",
       "skipped": "skipped"
     }
+  },
+  "StudioLibrary": {
+    "title": "3D library",
+    "hint": "Click a card for the graph of how it was made — pick two or more to see them side by side",
+    "refresh": "Refresh",
+    "compare": "Side by side ({n})",
+    "pick": "Pick for side by side",
+    "openGraph": "Open the making graph",
+    "empty": "No 3D materials yet — make 3D or upload a GLB in the materials drawer",
+    "missing": "File missing",
+    "tris": "Tris",
+    "vertices": "Vertices",
+    "bones": "Bones",
+    "clips": "Clips",
+    "size": "Size",
+    "made": "Made",
+    "texture": "Texture",
+    "project": "Project",
+    "kind": "Kind",
+    "how": "Made with",
+    "back": "Back to the grid",
+    "compareTitle": "{n} side by side",
+    "compareHint": "Orbit one and all turn · a clip button plays that clip on every model that has it",
+    "noPreview": "The preview server is not reachable",
+    "graphTitle": "{id} — making graph",
+    "loading": "Loading…",
+    "nodeFailed": "Failed",
+    "steps": "Steps",
+    "time": "Time",
+    "cost": "Cost",
+    "from": "From",
+    "fromChain": "register source.from chain",
+    "failedTries": "Failed tries",
+    "role": {
+      "all": "All",
+      "character": "Character",
+      "prop": "Prop",
+      "scene": "Scene"
+    }
   }
 }
