@@ -185,7 +185,16 @@
       "text": "그림 한 장을 주면 3D 캐릭터 모델을 뽑고 애니메이션까지 붙어서 게임에서 바로 쓸 수 있으면 좋겠다. 우선은 모델을 만들어 미리보기만 돼도 좋다(대표님 10-14)",
       "status": "new",
       "items": [],
-      "note": "10-14 맥북에서 한 번 손으로 끝까지 돌림(결과 artifact 5Df8YioCHQa8XUadM4TVko — 초록 망토 모험가): 그림 qwen-image-21-rgba T포즈 → genai trellis2 → rig_3d(SkinTokens 34뼈) → Blender 로 studio_render.py walk() 의 팔다리 찾기 · 걸음을 Idle(2초) · Walk(1초) 루프 클립으로 구워 GLB 내보내기(NLA 트랙 = glTF 애니메이션 둘) → three.js 미리보기. 실측: ① 투명 PNG 그대로 · 8천 면은 팔 · 다리가 사라지고 텍스처가 깨짐 → 밝은 회색(0.86) 배경에 얹고 2만 면 · 텍스처 2048 로 다시 뽑으니 팔 · 다리 · 후드 · 가방 다 살아남(3.6MB). ② 팔이 없는 모델에선 모양 기반 팔 찾기가 척추를 팔로 잡아 상체가 접힘 — 굽기 뒤 '머리(위 1/5) 위치 · 키가 그대로인가' 점검으로 실패를 잡음. Studio 에 없는 것: 동작을 GLB 클립으로 굽기(지금 walk 는 렌더 영상만) · 굽기 뒤 점검 · 캐릭터 3D 의 회색 배경 · 면 수 기본값. 영상 → 동작 리타깃은 Motion2MixamoRig 검토 세션 몫(GVHMR · SMPL-X 비상업 라이선스)."
+      "note": "10-14 맥북에서 한 번 손으로 끝까지 돌림(결과 artifact 5Df8YioCHQa8XUadM4TVko — 초록 망토 모험가): 그림 qwen-image-21-rgba T포즈 → genai trellis2 → rig_3d(SkinTokens 34뼈) → Blender 로 studio_render.py walk() 의 팔다리 찾기 · 걸음을 Idle(2초) · Walk(1초) 루프 클립으로 구워 GLB 내보내기(NLA 트랙 = glTF 애니메이션 둘) → three.js 미리보기. 실측: ① 투명 PNG 그대로 · 8천 면은 팔 · 다리가 사라지고 텍스처가 깨짐 → 밝은 회색(0.86) 배경에 얹고 2만 면 · 텍스처 2048 로 다시 뽑으니 팔 · 다리 · 후드 · 가방 다 살아남(3.6MB). ② 팔이 없는 모델에선 모양 기반 팔 찾기가 척추를 팔로 잡아 상체가 접힘 — 굽기 뒤 '머리(위 1/5) 위치 · 키가 그대로인가' 점검으로 실패를 잡음. Studio 에 없는 것: 동작을 GLB 클립으로 굽기(지금 walk 는 렌더 영상만) · 굽기 뒤 점검 · 캐릭터 3D 의 회색 배경 · 면 수 기본값. 영상 → 동작 리타깃은 Motion2MixamoRig 검토 세션 몫(GVHMR · SMPL-X 비상업 라이선스). 10-14 대표님 방향: 동작은 Blender 절차 생성 말고 ① 미리 잘 되는 Mixamo 동작을 대표님이 골라 템플릿으로 준다 → SkinTokens 뼈에 옮겨 붙이기(뼈 이름이 Mixamo 와 달라 모양 기반 팔다리 찾기로 매핑) ② 영상 → 동작(Motion2MixamoRig · GVHMR 길 — 비상업 라이선스라 시험 · 프리비즈만). 말 → 동작 HY-Motion 1.0 은 라이선스 지역에서 한국 제외 · VRAM 26GB(4090 24GB)라 못 쓴다."
+    },
+    {
+      "id": "3d-gallery-graph",
+      "date": "2026-10-14",
+      "from": "오너",
+      "text": "만든 3D 씬 · 캐릭터 · 프랍을 한곳에서 보고, 서로 나란히 비교하고, 하나를 누르면 그게 어떻게 만들어졌는지 제작 과정을 노드 그래프(단계마다 입력 · 설정 · 출력)로 보고 싶다. Studio 웹 안에(대표님 10-14)",
+      "status": "new",
+      "items": [],
+      "note": "본보기: 10-14 손으로 만든 두 장 — 미리보기 artifact 5Df8YioCHQa8XUadM4TVko(GLB · 동작 버튼 · 뼈 보기) · 제작 그래프 artifact 1CbvxAUSZ4vmvbJNXReWGa(ComfyUI 처럼 노드 8개 · 포트 색 = 데이터 종류 · 실패한 판도 같이). 대표님이 'Studio 안 화면'을 고름(새 사이트 아님) — 재료 서랍 · GLB 뷰어 · 흐름 실행 기록(runs/) · 실행 나란히 보기가 이미 있다. 모델끼리 겨루는 판은 지금처럼 model-pick 으로 내보낸다."
     }
   ],
   "topics": [
