@@ -564,7 +564,7 @@
           },
           "workflow": {
             "type": "string",
-            "description": "Generator workflow name (comfyui — the generator's own GPU). Defaults: qwen-image-21-rgba (image), qwen-image-21-edit (edit · tpose), trellis2 (3d), minimax-h3-i2v (video). studio_generator_options lists what the generator has."
+            "description": "Generator workflow name (comfyui — the generator's own GPU). Defaults: qwen-image-21-rgba (image), qwen-image-21-edit (edit · tpose), pixal3d (3d — trellis2 also available), minimax-h3-i2v (video). studio_generator_options lists what the generator has."
           },
           "provider": {
             "type": "string",

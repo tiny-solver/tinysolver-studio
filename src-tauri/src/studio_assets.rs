@@ -41,7 +41,9 @@ const MANIFEST: &str = "manifest.json";
 /// The image workflow `generate` uses when none is given: a transparent PNG,
 /// the shape a 3D lift wants as its input.
 const DEFAULT_IMAGE_WORKFLOW: &str = "qwen-image-21-rgba";
-const DEFAULT_3D_WORKFLOW: &str = "trellis2";
+/// Pixal3D keeps colours and lettering better than TRELLIS.2 and builds busy
+/// props TRELLIS.2 runs out of GPU memory on (model-pick 2026-10-16-image-3d-setting).
+const DEFAULT_3D_WORKFLOW: &str = "pixal3d";
 const DEFAULT_EDIT_WORKFLOW: &str = "qwen-image-21-edit";
 /// Keyframe → clip, ~90 s for 768² · 4–5 s. (The turbo variant measured
 /// ~60 s on 2026-10-07 but answers 500 at once since 10-09 — issue 1009-8.)
@@ -1750,7 +1752,7 @@ mod tests {
         assert_eq!(body["source_image"], "data:x");
         assert_eq!(body["target_faces"], 10_000);
         assert_eq!(source["from"], "cup");
-        assert_eq!(source["workflow"], "trellis2");
+        assert_eq!(source["workflow"], "pixal3d");
         assert_eq!(source["params"]["texture_size"], 2048);
 
         assert!(generator_call(&GenerateRequest { kind: "3d".into(), ..Default::default() }, None, 1).is_err());
