@@ -6484,7 +6484,8 @@
     },
     "yaw": "Giro horizontal (°)",
     "pitch": "Giro vertical (°)",
-    "setView": "Set"
+    "setView": "Set",
+    "library": "3D library"
   },
   "Browser": {
     "toolbar": {
@@ -6870,7 +6871,8 @@
         "no_generator": "Nenhum gerador conectado — só imagens na nuvem são listadas. Informe o endereço no campo Gerador da primeira tela.",
         "generator_off": "O gerador não respondeu com a lista — pode estar desligado ou ocupado. Abra os ajustes de novo para perguntar outra vez."
       }
-    }
+    },
+    "library": "3D library"
   },
   "StudioSet": {
     "set": "Set de filmagem",
@@ -6994,6 +6996,7 @@
       "character": "Character",
       "prop": "Prop",
       "scene": "Scene"
-    }
+    },
+    "toStudio": "Studio"
   }
 }

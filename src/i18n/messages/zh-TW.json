@@ -6484,7 +6484,8 @@
     },
     "yaw": "左右旋轉(°)",
     "pitch": "上下旋轉(°)",
-    "setView": "片場"
+    "setView": "片場",
+    "library": "3D library"
   },
   "Browser": {
     "toolbar": {
@@ -6870,7 +6871,8 @@
         "no_generator": "未連接生成器,只顯示雲端圖像 — 請在首頁的「生成器」欄填寫位址。",
         "generator_off": "生成器沒有回傳清單 — 可能已關閉或忙碌。重新開啟設定會再詢問一次。"
       }
-    }
+    },
+    "library": "3D library"
   },
   "StudioSet": {
     "set": "片場",
@@ -6994,6 +6996,7 @@
       "character": "Character",
       "prop": "Prop",
       "scene": "Scene"
-    }
+    },
+    "toStudio": "Studio"
   }
 }

@@ -6484,7 +6484,8 @@
     },
     "yaw": "左右旋转(°)",
     "pitch": "上下旋转(°)",
-    "setView": "片场"
+    "setView": "片场",
+    "library": "3D library"
   },
   "Browser": {
     "toolbar": {
@@ -6870,7 +6871,8 @@
         "no_generator": "未连接生成器,只显示云端图像 — 请在首页的“生成器”栏填写地址。",
         "generator_off": "生成器没有返回列表 — 可能已关闭或繁忙。重新打开设置会再询问一次。"
       }
-    }
+    },
+    "library": "3D library"
   },
   "StudioSet": {
     "set": "片场",
@@ -6994,6 +6996,7 @@
       "character": "Character",
       "prop": "Prop",
       "scene": "Scene"
-    }
+    },
+    "toStudio": "Studio"
   }
 }

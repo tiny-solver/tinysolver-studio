@@ -65,7 +65,8 @@
   height: 26px;
 }
 .studio-home-drawer-bar button:hover,
-.studio-home-drawer-handle:hover {
+.studio-home-drawer-handle:hover,
+.studio-home-library:hover {
   background: var(--muted);
   color: var(--foreground);
 }
@@ -85,6 +86,29 @@
   background: var(--background);
   font-size: 12px;
   box-shadow: 0 4px 16px rgb(0 0 0 / 0.08);
+}
+
+/* The way to the 3D library (decide 3d-gallery-graph): bottom left, where
+   the drawer never covers it. */
+.studio-home-library {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  z-index: 5;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--background);
+  color: var(--muted-foreground);
+  font-size: 12px;
+  text-decoration: none;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.08);
+}
+.studio-home[data-drawer="wide"] .studio-home-library {
+  display: none;
 }
 
 /* ── start ─────────────────────────────────────────────── */

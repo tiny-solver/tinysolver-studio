@@ -6484,7 +6484,8 @@
     },
     "yaw": "Drehung links/rechts (°)",
     "pitch": "Neigung (°)",
-    "setView": "Set"
+    "setView": "Set",
+    "library": "3D library"
   },
   "Browser": {
     "toolbar": {
@@ -6870,7 +6871,8 @@
         "no_generator": "Kein Generator verbunden — nur Cloud-Bilder werden angezeigt. Trage seine Adresse im Feld „Generator“ des Startbildschirms ein.",
         "generator_off": "Der Generator hat seine Liste nicht geliefert — er ist vielleicht aus oder beschäftigt. Öffne die Einstellungen erneut, um noch einmal zu fragen."
       }
-    }
+    },
+    "library": "3D library"
   },
   "StudioSet": {
     "set": "Filmset",
@@ -6994,6 +6996,7 @@
       "character": "Character",
       "prop": "Prop",
       "scene": "Scene"
-    }
+    },
+    "toStudio": "Studio"
   }
 }

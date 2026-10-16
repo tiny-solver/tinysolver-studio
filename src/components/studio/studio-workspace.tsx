@@ -8,6 +8,7 @@ import {
   ArrowLeft,
   ArrowUp,
   BookOpen,
+  Box,
   Compass,
   ExternalLink,
   FilePlus2,
@@ -589,6 +590,10 @@ export function StudioWorkspace({
             <Compass size={16} />
             {t("howBuilt")}
           </a>
+          <Link href="/studio/library">
+            <Box size={16} />
+            {t("library")}
+          </Link>
           <label className="studio-scene-pick">
             {t("scene")}
             <select

@@ -6484,7 +6484,8 @@
     },
     "yaw": "Giro horizontal (°)",
     "pitch": "Giro vertical (°)",
-    "setView": "Plató"
+    "setView": "Plató",
+    "library": "3D library"
   },
   "Browser": {
     "toolbar": {
@@ -6870,7 +6871,8 @@
         "no_generator": "Sin generador conectado: solo se listan imágenes en la nube. Escribe su dirección en el campo Generador de la primera pantalla.",
         "generator_off": "El generador no respondió con su lista: puede estar apagado u ocupado. Abre los ajustes de nuevo para volver a preguntar."
       }
-    }
+    },
+    "library": "3D library"
   },
   "StudioSet": {
     "set": "Plató",
@@ -6994,6 +6996,7 @@
       "character": "Character",
       "prop": "Prop",
       "scene": "Scene"
-    }
+    },
+    "toStudio": "Studio"
   }
 }
