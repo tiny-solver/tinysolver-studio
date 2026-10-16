@@ -167,7 +167,7 @@ AI 생성물을 프로젝트의 재료로 받고, 재료를 다시 생성 입력
 | `image` | (그림) | `/api/images/generate` | 그리기 | qwen-image-21-rgba(프롬프트를 RGBA 레시피로 감싼다) |
 | `edit` | 그림 | `/api/images/generate` + `source_image` | — (MCP) | qwen-image-21-edit · 배경 지우기 |
 | `tpose` | 캐릭터 그림 | 같음 | **T포즈로** | 고정 프롬프트(같은 옷 · 팔 수평 · 정면) · 입력을 밝은 회색 정사각에 놓는다(model-pick `tpose.py`) |
-| `3d` | 그림 | `/api/3d/generate` | 3D 로 | trellis2 · 쓸 곳 프리셋 |
+| `3d` | 그림 | `/api/3d/generate` | 3D 로 | pixal3d(기본 · trellis2 도 됨) · 쓸 곳 프리셋 |
 | `rig` | 모델 | `/api/3d/rig`(SkinTokens) | **뼈 넣기** | — |
 | `video` | 그림(렌더 키프레임) | `/api/videos/generate` | **영상으로**(그리기 칸의 글 = 동작 · 카메라 · `Audio: …`) | minimax-h3-i2v · 768² · 5초 (turbo 는 10-09 genai 500 — 이슈 1009-8) |
 
