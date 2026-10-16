@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import Link from "next/link"
 import { useTranslations } from "next-intl"
 import { ArrowLeft, Box, Columns2, RefreshCw, Workflow } from "lucide-react"
 
@@ -190,6 +191,13 @@ export function StudioLibrary({
     <div className="flex min-h-full flex-col gap-4 p-4 text-sm">
       {thumbFrame}
       <header className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <Link
+          href="/workspace"
+          className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs hover:bg-muted"
+        >
+          <ArrowLeft className="size-3.5" />
+          {t("toStudio")}
+        </Link>
         <h1 className="text-lg font-semibold">{t("title")}</h1>
         <div className="flex flex-wrap gap-1">
           {roles.map((r) => (

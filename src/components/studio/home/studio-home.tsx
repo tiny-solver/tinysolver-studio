@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { useTranslations } from "next-intl"
+import Link from "next/link"
 import {
+  Box,
   MessageSquare,
   PanelRightClose,
   Maximize2,
@@ -130,6 +132,14 @@ export function StudioHome() {
   return (
     <div className="studio-home" data-drawer={drawer}>
       <div className="studio-home-main">{main}</div>
+      <Link
+        href="/studio/library"
+        className="studio-home-library"
+        title={t("library")}
+      >
+        <Box size={16} />
+        <span>{t("library")}</span>
+      </Link>
       {drawer === "closed" ? (
         <button
           className="studio-home-drawer-handle"

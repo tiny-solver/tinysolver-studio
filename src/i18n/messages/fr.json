@@ -6484,7 +6484,8 @@
     },
     "yaw": "Lacet (°)",
     "pitch": "Tangage (°)",
-    "setView": "Plateau"
+    "setView": "Plateau",
+    "library": "3D library"
   },
   "Browser": {
     "toolbar": {
@@ -6870,7 +6871,8 @@
         "no_generator": "Aucun générateur connecté — seules les images cloud sont listées. Saisissez son adresse dans le champ Générateur du premier écran.",
         "generator_off": "Le générateur n’a pas renvoyé sa liste — il est peut-être éteint ou occupé. Rouvrez les réglages pour redemander."
       }
-    }
+    },
+    "library": "3D library"
   },
   "StudioSet": {
     "set": "Plateau",
@@ -6994,6 +6996,7 @@
       "character": "Character",
       "prop": "Prop",
       "scene": "Scene"
-    }
+    },
+    "toStudio": "Studio"
   }
 }

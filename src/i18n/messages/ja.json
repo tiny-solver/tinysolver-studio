@@ -6484,7 +6484,8 @@
     },
     "yaw": "左右回転(°)",
     "pitch": "上下回転(°)",
-    "setView": "撮影セット"
+    "setView": "撮影セット",
+    "library": "3D library"
   },
   "Browser": {
     "toolbar": {
@@ -6870,7 +6871,8 @@
         "no_generator": "生成機が未接続のためクラウド画像のみ表示 — 最初の画面の「生成機」欄にアドレスを入れてください。",
         "generator_off": "生成機が一覧に応答しません — 停止中か混雑中かもしれません。設定を開き直すと再度問い合わせます。"
       }
-    }
+    },
+    "library": "3D library"
   },
   "StudioSet": {
     "set": "撮影セット",
@@ -6994,6 +6996,7 @@
       "character": "Character",
       "prop": "Prop",
       "scene": "Scene"
-    }
+    },
+    "toStudio": "Studio"
   }
 }

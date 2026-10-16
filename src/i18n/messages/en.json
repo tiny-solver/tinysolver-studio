@@ -6484,7 +6484,8 @@
     },
     "yaw": "Yaw (°)",
     "pitch": "Pitch (°)",
-    "setView": "Set"
+    "setView": "Set",
+    "library": "3D library"
   },
   "Browser": {
     "toolbar": {
@@ -6870,7 +6871,8 @@
         "no_generator": "No generator connected — only cloud pictures are listed. Enter its address in the first screen's Generator field.",
         "generator_off": "The generator did not answer with its list — it may be off or busy. Open settings again to ask once more."
       }
-    }
+    },
+    "library": "3D library"
   },
   "StudioSet": {
     "set": "Film set",
@@ -6994,6 +6996,7 @@
       "character": "Character",
       "prop": "Prop",
       "scene": "Scene"
-    }
+    },
+    "toStudio": "Studio"
   }
 }
