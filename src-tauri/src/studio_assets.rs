@@ -1964,6 +1964,32 @@ mod tests {
         assert_eq!(back_fit(&opaque, &a), None);
     }
 
+    /// The back view against a real generator (draws, measures, lifts — a few
+    /// minutes): `GENAI=https://genai.home.codepoet.me STUDIO_LIVE_DIR=<dir with
+    /// player-t.png · player-n.png> cargo test --lib live_back_view -- --ignored --nocapture`
+    #[tokio::test]
+    #[ignore]
+    async fn live_back_view() {
+        let (Ok(gen), Ok(pics)) = (std::env::var("GENAI"), std::env::var("STUDIO_LIVE_DIR")) else {
+            return;
+        };
+        let (_dir, root) = project().await;
+        assert_eq!(connect(&root, Some(gen)).await["ok"], true);
+        for name in ["player-t", "player-n"] {
+            let png = std::fs::read(format!("{pics}/{name}.png")).unwrap();
+            let url = format!("data:image/png;base64,{}", base64::engine::general_purpose::STANDARD.encode(png));
+            assert_eq!(import(&root, ImportRequest { url, id: Some(name.into()), ..Default::default() }).await["ok"], true);
+            let started = std::time::Instant::now();
+            let made = generate(&root, GenerateRequest { kind: "3d".into(), from: Some(name.into()), seed: Some(42), ..Default::default() }).await;
+            println!(
+                "LIVE {name} {:.0}s {}",
+                started.elapsed().as_secs_f64(),
+                json!({ "ok": made["ok"], "note": made["note"], "back": made["back"], "workflow": made["asset"]["source"]["workflow"] })
+            );
+            assert_eq!(made["ok"], true);
+        }
+    }
+
     #[test]
     fn back_view_fields_are_optional() {
         let r: GenerateRequest = serde_json::from_value(json!({ "kind": "3d", "from": "hero", "back_view": false, "back": "hero-back" })).unwrap();
