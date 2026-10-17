@@ -4093,6 +4093,10 @@ export type StudioOp =
       texture_size?: 1024 | 2048 | 4096
       /** 3d: compress the GLB's textures. */
       compress_textures?: boolean
+      /** 3d: send a back view with the front (default true) — drawn when `back` is absent, used when it matches. */
+      back_view?: boolean
+      /** 3d: an image material that is the back of `from`. */
+      back?: string
       /** video: seconds (default 5) and canvas (default 768²). */
       duration?: number
       width?: number

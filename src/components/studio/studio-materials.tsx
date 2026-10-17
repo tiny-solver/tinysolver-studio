@@ -60,6 +60,13 @@ export function formatBytes(n?: number): string {
   return `${(n / 1024 / 1024).toFixed(1)} MB`
 }
 
+/** What a 3D lift did with the back view (`back` on the generate result). */
+type BackReport = {
+  used?: boolean
+  fit?: number | null
+  why?: string
+}
+
 /** `hero idle (1).PNG` → `hero-idle-1`: the material id an upload gets. */
 export function idFromFileName(name: string): string {
   const stem = name.replace(/\.[^.]+$/, "")
@@ -102,6 +109,13 @@ export function StudioMaterials({
   /** "Where will this be used" — a preset id, or "" for none. Applies to
    *  what the buttons make next; each material keeps its own `use`. */
   const [useFor, setUseFor] = useState("")
+  /** 3D: send a back view with the front (drawn from it, or the material
+   *  picked here) — on by default; the backend drops a back that does not
+   *  match the front and says so. */
+  const [backView, setBackView] = useState(true)
+  const [backFrom, setBackFrom] = useState("")
+  /** A line about what the last run did (e.g. the back view was left out). */
+  const [notice, setNotice] = useState("")
   const tp = useTranslations("Studio.materials.presets")
   const fileInput = useRef<HTMLInputElement>(null)
 
@@ -147,9 +161,11 @@ export function StudioMaterials({
   const run = async (key: string, op: StudioOp) => {
     setPending(key)
     setError("")
+    setNotice("")
     try {
       const result = await studioRun(root, op)
       if (!result.ok) setError(result.note ?? "")
+      else setNotice(backNotice((result as { back?: BackReport }).back))
       await refresh()
       return result.ok
     } catch (reason) {
@@ -158,6 +174,14 @@ export function StudioMaterials({
     } finally {
       setPending(null)
     }
+  }
+
+  const backNotice = (back?: BackReport) => {
+    if (!back) return ""
+    const fit = typeof back.fit === "number" ? back.fit.toFixed(2) : ""
+    if (back.used) return fit ? t("backUsed", { fit }) : t("backUsedGiven")
+    if (fit) return t("backDropped", { fit })
+    return t("backSkipped", { why: back.why ?? "" })
   }
 
   const connect = async () => {
@@ -257,11 +281,16 @@ export function StudioMaterials({
       })
     }
     if (asset.kind === "image" && generator) {
-      step("3d", "box", t("make3d"), t("lifting"), {
+      step("3d", "box", t("make3d"), t(backView ? "liftingBack" : "lifting"), {
         op: "generate_asset",
         kind: "3d",
         from: asset.id,
         ...(useFor ? { use: useFor } : LIFT_3D),
+        ...(!backView
+          ? { back_view: false }
+          : backFrom && backFrom !== asset.id
+            ? { back: backFrom }
+            : {}),
       })
       step("tpose", "tpose", t("tpose"), t("tposing"), {
         op: "generate_asset",
@@ -381,6 +410,35 @@ export function StudioMaterials({
               <span>{t("use")}</span>
               {renderUseSelect(useFor, setUseFor, t("use"))}
             </label>
+            <label className="studio-materials-use">
+              <input
+                type="checkbox"
+                checked={backView}
+                onChange={(e) => setBackView(e.target.checked)}
+                disabled={busy}
+              />
+              <span title={t("backViewHint")}>{t("backView")}</span>
+            </label>
+            {backView && (
+              <label className="studio-materials-use">
+                <span>{t("backFrom")}</span>
+                <select
+                  value={backFrom}
+                  onChange={(e) => setBackFrom(e.target.value)}
+                  aria-label={t("backFrom")}
+                  disabled={busy}
+                >
+                  <option value="">{t("backAuto")}</option>
+                  {assets
+                    .filter((a) => a.kind === "image" && a.exists)
+                    .map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.id}
+                      </option>
+                    ))}
+                </select>
+              </label>
+            )}
             <small>
               {preset
                 ? t("useHint", {
@@ -414,6 +472,11 @@ export function StudioMaterials({
         <p>{t("uploading", { name: pending.slice(7) })}</p>
       )}
       {error && <p className="studio-materials-error">{error}</p>}
+      {notice && !error && (
+        <p className="studio-materials-notice" role="status">
+          {notice}
+        </p>
+      )}
 
       {list && assets.length === 0 && loose.length === 0 && (
         <div className="studio-empty-assets">{t("empty")}</div>

@@ -50,6 +50,17 @@ const DEFAULT_EDIT_WORKFLOW: &str = "qwen-image-21-edit";
 const DEFAULT_VIDEO_WORKFLOW: &str = "minimax-h3-i2v";
 /// The redraw that puts a character in a T-pose before the 3D lift — a
 /// T-pose rigs far more reliably (model-pick 2026-10-08: 5/6 vs 1/6 natural).
+/// The back view drawn for a 3D lift (model-pick 2026-10-17-image-3d-multiview):
+/// Qwen-Image-Edit 2511 with the front as both the picture to change and the
+/// reference, then the background cut away.
+pub const BACK_PROMPT: &str = "Show this same subject from directly behind: rotate it 180 degrees so we see its back, front not visible. Keep exactly the same character design, proportions, height, colors, clothing, markings and the same pose. Same scale, full body fully in frame, orthographic turnaround sheet style, plain light gray background, no shadow, no text.";
+const BACK_WORKFLOW: &str = "qwen-image-edit-2511-ref";
+/// Front · back silhouette overlap (the back mirrored, both scaled to the same
+/// height) below which the back is left out and the model is lifted from the
+/// front alone. model-pick 2026-10-17: backs that matched at 0.93 · 0.97
+/// (T-poses) built clean backs; 0.74 (natural pose) · 0.72 (a 3/4 prop) did
+/// worse than one picture.
+pub const BACK_FIT_MIN: f64 = 0.85;
 pub const TPOSE_PROMPT: &str = "the same character in a T-pose, arms straight out horizontally, legs apart, front view, same outfit and colours, plain background";
 
 /// Qwen-Image RGBA draws an alpha channel only when the prompt says so — a
@@ -193,6 +204,15 @@ pub struct GenerateRequest {
     /// goes on to a 3D lift).
     #[serde(default)]
     pub transparent: Option<bool>,
+    /// `3d`: send a back view with the front (the generator's 2-view path) —
+    /// default true. Without `back` one is drawn from the front; it goes in
+    /// only when its silhouette matches the front ([`BACK_FIT_MIN`]).
+    #[serde(default)]
+    pub back_view: Option<bool>,
+    /// `3d`: an image material that is the back of `from` (same pose, seen
+    /// from behind) — used as given instead of drawing one.
+    #[serde(default)]
+    pub back: Option<String>,
     /// Id for the new material (see [`ImportRequest::id`]).
     #[serde(default)]
     pub id: Option<String>,
@@ -930,6 +950,59 @@ async fn data_url(path: &Path) -> Result<String, String> {
     ))
 }
 
+/// How well a back view matches its front: the back mirrored left-right, both
+/// silhouettes (alpha) cropped and scaled to the same height, centred, and
+/// overlapped (IoU). `None` when either picture has no transparent background
+/// to read a silhouette from.
+pub fn back_fit(front: &image::RgbaImage, back: &image::RgbaImage) -> Option<f64> {
+    const H: u32 = 256;
+    let silhouette = |img: &image::RgbaImage| -> Option<image::GrayImage> {
+        let (w, h) = img.dimensions();
+        if !img.pixels().any(|p| p[3] < 128) {
+            return None;
+        }
+        let (mut x0, mut y0, mut x1, mut y1) = (w, h, 0, 0);
+        for (x, y, p) in img.enumerate_pixels() {
+            if p[3] >= 128 {
+                x0 = x0.min(x);
+                y0 = y0.min(y);
+                x1 = x1.max(x);
+                y1 = y1.max(y);
+            }
+        }
+        if x1 < x0 || y1 < y0 {
+            return None;
+        }
+        let (cw, ch) = (x1 - x0 + 1, y1 - y0 + 1);
+        let mask = image::GrayImage::from_fn(cw, ch, |x, y| image::Luma([if img.get_pixel(x0 + x, y0 + y)[3] >= 128 { 255 } else { 0 }]));
+        let nw = ((cw as f64) * (H as f64) / (ch as f64)).round().max(1.0) as u32;
+        Some(image::imageops::resize(&mask, nw, H, image::imageops::FilterType::Nearest))
+    };
+    let f = silhouette(front)?;
+    let b = image::imageops::flip_horizontal(&silhouette(back)?);
+    let w = f.width().max(b.width());
+    let (fx, bx) = ((w - f.width()) / 2, (w - b.width()) / 2);
+    let (mut inter, mut union) = (0u64, 0u64);
+    for y in 0..H {
+        for x in 0..w {
+            let a = x >= fx && x < fx + f.width() && f.get_pixel(x - fx, y)[0] > 127;
+            let c = x >= bx && x < bx + b.width() && b.get_pixel(x - bx, y)[0] > 127;
+            inter += (a && c) as u64;
+            union += (a || c) as u64;
+        }
+    }
+    (union > 0).then(|| inter as f64 / union as f64)
+}
+
+async fn rgba_of(path: &Path) -> Result<image::RgbaImage, String> {
+    let bytes = tokio::fs::read(path)
+        .await
+        .map_err(|e| format!("Could not read {}: {e}", path.display()))?;
+    image::load_from_memory(&bytes)
+        .map(|i| i.to_rgba8())
+        .map_err(|e| format!("Could not read the image {}: {e}", path.display()))
+}
+
 /// The image centred on a light-grey square, as an opaque PNG data URL — the
 /// shape the T-pose redraw was measured with (model-pick bench/rig tpose.py):
 /// the edit model keeps the figure whole when it has room on every side.
@@ -1223,6 +1296,7 @@ pub async fn generate(root: &Path, mut req: GenerateRequest) -> Value {
         return fail("No generator connected. Set `generate.url` in codeg-project.json (ask the user for the address), or press Connect in the Studio's material panel.");
     };
     let dir = assets_dir(root, manifest.as_ref());
+    let mut front_path: Option<PathBuf> = None;
     let source_image = match req.from.as_deref() {
         None => None,
         Some(from) => {
@@ -1242,6 +1316,7 @@ pub async fn generate(root: &Path, mut req: GenerateRequest) -> Value {
                     format!("`{from}` is not an image; kind `{}` takes an image material.", req.kind)
                 });
             }
+            front_path = Some(dir.join(file));
             let fed = if req.kind == "tpose" {
                 squared_on_light(&dir.join(file)).await
             } else {
@@ -1254,7 +1329,7 @@ pub async fn generate(root: &Path, mut req: GenerateRequest) -> Value {
         }
     };
     let seed = req.seed.unwrap_or_else(|| rand::random::<u32>() as i64);
-    let (route, body, source) = match generator_call(&req, source_image, seed) {
+    let (route, mut body, mut source) = match generator_call(&req, source_image, seed) {
         Ok(v) => v,
         Err(note) => return fail(note),
     };
@@ -1262,6 +1337,26 @@ pub async fn generate(root: &Path, mut req: GenerateRequest) -> Value {
         Ok(c) => c,
         Err(note) => return fail(note),
     };
+    // 3D: the back view goes along when it matches the front (the generator's 2-view path).
+    let mut back_report = None;
+    if req.kind == "3d"
+        && req.back_view != Some(false)
+        && matches!(body["workflow"].as_str(), Some("pixal3d" | "pixal3d-2view"))
+    {
+        if let (Some(front), Some(from)) = (front_path.as_deref(), req.from.as_deref()) {
+            let (back_image, report) = back_view(root, &dir, &base, &client, &req, from, front, seed).await;
+            if let Some(img) = back_image {
+                body["back_image"] = json!(img);
+                body["workflow"] = json!("pixal3d-2view");
+                source["workflow"] = json!("pixal3d-2view");
+            } else if body["workflow"] == "pixal3d-2view" {
+                body["workflow"] = json!("pixal3d");
+                source["workflow"] = json!("pixal3d");
+            }
+            source["back"] = report.clone();
+            back_report = Some(report);
+        }
+    }
     let result = match run_job(&client, &base, route, &body).await {
         Ok(r) => r,
         Err(note) => return fail(note),
@@ -1284,7 +1379,6 @@ pub async fn generate(root: &Path, mut req: GenerateRequest) -> Value {
         (None, _) => req.prompt.as_deref().map(id_from_prompt),
     });
     // A clip's real size and length (H3 snaps the frame count to its grid).
-    let mut source = source;
     if req.kind == "video" {
         for key in ["width", "height", "frames", "fps"] {
             if let Some(v) = out.get(key).filter(|v| !v.is_null()) {
@@ -1301,7 +1395,7 @@ pub async fn generate(root: &Path, mut req: GenerateRequest) -> Value {
         (None, Some(p)) => format!("{base}/outputs/{p}"),
         _ => return fail("The generator's result has no url."),
     };
-    import(
+    let mut done = import(
         root,
         ImportRequest {
             url,
@@ -1311,7 +1405,118 @@ pub async fn generate(root: &Path, mut req: GenerateRequest) -> Value {
             ..Default::default()
         },
     )
-    .await
+    .await;
+    if let Some(report) = back_report.filter(|_| done["ok"] == true) {
+        if report["used"] != true {
+            done["note"] = json!(format!(
+                "Lifted from the front alone — {}",
+                report["why"].as_str().unwrap_or("the back view was left out")
+            ));
+        }
+        done["back"] = report;
+    }
+    done
+}
+
+/// The back view for a 3D lift — the person's own `back` material, or one drawn
+/// from the front ([`BACK_PROMPT`]) and kept as the material `<from>-back`.
+/// Returns the data URL to send (`None` = lift from the front alone) and what
+/// happened, kept on the model as `source.back` (`from` · `drawn` · `fit` ·
+/// `used` · `why`). A back that cannot be drawn never fails the lift.
+#[allow(clippy::too_many_arguments)]
+async fn back_view(
+    root: &Path,
+    dir: &Path,
+    base: &str,
+    client: &reqwest::Client,
+    req: &GenerateRequest,
+    from: &str,
+    front: &Path,
+    seed: i64,
+) -> (Option<String>, Value) {
+    let skip = |why: String| (None, json!({ "used": false, "why": why }));
+    let (back_path, back_id, drawn) = if let Some(id) = req.back.as_deref() {
+        let register = match read_register(dir).await {
+            Ok(r) => r,
+            Err(note) => return skip(note),
+        };
+        let Some(entry) = find(&register, id) else {
+            return skip(format!("no material `{id}` for the back view"));
+        };
+        let file = entry["file"].as_str().unwrap_or("");
+        if kind_of(file) != "image" {
+            return skip(format!("`{id}` is not an image"));
+        }
+        (dir.join(file), id.to_string(), false)
+    } else {
+        let squared = match squared_on_light(front).await {
+            Ok(d) => d,
+            Err(note) => return skip(note),
+        };
+        let body = json!({
+            "prompt": BACK_PROMPT,
+            "provider": "comfyui",
+            "workflow": BACK_WORKFLOW,
+            "seed": seed,
+            "source_image": squared,
+            "reference_images": [squared],
+            "transparent": true,
+        });
+        let result = match run_job(client, base, "/api/images/generate", &body).await {
+            Ok(r) => r,
+            Err(note) => return skip(format!("the back view could not be drawn ({note})")),
+        };
+        let out = &result["images"][0];
+        let url = match (out["url"].as_str(), out["path"].as_str()) {
+            (Some(u), _) if u.starts_with("http") => u.to_string(),
+            (Some(u), _) => format!("{base}{u}"),
+            (None, Some(p)) => format!("{base}/outputs/{p}"),
+            _ => return skip("the back view came back without a picture".into()),
+        };
+        let kept = import(
+            root,
+            ImportRequest {
+                url,
+                id: Some(format!("{from}-back")),
+                source: Some(json!({ "kind": "back", "from": from, "workflow": BACK_WORKFLOW, "prompt": BACK_PROMPT, "seed": seed })),
+                ..Default::default()
+            },
+        )
+        .await;
+        let (Some(file), Some(id)) = (kept["asset"]["file"].as_str(), kept["asset"]["id"].as_str()) else {
+            return skip(format!("the back view could not be kept ({})", kept["note"].as_str().unwrap_or("?")));
+        };
+        (dir.join(file), id.to_string(), true)
+    };
+    let back = match rgba_of(&back_path).await {
+        Ok(b) => b,
+        Err(note) => return skip(note),
+    };
+    let fit = rgba_of(front).await.ok().and_then(|f| back_fit(&f, &back));
+    let given = req.back.is_some();
+    let used = given || fit.is_some_and(|v| v >= BACK_FIT_MIN);
+    let mut report = json!({
+        "from": back_id,
+        "drawn": drawn,
+        "fit": fit.map(|v| (v * 1000.0).round() / 1000.0),
+        "min": BACK_FIT_MIN,
+        "used": used,
+    });
+    if !used {
+        report["why"] = json!(match fit {
+            Some(v) => format!("the back view matches the front at {v:.2}, under {BACK_FIT_MIN}"),
+            None => "the front has no transparent background to compare the back with".into(),
+        });
+        return (None, report);
+    }
+    match data_url(&back_path).await {
+        Ok(d) => (Some(d), report),
+        Err(note) => {
+            report["used"] = json!(false);
+            report["why"] = json!(note);
+            (None, report)
+        }
+    }
 }
 
 /// Image workflows worth offering for a fresh drawing: text-to-image, no
@@ -1736,6 +1941,36 @@ mod tests {
         assert_eq!(job_route("/api/3d/generate"), "/api/3d/jobs");
         assert_eq!(job_route("/api/videos/generate"), "/api/videos/jobs");
         assert_eq!(job_route("/api/3d/rig"), "/api/3d/rig/jobs");
+    }
+
+    fn figure(w: u32, h: u32, body: impl Fn(u32, u32) -> bool) -> image::RgbaImage {
+        image::RgbaImage::from_fn(w, h, |x, y| if body(x, y) { image::Rgba([200, 60, 60, 255]) } else { image::Rgba([0, 0, 0, 0]) })
+    }
+
+    #[test]
+    fn back_fit_reads_silhouettes() {
+        // 같은 T포즈 실루엣 — 뒤를 좌우로 뒤집어도 같다 → 1
+        let tpose = |x: u32, y: u32| (40..60).contains(&x) && y > 10 || (10..90).contains(&x) && (30..38).contains(&y);
+        let a = figure(100, 120, tpose);
+        assert!((back_fit(&a, &a).unwrap() - 1.0).abs() < 1e-9);
+        // 크기만 다르면 키로 맞춘다 → 1 에 가깝다
+        let big = image::imageops::resize(&a, 200, 240, image::imageops::FilterType::Nearest);
+        assert!(back_fit(&a, &big).unwrap() > 0.97);
+        // 팔 없는 뒷모습은 덜 맞는다 → 기준 아래
+        let armless = figure(100, 120, |x, y| (40..60).contains(&x) && y > 10);
+        assert!(back_fit(&a, &armless).unwrap() < BACK_FIT_MIN);
+        // 불투명(배경이 그대로) 그림은 잴 수 없다
+        let opaque = image::RgbaImage::from_pixel(50, 50, image::Rgba([240, 240, 240, 255]));
+        assert_eq!(back_fit(&opaque, &a), None);
+    }
+
+    #[test]
+    fn back_view_fields_are_optional() {
+        let r: GenerateRequest = serde_json::from_value(json!({ "kind": "3d", "from": "hero", "back_view": false, "back": "hero-back" })).unwrap();
+        assert_eq!(r.back_view, Some(false));
+        assert_eq!(r.back.as_deref(), Some("hero-back"));
+        let d: GenerateRequest = serde_json::from_value(json!({ "kind": "3d", "from": "hero" })).unwrap();
+        assert_eq!((d.back_view, d.back), (None, None));
     }
 
     #[test]

@@ -536,7 +536,7 @@
       "tool": "studio_generate_asset",
       "group": "generate",
       "title": "재료 생성(genai)",
-      "description": "Make a new material with the project's connected generator (codeg-project.json `generate.url`, the genai API) and import it with its provenance — the same operations as the Studio material drawer's buttons. Kinds: `image` draws from `prompt` (default workflow qwen-image-21-rgba on the generator's GPU: a transparent PNG; with `from`, that image is the img2img source; `provider` + `model` draw it in the cloud instead — studio_generator_options lists the choices). `edit` redraws the image material `from` by `prompt` (qwen-image-21-edit; background cut away unless `transparent: false`) — e.g. restyle a render keyframe. `tpose` redraws a character image `from` standing in a T-pose (same outfit) — do this BEFORE `3d` for any character that will be rigged: a T-pose rigs cleanly far more often (5/6 vs 1/6 measured). `3d` lifts the image material `from` into a textured GLB (TRELLIS.2; `target_faces` 1000–2000000; `texture_size` 1024|2048|4096). `rig` puts a skeleton and skin weights into the model material `from` (one standing character, SkinTokens) → a rigged GLB; then studio_render `mode: walk` makes it walk. `video` animates the image material `from` as the first frame (MiniMax H3 i2v, ~1.5 min): `prompt` = the motion, the camera move, and a final `Audio: …` line; `duration` seconds (default 5), `width`/`height` (default 768). The shape and colours stay; the motion is drawn by the video model. Usual video path: image → (tpose) → 3d → (rig) → studio_render (turntable or walk) → video from a keyframe still. Takes a minute or more (3D ~2–10 min with a busy queue); the generator machine can be switched off — the result then says so. If no generator is connected the result says how to connect one; ask the user for the address.",
+      "description": "Make a new material with the project's connected generator (codeg-project.json `generate.url`, the genai API) and import it with its provenance — the same operations as the Studio material drawer's buttons. Kinds: `image` draws from `prompt` (default workflow qwen-image-21-rgba on the generator's GPU: a transparent PNG; with `from`, that image is the img2img source; `provider` + `model` draw it in the cloud instead — studio_generator_options lists the choices). `edit` redraws the image material `from` by `prompt` (qwen-image-21-edit; background cut away unless `transparent: false`) — e.g. restyle a render keyframe. `tpose` redraws a character image `from` standing in a T-pose (same outfit) — do this BEFORE `3d` for any character that will be rigged: a T-pose rigs cleanly far more often (5/6 vs 1/6 measured). `3d` lifts the image material `from` into a textured GLB (Pixal3D; `target_faces` 1000–2000000; `texture_size` 1024|2048|4096) — by default with a back view drawn from the front when it matches (`back_view`, `back`): a matching back stops the generator inventing the back. `rig` puts a skeleton and skin weights into the model material `from` (one standing character, SkinTokens) → a rigged GLB; then studio_render `mode: walk` makes it walk. `video` animates the image material `from` as the first frame (MiniMax H3 i2v, ~1.5 min): `prompt` = the motion, the camera move, and a final `Audio: …` line; `duration` seconds (default 5), `width`/`height` (default 768). The shape and colours stay; the motion is drawn by the video model. Usual video path: image → (tpose) → 3d → (rig) → studio_render (turntable or walk) → video from a keyframe still. Takes a minute or more (3D ~2–10 min with a busy queue); the generator machine can be switched off — the result then says so. If no generator is connected the result says how to connect one; ask the user for the address.",
       "input": {
         "type": "object",
         "required": [
@@ -600,6 +600,14 @@
           "compress_textures": {
             "type": "boolean",
             "description": "3d: compress the GLB's textures (smaller file)."
+          },
+          "back_view": {
+            "type": "boolean",
+            "description": "3d: send a back view with the front (the generator's front + back path, Pixal3D multi-view) — default true. Without `back` one is drawn from the front (kept as the material `<from>-back`) and used only when its silhouette matches the front (overlap ≥ 0.85); otherwise the model is lifted from the front alone and the result's `note` · `back` say so. false = the front alone."
+          },
+          "back": {
+            "type": "string",
+            "description": "3d: an image material that is the back of `from` (same pose, seen from behind) — used as given instead of drawing one."
           },
           "duration": {
             "type": "number",
