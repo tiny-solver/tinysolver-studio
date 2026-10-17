@@ -6,7 +6,7 @@
     "asks = 니즈 — 사업 자리(버드뷰 · 오너)가 넣는 '무엇이 필요한가'. new → taken(items 에 계획 항목) → done(note 에 공지) · 안 하면 dropped. 세션을 시작하면 new 부터 본다.",
     "갈래 칸(my-devops docs/plans/tinysolver/work-management.md §3-1) — 결정 요청(open)은 rule = 어느 기준 밖인가(방향판 https://direction.home.tinysolver.me/rules 의 규칙 id · 맞는 규칙이 없으면 none). 규칙 · 약속 · none 에 걸린 것은 정하면 그 규칙 정본에 한 줄 쓰고 ruled(날짜). 할 일(todo)은 goal(방향판 goals.json 키) · from(issue:<id> · ask:<id>) · prep · who · learn(목록 — 준비해 줄 것 · 필요한 사람 · 먼저 공부할 것). 비면 '안 적음' — 기한은 두지 않는다."
   ],
-  "date": "2026-09-26",
+  "date": "2026-10-17",
   "asks": [
     {
       "id": "standalone-native",
@@ -1811,6 +1811,103 @@
         "http://research.home.codepoet.me/#field/deco-game-trends-172c"
       ],
       "from": "ask:deco-game"
+    },
+    {
+      "id": "layers-shell",
+      "topic": "layers",
+      "p": 2,
+      "status": "open",
+      "role": "제품",
+      "rule": "up-tech",
+      "asked": "2026-10-17",
+      "from": "대표님 10-17 대화",
+      "q": "Studio 를 'Claude Desktop(말하는 곳) + 부품 입구(MCP · API · CLI) + 웹 편집기 · 보기'로 줄이나 — codeg 에서 받은 대화 앱 껍데기(채팅 작업공간 · 맥 앱 · 릴리스 · 업스트림 추종)를 어떻게 하나",
+      "want": "대표님은 Claude Desktop 에서 말로 시키고, 만드는 동안 생긴 중간 산출물(재료 · 실행 기록 · 제작 그래프 · 고른 그림체 · 의도)은 Studio 서버 한 곳에 쌓여 다음 대화가 거기서 이어 간다. 맥 앱 · 릴리스 · 업스트림 추종에는 손이 들지 않는다",
+      "now": "Studio = codeg(여러 코딩 에이전트를 한 창에 모으는 대화 앱 · Tauri) fork 위에 콘텐츠 층을 얹은 것. 대표님 판은 10-11 layers-where A 로 이미 linux-1 서버(studio.home.tinysolver.me) + Claude Desktop MCP 로 옮겼다 — 앱을 켜지 않는다. 그런데 껍데기 비용은 그대로 돈다: 맥 앱 릴리스 레일(GitHub 러너 macOS 빌드 약 32분 · 서버 tarball 쓰는 곳 없음) · 업스트림 추종 크론(매일 07:20 · 브랜드 되돌림 검사 · 열린 PR 셋 #6 #7 #10) · fork 라 land 가 CI 전에 머지되는 함정 · 남에게 주기(studio-distribution) 결정 대기. 대표님 10-17: '콘텐츠가 진짜 만들려는 것이고, 과정을 돕는 도구는 필요하다 — 중간 부산물을 체계적으로 관리해야 다음에 이어 가고 원하는 결과까지 몰아붙인다.' → 살릴 것의 중심은 대화 앱이 아니라 중간 산출물을 쌓는 자리다",
+      "facets": [
+        "대표님이 말하는 곳",
+        "중간 산출물 — 재료 서랍 · 실행 기록 · 제작 그래프 · bible",
+        "부품 · 흐름 · 입구 셋(MCP · API · CLI)",
+        "웹 편집기 · 보기 화면(장면 편집 · 3D 재료 · 흐름 기록)",
+        "엔진 · 플랫폼 층 · 빌드 · 출시",
+        "채팅 작업공간(codeg 세션 모음 · 15 에이전트 · 할 일 보드 · 폰 앱)",
+        "맥 앱(Tauri) · 릴리스 레일",
+        "업스트림 codeg 추종",
+        "남에게 주기(studio-distribution)",
+        "드는 일"
+      ],
+      "options": [
+        {
+          "key": "A",
+          "title": "쓰는 길만 줄인다 — codeg 밑단은 서버 속에 그대로 두고, 대화 앱 껍데기는 쓰지도 키우지도 않는다",
+          "facets": {
+            "대표님이 말하는 곳": "Claude Desktop",
+            "중간 산출물 — 재료 서랍 · 실행 기록 · 제작 그래프 · bible": "살린다 · 키운다 — linux-1 서버 프로젝트 폴더 한 곳",
+            "부품 · 흐름 · 입구 셋(MCP · API · CLI)": "살린다 · 키운다",
+            "웹 편집기 · 보기 화면(장면 편집 · 3D 재료 · 흐름 기록)": "살린다 — studio.home 에서 보고 만진다",
+            "엔진 · 플랫폼 층 · 빌드 · 출시": "살린다",
+            "채팅 작업공간(codeg 세션 모음 · 15 에이전트 · 할 일 보드 · 폰 앱)": "안 쓴다 — 코드는 둔다(agent 노드가 ACP 실행 밑단을 쓴다)",
+            "맥 앱(Tauri) · 릴리스 레일": "멈춘다 — 릴리스 안 끊음 · 맥북 설치본 지움",
+            "업스트림 codeg 추종": "매일 크론 끔 — 서버에 필요한 고침이 있을 때만 손으로",
+            "남에게 주기(studio-distribution)": "닫는다 — 팔 때 다시 연다(그때 껍데기를 다시 고른다)",
+            "드는 일": "작다 — 크론 · 러너 끄기 · 항목 넷 닫기 · 문서 고침"
+          }
+        },
+        {
+          "key": "B",
+          "title": "codeg 에서 떼어 낸다 — Studio 부분만 자체 서버 · CLI · 웹으로 새로 세우고 fork 를 끊는다",
+          "facets": {
+            "대표님이 말하는 곳": "Claude Desktop",
+            "중간 산출물 — 재료 서랍 · 실행 기록 · 제작 그래프 · bible": "살린다 — 새 서버로 옮김",
+            "부품 · 흐름 · 입구 셋(MCP · API · CLI)": "살린다 — 새 서버로 옮김",
+            "웹 편집기 · 보기 화면(장면 편집 · 3D 재료 · 흐름 기록)": "살린다 — 화면만 떼어 옮김",
+            "엔진 · 플랫폼 층 · 빌드 · 출시": "살린다 — 엔진은 npm 패키지로",
+            "채팅 작업공간(codeg 세션 모음 · 15 에이전트 · 할 일 보드 · 폰 앱)": "버린다",
+            "맥 앱(Tauri) · 릴리스 레일": "버린다",
+            "업스트림 codeg 추종": "버린다 — fork 끊음",
+            "남에게 주기(studio-distribution)": "버린다 — CLI · 웹으로 다시 설계",
+            "드는 일": "크다 — 인증 · 파일 감시 · 에이전트 실행(ACP) · 프로젝트 관리를 다시 짠다 · 진행 중 Studio 세션들과 겹친다"
+          }
+        },
+        {
+          "key": "C",
+          "title": "지금대로 — 서버(대표님 판)와 맥 앱(남에게 줄 판) 둘 다 간다",
+          "facets": {
+            "대표님이 말하는 곳": "Claude Desktop",
+            "중간 산출물 — 재료 서랍 · 실행 기록 · 제작 그래프 · bible": "살린다",
+            "부품 · 흐름 · 입구 셋(MCP · API · CLI)": "살린다",
+            "웹 편집기 · 보기 화면(장면 편집 · 3D 재료 · 흐름 기록)": "살린다",
+            "엔진 · 플랫폼 층 · 빌드 · 출시": "살린다",
+            "채팅 작업공간(codeg 세션 모음 · 15 에이전트 · 할 일 보드 · 폰 앱)": "둔다 — 맥 앱 첫 화면",
+            "맥 앱(Tauri) · 릴리스 레일": "둔다 — 릴리스마다 러너 32분",
+            "업스트림 codeg 추종": "매일 크론 · 열린 PR 셋 land",
+            "남에게 주기(studio-distribution)": "열어 둔다(권장 B — 맥 + Windows)",
+            "드는 일": "지금 그대로 계속 — 추종 충돌 · 브랜드 되돌림 · CI 함정"
+          }
+        }
+      ],
+      "pick": "A",
+      "reason": "대표님 판은 10-11 에 이미 서버 + Claude Desktop 으로 옮겼고 앱을 켜지 않는다 — 남은 비용은 껍데기(맥 앱 · 릴리스 · 업스트림 추종)뿐이라 그것만 멈추면 된다. B(떼어 내기)는 지금 잘 도는 밑단(인증 · 파일 감시 · 에이전트 실행)을 다시 짜는 일이라 복잡도만 오른다 — 밑단이 짐이 될 때(업스트림 충돌 · 서버에 안 맞는 고침) 다시 연다. 남에게 줄 때 껍데기는 그때 고른다(미리 맞추지 않는다). 살린 것 중 다음 할 일은 대표님 10-17 말 그대로 중간 산출물 — 프로젝트마다 '원하는 것 한 줄 → 시도 → 바꾼 것 → 결과' 줄기와 재료 · 실행 기록 · bible 을 한 화면에서 보고 다음 대화가 거기서 이어 가게",
+      "needs": [],
+      "unblocks": [
+        "upstream-sync-land",
+        "release-rail-rest",
+        "users-ai-guide",
+        "studio-distribution"
+      ],
+      "then": [
+        "A 면: linux-1 크론 studio-upstream-sync 끄기 · studio-release 태그 안 끊음 · upstream-sync-land · release-rail-rest · users-ai-guide · studio-distribution 을 '대표님 10-17 layers-shell A 로 멈춤'으로 닫는다(열린 업스트림 PR 셋도 닫음)",
+        "AGENTS.md 'Fork 운영' · my-devops studio-release.md · studio-layers.md 에 '대표님 판 = 서버 + Claude Desktop · 맥 앱 · 릴리스 멈춤' 한 줄씩",
+        "맥북 /Applications/Tinysolver Studio.app 지우기",
+        "새 할 일: 중간 산출물 한 화면 — 프로젝트마다 원하는 것 → 시도 → 바꾼 것 → 결과 줄기 + 재료 · 실행 기록 · bible (ask lab-layers 반복 실험 줄기)"
+      ],
+      "refs": [
+        "#layers-where",
+        "#layers-l1-doors",
+        "ask:lab-layers",
+        "my-devops docs/plans/tinysolver/studio-release.md",
+        "my-devops docs/plans/tinysolver/studio-layers.md"
+      ]
     },
     {
       "id": "layers-where",
