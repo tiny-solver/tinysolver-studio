@@ -137,13 +137,14 @@ layer independent of Three.js and other renderers.
 > 이 절은 fork 만의 것이다. 업스트림 파일이라 **끝에만 덧붙인다**(중간을 고치면 업스트림 머지마다 충돌).
 
 - 이 repo 는 `xintaofei/codeg` 의 fork 다. **업스트림은 받기만 한다** — `upstream` 리모트는 fetch 전용(push URL 막힘), 업스트림에 PR · push 하지 않는다.
-- **업스트림 추종은 기계가 한다** — linux-1 크론 `studio-upstream-sync`(매일 07:20)가 새 태그를 `upstream-sync/<태그>` 로 머지하고 PR 을 연다.
-  land 는 알림의 명령대로 **ff 로 — squash 금지**(업스트림 조상이 끊기면 다음 머지가 충돌한다).
+- **업스트림 추종은 멈췄다**(decide layers-shell A · 10-17) — 크론 없음. 서버에 필요한 고침이 업스트림에 나오면 손으로 `scripts/studio-upstream-sync.sh` → `upstream-sync/<태그>` PR.
+  land 는 **ff 로 — squash 금지**(업스트림 조상이 끊기면 다음 머지가 충돌한다).
 - **내 개발은 토픽 브랜치로**:
   `W=~/k-codepoet/my-devops/scripts/work.sh` → `$W start <type>/<주제>` → 커밋 → `$W land`.
   PR 은 **tiny-solver/tinysolver-studio** 에만 선다(work.sh 가 `-R` 고정 · 이 체크아웃의 gh 기본 repo 도 이것).
 - **계정** — PR 은 gh `tiny-solver`, 커밋은 `iam.tinysolver@gmail.com`. linux-1 의 gh 기본 계정은 choigawoon 이라 `gh` 를 맨손으로 쓰지 않는다.
 - 업스트림 파일은 되도록 고치지 않는다. 브랜드 불변식 · 릴리스는 my-devops `docs/plans/tinysolver/studio-release.md`.
+- **맥 앱 릴리스는 멈췄다** — 대표님 판은 linux-1 서버(studio.home) + Claude Desktop(decide layers-where · layers-shell). `scripts/studio-release.sh` 는 `STUDIO_RELEASE_RESUME=1` 없이는 멈춘다(남에게 줄 때 다시).
 - **할 일 · 결정 · 니즈의 정본은 [decide.json](decide.json)** — 서버가 없는 설치 앱이라 이 파일이 백오피스다. 세션을 시작하면 `asks` 의 `new`(사업 자리가 넣은 니즈)부터 → 계획 항목으로 받고 `taken` · 반영한 PR 에서 `done` (my-devops `docs/architecture/roles.md` "니즈").
 - **이 제품이 정해 둔 것(기준 · 규칙 목록) · 바뀐 이력** — [rules.json](rules.json) · 화면 <https://direction.home.tinysolver.me/rules> '제품 · Tinysolver Studio'(규칙마다 이력) · 결정 요청의 `rule` 은 여기 id 먼저.
 - **백오피스** — <https://studio-admin.home.tinysolver.me> (LAN · Tailscale · 읽기 전용) — 이 repo main 의 decide.json(할 일 · 정할 것 · 요청) · rules.json · why.json 을 그대로 읽어 보여 준다(land 뒤 몇 분 안에). 화면 코드는 따로 repo [tiny-solver/studio-admin](https://github.com/tiny-solver/studio-admin)(stage.sh 의 CalVer 태그가 여기 release.yml `v*.*.*` 에 걸려서) · decide `bo-home` A.
