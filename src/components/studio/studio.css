@@ -942,6 +942,11 @@
   color: var(--destructive);
   overflow-wrap: anywhere;
 }
+.studio-materials .studio-materials-notice {
+  margin: 6px 0;
+  font-size: 12px;
+  color: var(--muted-foreground, inherit);
+}
 .studio-material-list {
   display: flex;
   flex-direction: column;
