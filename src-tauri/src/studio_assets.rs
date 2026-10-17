@@ -976,7 +976,7 @@ pub fn back_fit(front: &image::RgbaImage, back: &image::RgbaImage) -> Option<f64
         let (cw, ch) = (x1 - x0 + 1, y1 - y0 + 1);
         let mask = image::GrayImage::from_fn(cw, ch, |x, y| image::Luma([if img.get_pixel(x0 + x, y0 + y)[3] >= 128 { 255 } else { 0 }]));
         let nw = ((cw as f64) * (H as f64) / (ch as f64)).round().max(1.0) as u32;
-        Some(image::imageops::resize(&mask, nw, H, image::imageops::FilterType::Nearest))
+        Some(image::imageops::resize(&mask, nw, H, image::imageops::FilterType::Triangle))
     };
     let f = silhouette(front)?;
     let b = image::imageops::flip_horizontal(&silhouette(back)?);
@@ -1949,10 +1949,10 @@ mod tests {
 
     #[test]
     fn back_fit_reads_silhouettes() {
-        // 같은 T포즈 실루엣 — 뒤를 좌우로 뒤집어도 거의 같다(줄일 때 픽셀이 한 칸씩 어긋난다)
+        // 같은 T포즈 실루엣 — 뒤를 좌우로 뒤집어도 같다(이중 선형으로 줄여 한 칸 어긋남이 없다)
         let tpose = |x: u32, y: u32| (40..60).contains(&x) && y > 10 || (10..90).contains(&x) && (30..38).contains(&y);
         let a = figure(100, 120, tpose);
-        assert!(back_fit(&a, &a).unwrap() > 0.97);
+        assert!(back_fit(&a, &a).unwrap() > 0.99);
         // 크기만 다르면 키로 맞춘다 → 1 에 가깝다
         let big = image::imageops::resize(&a, 200, 240, image::imageops::FilterType::Nearest);
         assert!(back_fit(&a, &big).unwrap() > 0.97);
