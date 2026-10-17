@@ -40,7 +40,6 @@
       "text": "Studio 는 개인 사용자용이다 — 각자 PC 에 설치해 자기 AI 구독으로 만든다",
       "status": "taken",
       "items": [
-        "users-ai-guide",
         "t4-afterplay-account"
       ]
     },
@@ -465,127 +464,6 @@
       "then": [],
       "refs": [
         "docs/studio/roadmap.json S6"
-      ]
-    },
-    {
-      "id": "upstream-sync-land",
-      "topic": "release",
-      "p": 1,
-      "status": "todo",
-      "role": "제품",
-      "asked": "2026-09-23",
-      "q": "열린 업스트림 추종 PR 셋 — #6 v0.32.0 · #7 v0.32.1 · #10 v0.32.2",
-      "want": "#10 이 main 에 ff 로 들어가 있고 #6 · #7 이 닫혀 있으며, 그 기준 릴리스가 scripts/studio-release.sh 로 나와 있다",
-      "want_draft": true,
-      "now": "#10 은 검사가 모두 통과했다. #6 · #7 의 태그는 v0.32.2 에 들어 있다. land 는 ff — squash 금지(업스트림 조상이 끊기면 다음 머지가 충돌한다)",
-      "action": "#10 브랜치를 지금 main 에 맞춘다(main 이 앞서 있으면 main 을 머지) → 검사 · 브랜드 불변식 확인 → ff land → #6 · #7 닫기 → 릴리스는 scripts/studio-release.sh",
-      "needs": [],
-      "unblocks": [],
-      "then": [],
-      "refs": [
-        "https://github.com/tiny-solver/tinysolver-studio/pull/10",
-        "my-devops docs/plans/tinysolver/studio-release.md 업스트림 추종"
-      ]
-    },
-    {
-      "id": "release-rail-rest",
-      "topic": "release",
-      "p": 3,
-      "status": "todo",
-      "role": "제품",
-      "asked": "2026-09-20",
-      "q": "릴리스 레일 남은 것 — 서버 tarball 을 쓰는 자리 · 빌드 시간",
-      "want": "서버 tarball 을 계속 만들지 정해져 있고, 캐시 뒤 빌드 시간이 studio-release.md 에 적혀 있다",
-      "want_draft": true,
-      "now": "릴리스는 macOS arm64 앱과 서버 tarball(linux-x64 · darwin-arm64)을 만든다. 서버 tarball 은 만들기만 하고 쓰는 자리가 없다. 첫 빌드는 약 32분",
-      "action": "서버 tarball 을 계속 만들지 정한다 → 캐시 뒤 빌드 시간을 재서 studio-release.md 에 적는다",
-      "needs": [],
-      "unblocks": [],
-      "then": [],
-      "refs": [
-        "my-devops docs/plans/tinysolver/studio-release.md 남은 일"
-      ]
-    },
-    {
-      "id": "users-ai-guide",
-      "topic": "release",
-      "p": 3,
-      "status": "todo",
-      "role": "제품",
-      "asked": "2026-09-25",
-      "q": "사용자 PC 의 AI 설치 안내 — Claude Code · Codex 가 없으면 에이전트가 안 돈다",
-      "want": "claude · codex 가 없는 PC 에서 Studio 를 처음 켜면 설치 안내가 뜬다",
-      "want_draft": true,
-      "now": "Studio 는 머신의 claude CLI 로 에이전트를 띄운다(src-tauri/src/studio_agent_cli.rs) · 사용자는 자기 구독을 쓴다. 지금은 오너 맥에만 설치돼 있다",
-      "action": "첫 실행에서 claude · codex 가 있는지 보고 없으면 설치 안내",
-      "needs": [],
-      "unblocks": [],
-      "then": [],
-      "refs": [
-        "my-devops docs/plans/tinysolver/studio-afterplay.md 4단계",
-        "#studio-distribution"
-      ]
-    },
-    {
-      "id": "studio-distribution",
-      "rule": "up-biz",
-      "topic": "release",
-      "p": 3,
-      "status": "open",
-      "role": "제품",
-      "asked": "2026-09-24",
-      "q": "Studio 를 오너 밖으로 — 언제 · 어느 OS 로 주나",
-      "now": "오너 맥 전용(Apple Silicon · ad-hoc 서명 · 자동 업데이트 꺼짐). 서명은 store-dev-account 결정(D)대로 법인 등기 뒤 Apple 조직 계정. 업스트림 codeg 는 Windows 도 빌드한다(install.ps1 · 업스트림 Test). 막는 일은 아니다 — 0~3단계(afterplay 연결)는 오너 맥으로 먼저 된다",
-      "facets": [
-        "누가 쓰나",
-        "OS",
-        "서명 · 경고",
-        "비용 · 일"
-      ],
-      "options": [
-        {
-          "key": "A",
-          "title": "등기 전엔 지인 몇 명에게 맥만 — curl 설치, 등기 뒤 서명",
-          "facets": {
-            "누가 쓰나": "오너 · 지인",
-            "OS": "macOS(Apple Silicon)",
-            "서명 · 경고": "ad-hoc — 업데이트마다 권한 재요청",
-            "비용 · 일": "지금 0 · 설치 안내 한 장"
-          }
-        },
-        {
-          "key": "B",
-          "title": "A + Windows 빌드도 — 서명 없이 먼저",
-          "facets": {
-            "누가 쓰나": "게이머 다수(Windows)까지",
-            "OS": "macOS + Windows",
-            "서명 · 경고": "Windows SmartScreen 경고 · 맥은 A 와 같음",
-            "비용 · 일": "러너 시간 · Windows 설치 스크립트 · 경로 · 셸 차이 실측"
-          }
-        },
-        {
-          "key": "C",
-          "title": "등기 전엔 오너만 — 서명 뒤 한 번에 공개",
-          "facets": {
-            "누가 쓰나": "오너",
-            "OS": "macOS",
-            "서명 · 경고": "공개 때부터 공증",
-            "비용 · 일": "지금 0 · 공개가 등기만큼 늦다"
-          }
-        }
-      ],
-      "pick": "B",
-      "reason": "afterplay 첫 고객이 한국 게임 플레이어라 올리는 사람도 Windows 가 다수일 것이다. 업스트림이 이미 Windows 를 빌드해 추가 일이 작다. 경고는 초기 지인 단계에서 감수 · 서명은 등기 뒤",
-      "needs": [],
-      "unblocks": [],
-      "then": [
-        "studio-release.md 에 Windows 러너 · 설치 스크립트 절",
-        "afterplay #make 에 'Studio 받기'",
-        "등기 뒤: Apple 조직 계정 → Developer ID 서명 · 공증 · Tauri updater 서명 키 Vault secret/tinysolver/studio"
-      ],
-      "refs": [
-        "my-devops docs/plans/tinysolver/studio-afterplay.md",
-        "my-devops docs/plans/tinysolver/studio-release.md"
       ]
     },
     {
@@ -1816,7 +1694,7 @@
       "id": "layers-shell",
       "topic": "layers",
       "p": 2,
-      "status": "open",
+      "status": "decided",
       "role": "제품",
       "rule": "up-tech",
       "asked": "2026-10-17",
@@ -1889,12 +1767,7 @@
       "pick": "A",
       "reason": "대표님 판은 10-11 에 이미 서버 + Claude Desktop 으로 옮겼고 앱을 켜지 않는다 — 남은 비용은 껍데기(맥 앱 · 릴리스 · 업스트림 추종)뿐이라 그것만 멈추면 된다. B(떼어 내기)는 지금 잘 도는 밑단(인증 · 파일 감시 · 에이전트 실행)을 다시 짜는 일이라 복잡도만 오른다 — 밑단이 짐이 될 때(업스트림 충돌 · 서버에 안 맞는 고침) 다시 연다. 남에게 줄 때 껍데기는 그때 고른다(미리 맞추지 않는다). 살린 것 중 다음 할 일은 대표님 10-17 말 그대로 중간 산출물 — 프로젝트마다 '원하는 것 한 줄 → 시도 → 바꾼 것 → 결과' 줄기와 재료 · 실행 기록 · bible 을 한 화면에서 보고 다음 대화가 거기서 이어 가게",
       "needs": [],
-      "unblocks": [
-        "upstream-sync-land",
-        "release-rail-rest",
-        "users-ai-guide",
-        "studio-distribution"
-      ],
+      "unblocks": [],
       "then": [
         "A 면: linux-1 크론 studio-upstream-sync 끄기 · studio-release 태그 안 끊음 · upstream-sync-land · release-rail-rest · users-ai-guide · studio-distribution 을 '대표님 10-17 layers-shell A 로 멈춤'으로 닫는다(열린 업스트림 PR 셋도 닫음)",
         "AGENTS.md 'Fork 운영' · my-devops studio-release.md · studio-layers.md 에 '대표님 판 = 서버 + Claude Desktop · 맥 앱 · 릴리스 멈춤' 한 줄씩",
@@ -1906,6 +1779,43 @@
         "#layers-l1-doors",
         "ask:lab-layers",
         "my-devops docs/plans/tinysolver/studio-release.md",
+        "my-devops docs/plans/tinysolver/studio-layers.md"
+      ],
+      "decided": {
+        "date": "2026-10-17",
+        "pick": "A",
+        "note": "대표님 'A 로 정해' — 같은 날 linux-1 크론 studio-upstream-sync 끔 · studio-release.sh 멈춤 · 항목 넷(upstream-sync-land · release-rail-rest · users-ai-guide · studio-distribution) 지움 · 업스트림 PR #6 #7 #10 닫음 · 맥북 앱 번들 지움(데이터 폴더는 둠) · 다음 할 일 byproducts-view"
+      }
+    },
+    {
+      "id": "byproducts-view",
+      "topic": "layers",
+      "p": 2,
+      "status": "todo",
+      "role": "제품",
+      "asked": "2026-10-17",
+      "from": "ask:lab-layers",
+      "q": "중간 산출물 한 화면 — 프로젝트마다 원하는 것 → 시도 → 바꾼 것 → 결과 줄기와 재료 · 실행 기록 · bible 을 한곳에서",
+      "want": "studio.home 에서 프로젝트 하나를 열면 맨 위에 원하는 것 한 줄, 그 아래로 시도(흐름 실행 · 에이전트 작업) → 바꾼 것 → 결과가 날짜순 줄기로 보이고, 결과마다 그 재료 · 실행 기록 · 고른 그림체(bible)로 들어간다. Claude Desktop 새 대화가 같은 줄기를 MCP 로 읽어 '지난번 어디까지 했지'에 답하고 이어 간다",
+      "want_draft": true,
+      "now": "산출물은 쌓이지만 보는 곳이 갈려 있다 — 재료 서랍(프로젝트마다 · 한 개씩 · aw-drawer) · /studio/flows 실행 기록(runs/<flow>/<run>/ · run_compare 나란히 · layers-l3-flow) · 3D 재료 화면(lib-3d 모아 보기 · 제작 그래프) · bible 그림체 카드(style_card_save) · 장면 · 빌드. 흐름 밖에서 에이전트가 부품을 바로 부른 것(재료 넣기 · 생성 · 렌더 · 장면 고침)은 줄기에 안 남는다. '원하는 것 한 줄'은 흐름 맨 앞 want 에만 있고 프로젝트 단위 자리가 없다",
+      "action": "① 프로젝트 정본에 want(원하는 것 한 줄 · 좋은 예 · 나쁜 예) 자리 ② 줄기 기록 — 흐름 실행 · 부품 호출마다 한 줄(무엇을 · 왜 · 결과 링크) ③ 웹 한 화면(줄기 → 결과마다 재료 · 실행 · bible 로) ④ 읽기 부품 project_timeline 을 레지스트리에 → MCP · API · CLI 셋 다 ⑤ 해 보기: Claude Desktop 새 대화에서 '○○ 어디까지 했지?' → 줄기로 답하고 이어 간다",
+      "prep": [],
+      "who": [
+        "대표님(해 보기 — 프로젝트 하나 골라 이어 가기)",
+        "개발팀"
+      ],
+      "learn": [
+        "my-devops docs/plans/tinysolver/studio-layers.md '실행 기록'"
+      ],
+      "needs": [],
+      "unblocks": [],
+      "then": [],
+      "refs": [
+        "#layers-shell",
+        "#layers-l3-flow",
+        "#lib-3d",
+        "#aw-drawer",
         "my-devops docs/plans/tinysolver/studio-layers.md"
       ]
     },

@@ -14,6 +14,11 @@ set -euo pipefail
 cd "$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
 MODE="${1:-}"
 
+# Paused: the owner's Studio runs as the linux-1 server + Claude Desktop (decide layers-shell A, 10-17).
+if [ "$MODE" != --check ] && [ "${STUDIO_RELEASE_RESUME:-}" != 1 ]; then
+  echo "✗ 릴리스 멈춤 — decide layers-shell A (대표님 10-17). 남에게 줄 때 STUDIO_RELEASE_RESUME=1 로 다시"; exit 1
+fi
+
 [ "$(git rev-parse --abbrev-ref HEAD)" = main ] || { echo "✗ not on main"; exit 1; }
 [ -z "$(git status --porcelain)" ] || { echo "✗ working tree not clean"; exit 1; }
 git fetch -q origin

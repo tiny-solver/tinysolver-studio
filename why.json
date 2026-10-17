@@ -6,6 +6,36 @@
   "v": 1,
   "items": [
     {
+      "id": "studio-shell-stopped",
+      "asked": "2026-10-17",
+      "tags": [
+        "배포 형태",
+        "서버",
+        "Claude Desktop",
+        "fork",
+        "릴리스"
+      ],
+      "q": "Studio 는 왜 맥 앱을 안 내고 업스트림 codeg 도 안 따라가나?",
+      "a": "대표님 결정(10-17 layers-shell A): Studio 의 몫은 대화 앱이 아니라 만드는 과정 — 부품 · 흐름 · 중간 산출물이다. 말하는 곳은 Claude Desktop, 보는 곳은 linux-1 서버 웹(studio.home). 그래서 맥 앱 릴리스 · 업스트림 추종 크론 · 남에게 주기를 멈췄다.",
+      "why": [
+        "대표님 10-17: '콘텐츠가 진짜 만들려는 것이고 과정을 돕는 도구는 필요하다 — 중간 부산물을 체계적으로 관리해야 다음에 이어 가고 원하는 결과까지 몰아붙인다.' 대화 앱 껍데기(세션 모음 · 여러 에이전트 · 할 일 보드)는 Claude Desktop 과 겹친다.",
+        "대표님 판은 10-11 layers-where A 로 이미 서버 + Claude Desktop MCP 였다 — 앱을 켜지 않으니 맥 앱 릴리스(러너 약 32분) · 업스트림 추종(매일 크론 · 브랜드 되돌림 검사 · ff land) 비용만 남아 있었다.",
+        "codeg 를 떼어 내지 않은 이유: 서버 속 밑단(인증 · 파일 감시 · 에이전트 실행 ACP)이 잘 돌고, 다시 짜면 복잡도만 오른다. 밑단이 짐이 될 때(업스트림 충돌 · 서버에 안 맞는 고침) 다시 연다.",
+        "남에게 주는 설치 앱(studio-where-runs · 09-25)은 팔 때 다시 고른다 — 미리 맞추지 않는다."
+      ],
+      "where": "linux-1 서버 모드 studio-server(deploy/studio-server) · 입구 셋 MCP · API · CLI · 웹 https://studio.home.tinysolver.me",
+      "enforce": "scripts/studio-release.sh 가 STUDIO_RELEASE_RESUME=1 없이는 멈춘다 · linux-1 crontab 에 studio-upstream-sync 없음",
+      "status": {
+        "kind": "keep",
+        "text": "2026-10-17 — A. 서버에 필요한 고침이 업스트림에 나오면 손으로 scripts/studio-upstream-sync.sh. 다음 할 일 decide byproducts-view(중간 산출물 한 화면)."
+      },
+      "refs": [
+        "decide.json",
+        "AGENTS.md",
+        "scripts/studio-release.sh"
+      ]
+    },
+    {
       "id": "studio-where-runs",
       "asked": "2026-09-25",
       "tags": [
@@ -28,8 +58,8 @@
       "where": "사용자 PC 설치 앱(src-tauri) · 서버 몫은 afterplay(tiny-solver/afterplay) · 계획 my-devops docs/plans/tinysolver/studio-afterplay.md '만드는 곳과 노는 곳을 가른다'",
       "enforce": "—",
       "status": {
-        "kind": "keep",
-        "text": "2026-09-25 — C. 언제 · 어느 OS 로 주나 · 에셋 생성을 어디서 돌리나 · afterplay 계정 잇기는 decide.json studio-distribution · studio-asset-gen · t4-afterplay-account."
+        "kind": "redesign",
+        "text": "2026-10-17 — 대표님 판은 linux-1 서버(layers-where A · 10-11), 남에게 주는 설치 앱은 멈춤(layers-shell A · 10-17) → why studio-shell-stopped. 팔 때 이 질문을 다시 연다."
       },
       "refs": [
         "decide.json",
